@@ -128,6 +128,7 @@ export async function uninstall(): Promise<void> {
 
 export function resolveSpawnArgs(apiKey: string, port: number): SpawnArgs {
   const serverPath = getServerPath();
+  const host = process.env.NINEROUTER_HOST || "127.0.0.1";
   // Next.js standalone dir ships its own node_modules — include them in NODE_PATH
   // so native addons (better-sqlite3) resolve correctly.
   const standaloneDir = path.dirname(serverPath);
@@ -141,7 +142,7 @@ export function resolveSpawnArgs(apiKey: string, port: number): SpawnArgs {
     env: {
       ...process.env,
       PORT: String(port),
-      HOSTNAME: "127.0.0.1",
+      HOSTNAME: host,
       // API_KEY_SECRET is the HMAC secret 9router uses to generate/validate API keys.
       // OmniRoute generates this secret and can derive valid keys from it.
       API_KEY_SECRET: apiKey,

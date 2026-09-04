@@ -146,6 +146,19 @@ test("resolveSpawnArgs returns expected env and command", () => {
   assert.equal(args.env.DISABLE_TUNNEL, "true");
 });
 
+test("resolveSpawnArgs respects NINEROUTER_HOST", () => {
+  const previousHost = process.env.NINEROUTER_HOST;
+  process.env.NINEROUTER_HOST = "0.0.0.0";
+
+  try {
+    const args = resolveSpawnArgs("sk-test-api-key", 20130);
+    assert.equal(args.env.HOSTNAME, "0.0.0.0");
+  } finally {
+    if (previousHost === undefined) delete process.env.NINEROUTER_HOST;
+    else process.env.NINEROUTER_HOST = previousHost;
+  }
+});
+
 test("EACCES error returns friendly InstallError", async () => {
   const { InstallError } = await import("../../../../src/lib/services/installers/utils.ts");
 
