@@ -1,9 +1,10 @@
-import { checkHeapPressureGuard, HEAP_PRESSURE_THRESHOLD_MB } from "./heapPressure.ts";
+import { HEAP_PRESSURE_THRESHOLD_MB } from "./heapPressure.ts";
 import { buildErrorBody } from "./error.ts";
 import {
   createResourcePressureTracker,
   resolveResourcePressureThresholds,
   type PressureReason,
+  type PressureSeverity,
   type ResourcePressureState,
   type ResourcePressureThresholds,
   type ResourceSignals,
@@ -29,6 +30,15 @@ export type ResourcePressureObservation = {
   state: ResourcePressureState;
 };
 
+export type ResourcePressureDecision = {
+  severity: PressureSeverity;
+  shouldReject: boolean;
+  reason: PressureReason;
+  sampleAgeMs: number | null;
+  stale: boolean;
+  refreshing: boolean;
+};
+
 export type ResourcePressureRuntimeOptions = {
   thresholds?: Partial<ResourcePressureThresholds>;
   heapThresholdMb?: number | null;
@@ -44,6 +54,7 @@ export type ResourcePressureRuntimeOptions = {
 
 export type ResourcePressureRuntime = {
   check: () => ResourcePressureGuardResult | null;
+  getDecision: () => ResourcePressureDecision;
   getObservation: () => ResourcePressureObservation;
   whenRefreshSettled: () => Promise<void>;
   dispose: () => void;
@@ -128,19 +139,6 @@ function buildCriticalGuard(
   };
 }
 
-function immediateHeapGuard(
-  heapUsedMb: number,
-  thresholdMb: number | null
-): ResourcePressureGuardResult | null {
-  if (thresholdMb == null) return null;
-  const guard = checkHeapPressureGuard(heapUsedMb, thresholdMb);
-  if (!guard) return null;
-  return buildCriticalGuard("v8_heap_absolute", {
-    heapUsedMb: Math.round(heapUsedMb),
-    thresholdMb: Math.round(thresholdMb),
-  });
-}
-
 export function createResourcePressureRuntime(
   options: ResourcePressureRuntimeOptions = {}
 ): ResourcePressureRuntime {
@@ -182,15 +180,23 @@ export function createResourcePressureRuntime(
   let scheduled = false;
   let inFlight: Promise<void> | null = null;
   let disposed = false;
+  let lastHeapUsedMb = 0;
 
   const refresh = (): void => {
     if (disposed || inFlight) return;
     scheduled = false;
+    const startedAtMs = nowMs();
     inFlight = Promise.resolve()
       .then(sample)
       .then((signals) => {
         if (disposed) return;
         const settledAtMs = nowMs();
+        // Do not publish a result from a sampler that outlived the usable cache
+        // window. Keep a single in-flight sampler even if it hangs indefinitely.
+        if (settledAtMs - startedAtMs > maxStaleMs) {
+          nextRefreshAtMs = settledAtMs + retryAfterMs;
+          return;
+        }
         lastSignals = signals;
         state = tracker.observe(signals);
         lastRefreshAtMs = settledAtMs;
@@ -210,40 +216,54 @@ export function createResourcePressureRuntime(
     schedule(refresh);
   };
 
+  const getDecision = (): ResourcePressureDecision => {
+    try {
+      lastHeapUsedMb = immediateHeapUsedMb();
+    } catch {
+      lastHeapUsedMb = 0;
+    }
+    const now = nowMs();
+    if (now >= nextRefreshAtMs) scheduleRefresh();
+    const sampleAgeMs = lastSignals ? Math.max(0, now - lastRefreshAtMs) : null;
+    const expired = sampleAgeMs === null || sampleAgeMs > maxStaleMs;
+    let severity: PressureSeverity = expired ? "normal" : state.severity;
+    let reason: PressureReason = expired ? "none" : state.reason;
+    if (heapThresholdMb !== null && lastHeapUsedMb > heapThresholdMb) {
+      severity = "critical";
+      reason = "v8_heap_absolute";
+      state = {
+        severity,
+        reason,
+        elevatedStreak: 0,
+        recoveryStreak: 0,
+        lastTransitionAtMs: now,
+        observedAtMs: now,
+      };
+    }
+    return {
+      severity,
+      shouldReject: severity === "critical",
+      reason,
+      sampleAgeMs,
+      stale: sampleAgeMs === null || sampleAgeMs >= staleAfterMs,
+      refreshing: scheduled || inFlight !== null,
+    };
+  };
+
   return {
+    getDecision,
     check() {
-      let heapUsedMb = 0;
-      try {
-        heapUsedMb = immediateHeapUsedMb();
-      } catch {
-        heapUsedMb = 0;
-      }
-      const immediate = immediateHeapGuard(heapUsedMb, heapThresholdMb);
-      const now = nowMs();
-      if (now >= nextRefreshAtMs) scheduleRefresh();
-      if (immediate) {
-        state = {
-          severity: "critical",
-          reason: "v8_heap_absolute",
-          elevatedStreak: 0,
-          recoveryStreak: 0,
-          lastTransitionAtMs: now,
-          observedAtMs: now,
-        };
-        return immediate;
-      }
-      const cacheAge = lastSignals ? Math.max(0, now - lastRefreshAtMs) : Number.POSITIVE_INFINITY;
-      if (cacheAge > maxStaleMs || state.severity !== "critical") {
-        return null;
-      }
-      return buildCriticalGuard(
-        state.reason,
-        describeCachedPressure({
-          signals: lastSignals,
-          recoveryStreak: state.recoveryStreak,
-          cacheAgeMs: cacheAge,
-        })
-      );
+      const decision = getDecision();
+      if (!decision.shouldReject) return null;
+      const detail =
+        decision.reason === "v8_heap_absolute"
+          ? { heapUsedMb: Math.round(lastHeapUsedMb), thresholdMb: Math.round(heapThresholdMb!) }
+          : describeCachedPressure({
+              signals: lastSignals,
+              recoveryStreak: state.recoveryStreak,
+              cacheAgeMs: decision.sampleAgeMs!,
+            });
+      return buildCriticalGuard(decision.reason, detail);
     },
     getObservation: () => ({ signals: lastSignals, state }),
     whenRefreshSettled: async () => {
@@ -261,6 +281,11 @@ let defaultRuntime = createResourcePressureRuntime();
 
 export function checkResourcePressureGuard(): ResourcePressureGuardResult | null {
   return defaultRuntime.check();
+}
+
+/** Request-path decision: schedules sampling, but never waits or constructs a Response. */
+export function getResourcePressureDecision(): ResourcePressureDecision {
+  return defaultRuntime.getDecision();
 }
 
 export function getResourcePressureObservation(): ResourcePressureObservation {

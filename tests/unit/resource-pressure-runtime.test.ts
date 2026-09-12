@@ -40,6 +40,44 @@ async function settleRefresh(runtime: ResourcePressureRuntime): Promise<void> {
 }
 
 describe("ResourcePressureRuntime stale-while-revalidate cache", () => {
+  it("decision reads allocate no Response, log nothing, and never sample synchronously", async (t) => {
+    const NativeResponse = globalThis.Response;
+    let responses = 0;
+    let calls = 0;
+    t.mock.method(globalThis, "Response", function (
+      ...args: ConstructorParameters<typeof Response>
+    ) {
+      responses++;
+      return new NativeResponse(...args);
+    } as unknown as typeof Response);
+    const warnings = t.mock.method(console, "warn", () => {});
+    const runtime = createResourcePressureRuntime({
+      heapThresholdMb: 200,
+      immediateHeapUsedMb: () => 201,
+      sample: async () => {
+        calls++;
+        return signals(0);
+      },
+    });
+    t.after(() => runtime.dispose());
+    for (let i = 0; i < 50; i++) {
+      const decision = runtime.getDecision();
+      assert.equal(decision.shouldReject, true);
+      assert.equal(decision.reason, "v8_heap_absolute");
+      assert.equal(decision.sampleAgeMs, null);
+      assert.equal(decision.stale, true);
+      assert.equal(decision.refreshing, true);
+    }
+    assert.equal(responses, 0);
+    assert.equal(calls, 0);
+    assert.equal(warnings.mock.callCount(), 0);
+    assert.equal(runtime.check()?.status, 503);
+    assert.equal(responses, 1, "the downstream guard constructs only its actual rejection");
+    assert.equal(warnings.mock.callCount(), 1);
+    await runtime.whenRefreshSettled();
+    assert.equal(calls, 1);
+  });
+
   it("does no proc/sys I/O in check(), while a cheap first-request heap breach sheds immediately", async () => {
     let slowSamples = 0;
     const runtime = createResourcePressureRuntime({

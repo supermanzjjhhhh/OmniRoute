@@ -38,7 +38,7 @@ import {
   type IngestBudgetAcquireResult,
 } from "./ingestByteAdmission";
 import {
-  getResourcePressureObservation,
+  getResourcePressureDecision,
   type PressureSeverity,
 } from "@omniroute/open-sse/utils/resourcePressure.ts";
 
@@ -217,10 +217,10 @@ export type ChatAdmissionShedReason =
   | "inflight_bytes_budget"
   | "resource_pressure";
 
-/** Read cached pressure severity; sampling failures must not cause false sheds. */
+/** Read effective pressure and schedule refresh even when this entry sheds the request. */
 export function defaultPressureSeverity(): PressureSeverity {
   try {
-    return getResourcePressureObservation().state.severity;
+    return getResourcePressureDecision().severity;
   } catch {
     return "normal";
   }

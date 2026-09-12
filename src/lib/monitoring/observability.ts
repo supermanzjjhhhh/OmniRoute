@@ -4,8 +4,23 @@ import {
 } from "@omniroute/open-sse/services/codexAccount/index.ts";
 import type { AdaptiveAdmissionPublicSnapshot } from "@omniroute/open-sse/services/admission/runtime.ts";
 import type { PerConnectionAdmissionController } from "@/shared/middleware/chatBodyAdmission";
+import type { ResourcePressureDecision } from "@omniroute/open-sse/utils/resourcePressure.ts";
 
 type JsonRecord = Record<string, unknown>;
+
+/** Project cheap, current pressure onto cached aggregates only when serving a full view. */
+export function projectHealthPressure(payload: unknown, decision: ResourcePressureDecision) {
+  const cached = (payload ?? {}) as JsonRecord;
+  const chatAdmission = cached.chatAdmission as JsonRecord | null | undefined;
+  return {
+    ...cached,
+    resourcePressure: { ...decision },
+    pressureReady: !decision.shouldReject,
+    ...(chatAdmission
+      ? { chatAdmission: { ...chatAdmission, pressureSeverity: decision.severity } }
+      : {}),
+  };
+}
 
 /** Process-wide structural chat-admission snapshot type (chatBodyAdmission.ts). */
 export type ChatAdmissionSnapshot = ReturnType<PerConnectionAdmissionController["snapshot"]>;
