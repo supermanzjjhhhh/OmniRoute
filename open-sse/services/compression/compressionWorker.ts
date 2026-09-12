@@ -1,9 +1,5 @@
 import { parentPort } from "node:worker_threads";
-import {
-  applyCompression,
-  applyStackedCompression,
-  type StackedCompressionStep,
-} from "./strategySelector.ts";
+import { applyCompression, type StackedCompressionStep } from "./strategySelector.ts";
 import type {
   CompressionWorkerJob,
   CompressionWorkerMessage,
@@ -18,13 +14,9 @@ parentPort.on("message", (job: CompressionWorkerJob) => {
         type: "step",
         step,
       } satisfies CompressionWorkerMessage);
-    const result =
-      job.mode === "stacked"
-        ? applyStackedCompression(job.body, job.options?.config?.stackedPipeline, {
-            ...job.options,
-            onEngineStep,
-          })
-        : applyCompression(job.body, job.mode, job.options);
+    // Use the same entrypoint as synchronous callers, including Responses body
+    // adaptation, preservation guards and the stacked hard-budget post-pass.
+    const result = applyCompression(job.body, job.mode, { ...job.options, onEngineStep });
     parentPort.postMessage({
       id: job.id,
       type: "result",

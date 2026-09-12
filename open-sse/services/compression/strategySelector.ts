@@ -273,6 +273,7 @@ export function applyCompression(
     compressionStage?: CompressionStage;
     config?: CompressionConfig;
     principalId?: string;
+    onEngineStep?: (step: StackedCompressionStep) => void;
     /**
      * Opt into the TV1 stacked bail-out (skip-on-throw + min-gain). Default off keeps the
      * legacy behavior. The combo proactive-fallback path enables it so a throwing engine is
@@ -300,6 +301,7 @@ function runCompression(
     compressionStage?: CompressionStage;
     config?: CompressionConfig;
     principalId?: string;
+    onEngineStep?: (step: StackedCompressionStep) => void;
     bailout?: BailoutConfig;
     riskGate?: RiskGateConfig;
     cachingContext?: CachingDetectionContext;
@@ -495,6 +497,7 @@ export async function applyCompressionAsync(
     config?: CompressionConfig;
     principalId?: string;
     onEngineStep?: (step: StackedCompressionStep) => void;
+    signal?: AbortSignal;
     cachingContext?: CachingDetectionContext;
   }
 ): Promise<CompressionResult> {
@@ -520,36 +523,14 @@ async function runCompressionAsync(
     config?: CompressionConfig;
     principalId?: string;
     onEngineStep?: (step: StackedCompressionStep) => void;
+    signal?: AbortSignal;
     cachingContext?: CachingDetectionContext;
   }
 ): Promise<CompressionResult> {
-  const workerOptions = options
-    ? {
-        model: options.model,
-        supportsVision: options.supportsVision,
-        providerTransport: options.providerTransport,
-        provider: options.provider,
-        imageTransportFidelity: options.imageTransportFidelity,
-        sourceFormat: options.sourceFormat,
-        targetFormat: options.targetFormat,
-        compressionStage: options.compressionStage,
-        config: options.config,
-      }
-    : undefined;
-  const { isCompressionWorkerEligible } = await import("./compressionWorkerProtocol.ts");
-  if (isCompressionWorkerEligible(body, mode, workerOptions)) {
-    try {
-      const { runCompressionInWorker } = await import("./compressionWorkerPool.ts");
-      return await runCompressionInWorker(body, mode, workerOptions, options?.onEngineStep);
-    } catch {
-      return { body, compressed: false, stats: null };
-    }
-  }
+  if (options?.signal?.aborted) return { body, compressed: false, stats: null };
   if (
     options?.config?.memoizeCompressionResults === true &&
-    // Only memoize for an explicit principal — a missing principalId would collapse
-    // authenticated callers into the shared anonymous (null) key space and let one
-    // principal receive another's cached body. No principal ⇒ skip the cache.
+    // The parent owns the principal-scoped memo; a miss still runs in the worker.
     typeof options?.principalId === "string" &&
     options.principalId.length > 0 &&
     isDeterministicMode(mode, options.config)
@@ -568,10 +549,42 @@ async function runCompressionAsync(
       ...options,
       config: { ...options.config, memoizeCompressionResults: false },
     });
-    // Same contract as the sync path: store the internal clone; return the caller's own
-    // object so later caller mutations cannot corrupt the cache (#11727 semantics).
-    memoStore(key, result);
+    // Do not cache the unchanged fallback from cancellation or temporary worker
+    // overload/failure. Successful results remain isolated by memoStore's clone.
+    if (result.compressed || result.stats) memoStore(key, result);
     return result;
+  }
+  const workerOptions = options
+    ? {
+        model: options.model,
+        supportsVision: options.supportsVision,
+        providerTransport: options.providerTransport,
+        provider: options.provider,
+        imageTransportFidelity: options.imageTransportFidelity,
+        sourceFormat: options.sourceFormat,
+        targetFormat: options.targetFormat,
+        compressionStage: options.compressionStage,
+        config: options.config,
+        cachingContext: options.cachingContext,
+      }
+    : undefined;
+  if (workerOptions) {
+    // Optional fields are absent on the wire; undefined values would make the
+    // strict eligibility check silently send ordinary calls back to the main thread.
+    for (const key of Object.keys(workerOptions) as (keyof typeof workerOptions)[]) {
+      if (workerOptions[key] === undefined) delete workerOptions[key];
+    }
+  }
+  const { isCompressionWorkerEligible } = await import("./compressionWorkerProtocol.ts");
+  if (isCompressionWorkerEligible(body, mode, workerOptions)) {
+    try {
+      const { runCompressionInWorker } = await import("./compressionWorkerPool.ts");
+      return await runCompressionInWorker(body, mode, workerOptions, options?.onEngineStep, {
+        signal: options?.signal,
+      });
+    } catch {
+      return { body, compressed: false, stats: null };
+    }
   }
   // Single-mode omniglyph (async-only) — resolution lives in engines/omniglyphSingleMode.ts.
   if (mode === "omniglyph") return applyOmniglyphSingleMode(body, options);

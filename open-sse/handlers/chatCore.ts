@@ -294,6 +294,7 @@ import {
 } from "@/lib/logEnv";
 import { logAuditEvent } from "@/lib/compliance";
 import { emit } from "@/lib/events/eventBus";
+import { createCompressionStepReporter } from "./chatCore/compressionProgress.ts";
 import { adaptBodyForCompression } from "../services/compression/bodyAdapter.ts";
 import { ensureEngineBreakdown } from "../services/compression/engineBreakdown.ts";
 import { handleBypassRequest } from "../utils/bypassHandler.ts";
@@ -1729,29 +1730,9 @@ export async function handleChatCore({
           config: compressionConfig,
           cachingContext: cacheCtx,
           principalId: compressionPrincipalId,
+          signal: clientRawRequest?.signal,
           // F3.3: stream per-engine progress live (best-effort) before compression.completed.
-          onEngineStep: (s) => {
-            try {
-              const stepPayload = {
-                requestId: traceId,
-                comboId: null,
-                mode,
-                stepIndex: s.stepIndex,
-                totalSteps: s.totalSteps,
-                engine: s.engine,
-                state: s.state,
-                originalTokens: s.originalTokens,
-                compressedTokens: s.compressedTokens,
-                savingsPercent: s.savingsPercent,
-                ...(s.durationMs !== undefined ? { durationMs: s.durationMs } : {}),
-                timestamp: Date.now(),
-              };
-              emit("compression.step", stepPayload);
-              void forwardDashboardEventToLiveWs("compression.step", stepPayload);
-            } catch (_stepErr) {
-              // best-effort live event — never fail the request
-            }
-          },
+          onEngineStep: createCompressionStepReporter(traceId, mode),
         };
         const runCompression = (input: Record<string, unknown>) =>
           applyCompressionAsync(input, mode, compressionOptions);

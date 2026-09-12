@@ -1,5 +1,6 @@
 import type { CompressionConfig, CompressionMode, CompressionResult } from "./types.ts";
 import type { StackedCompressionStep } from "./strategySelector.ts";
+import type { CachingDetectionContext } from "./cachingAware.ts";
 import type {
   CompressionStage,
   CompressionWireFormat,
@@ -16,6 +17,7 @@ export interface CompressionWorkerOptions {
   targetFormat?: CompressionWireFormat;
   compressionStage?: CompressionStage;
   config?: CompressionConfig;
+  cachingContext?: CachingDetectionContext;
 }
 export interface CompressionWorkerJob {
   id: number;
