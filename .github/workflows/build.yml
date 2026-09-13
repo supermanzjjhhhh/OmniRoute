@@ -1,64 +1,72 @@
-name: Build App
+name: Build ARM64 GHCR Image
 
-# Manual-only since #11946. The hosted 7 GB runner can no longer build this tree — 19 of
-# the last 30 runs died with "The runner has received a shutdown signal" (VM out of
-# memory) ~8 min into `next build`, release/v3.8.51 itself included, even with the 10 GB
-# swapfile below. Triggered on `push: branches: ["**"]` it painted every branch and every
-# PR red while producing an artefact nothing downloads. The bundle is validated where a
-# build actually fits:
-#   - main:       ci.yml `Build` (self-hosted omni-build pool) on every merge
-#   - release/**: nightly-release-green.yml (same pool, continuous)
-# Dispatch this workflow by hand when a hosted build artefact is genuinely needed.
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write
+
+concurrency:
+  group: memory-pressure-arm64-image
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/supermanzjjhhhh/omniroute
+  IMAGE_TAG: memory-pressure-a1cf20658
 
 jobs:
-  build:
-    name: Fast Production Build
-    runs-on: ubuntu-latest
+  build-image:
+    name: Build and push runner-base (ARM64)
+    runs-on: ubuntu-24.04-arm
     steps:
-      - name: Expand Virtual Memory (Native 10GB Swap)
+      - name: Record runner resources
         run: |
-          sudo swapoff -a || true
-          sudo rm -f /mnt/swapfile /swapfile
-          sudo fallocate -l 10G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=10240
-          sudo chmod 600 /mnt/swapfile
-          sudo mkswap /mnt/swapfile
-          sudo swapon /mnt/swapfile
+          uname -a
+          nproc
           free -h
+          df -h /
 
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4.6.0
         with:
-          node-version: "24"
-          cache: npm
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Next.js app & CLI bundle
-        run: |
-          npm run build:release
-        env:
-          NODE_OPTIONS: "--max-old-space-size=12288"
-          OMNIROUTE_BUILD_MEMORY_MB: "12288"
-          OMNIROUTE_USE_TURBOPACK: "1"
-
-      - name: Archive build outputs
-        run: |
-          tar -czf omniroute-build.tar.gz .build dist
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: Build and push ARM64 image
+        id: build
+        uses: docker/build-push-action@v7
         with:
-          name: omniroute-build
-          path: omniroute-build.tar.gz
-          retention-days: 7
+          context: .
+          target: runner-base
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            OMNIROUTE_BUILD_WORKERS=1
+            OMNIROUTE_BUILD_MEMORY_MB=6144
+          cache-from: type=gha,scope=memory-pressure-arm64
+          cache-to: type=gha,scope=memory-pressure-arm64,mode=min,ignore-error=true
+
+      - name: Verify published manifest
+        run: |
+          docker buildx imagetools inspect "${IMAGE_NAME}:${IMAGE_TAG}"
+          {
+            echo "### ARM64 image"
+            echo
+            echo "- Image: \`${IMAGE_NAME}:${IMAGE_TAG}\`"
+            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Source: \`${GITHUB_SHA}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
