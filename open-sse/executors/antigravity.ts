@@ -428,7 +428,7 @@ function sanitizeAntigravityGeminiRequest(
     ? { ...(request.generationConfig as Record<string, unknown>) }
     : {};
 
-  const geminiTools = buildGeminiTools(request.tools);
+  const geminiTools = buildGeminiTools(request.tools, { preferFunctionDeclarations: true });
   if (geminiTools) {
     clean.tools = geminiTools;
     clean.toolConfig = { functionCallingConfig: { mode: "VALIDATED" } };
@@ -774,9 +774,13 @@ export class AntigravityExecutor extends BaseExecutor {
     }
 
     const safetySettings = getAntigravitySafetySettings(normalizedRequest?.safetySettings);
+    const antigravityTools = buildGeminiTools(normalizedRequest?.tools, {
+      preferFunctionDeclarations: true,
+    });
     const rawTransformedRequest = {
       ...normalizedRequest,
       ...(contents.length > 0 && { contents }),
+      ...(antigravityTools !== undefined && { tools: antigravityTools }),
       sessionId: getAntigravitySessionId(
         credentials,
         typeof normalizedRequest?.sessionId === "string" ? normalizedRequest.sessionId : undefined

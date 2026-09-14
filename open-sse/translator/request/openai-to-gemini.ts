@@ -158,6 +158,8 @@ type GeminiToolNameOptions = {
   stripFunctionCallId?: boolean;
   /** Antigravity supports the thoughtSignature field. Standard Gemini rejects it with 400. */
   supportsSignatureBypass?: boolean;
+  /** Prefer callable tools when an upstream cannot mix them with Google Search grounding. */
+  preferFunctionDeclarations?: boolean;
 };
 
 // Core: Convert OpenAI request to Gemini format (base for all variants)
@@ -577,7 +579,7 @@ function openaiToGeminiBase(
 
   if (geminiTools && geminiTools.length > 0) {
     result.tools = geminiTools;
-    if (hasGoogleSearch) {
+    if (hasGoogleSearch && !toolNameOptions.preferFunctionDeclarations) {
       result.tools.push({ googleSearch: {} });
     }
     result.toolConfig = {
@@ -652,6 +654,7 @@ export function openaiToCloudCodeGeminiRequest(
   options: {
     signatureNamespace?: string | null;
     signaturelessToolCallMode?: "native" | "text" | "context";
+    preferFunctionDeclarations?: boolean;
   } = {}
 ) {
   const request = openaiToGeminiBase(model, body, stream, {
@@ -659,6 +662,7 @@ export function openaiToCloudCodeGeminiRequest(
     signatureNamespace: options.signatureNamespace,
     signaturelessToolCallMode: options.signaturelessToolCallMode,
     supportsSignatureBypass: true,
+    preferFunctionDeclarations: options.preferFunctionDeclarations,
   });
 
   // Standard Gemini requests retain the historical all-OFF defaults, but Cloud Code
@@ -797,6 +801,7 @@ export function openaiToAntigravityRequest(model, body, stream, credentials = nu
   const cloudCodeRequest = openaiToCloudCodeGeminiRequest(model, body, stream, {
     signatureNamespace,
     signaturelessToolCallMode: isThinkingGemini ? "context" : "native",
+    preferFunctionDeclarations: true,
   });
 
   if (isClaude) {

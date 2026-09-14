@@ -16,6 +16,9 @@ type GeminiTool = {
 type GeminiToolSanitizationOptions = {
   stripNamespace?: boolean;
   toolNameMap?: Map<string, string> | null;
+  // Antigravity rejects native googleSearch mixed with functionDeclarations.
+  // Agent clients need their executable functions more than optional web grounding.
+  preferFunctionDeclarations?: boolean;
 };
 
 const MAX_GEMINI_TOOL_NAME_LENGTH = 64;
@@ -243,7 +246,10 @@ export function buildGeminiTools(
 
   const result: GeminiTool[] = [];
 
-  if (googleSearchTool) {
+  if (
+    googleSearchTool &&
+    (!options.preferFunctionDeclarations || functionDeclarations.length === 0)
+  ) {
     return [googleSearchTool];
   }
 

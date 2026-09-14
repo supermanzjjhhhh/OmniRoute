@@ -82,6 +82,43 @@ test("(b3) image and older Gemini families keep their separate request contract"
   }
 });
 
+test("Antigravity executor keeps function declarations from a mixed Gemini tool envelope", async () => {
+  const executor = new AntigravityExecutor();
+  const result = await executor.transformRequest(
+    "antigravity/gemini-3.1-pro",
+    {
+      request: {
+        contents: [{ role: "user", parts: [{ text: "Run a tool" }] }],
+        generationConfig: {},
+        tools: [
+          { googleSearch: {} },
+          {
+            functionDeclarations: [
+              {
+                name: "exec_command",
+                description: "Run a command",
+                parameters: { type: "object", properties: {} },
+              },
+            ],
+          },
+        ],
+      },
+    },
+    true,
+    { projectId: "project-1" }
+  );
+  if (result instanceof Response) throw new Error("Unexpected Response from transformRequest");
+
+  const request = result.request as {
+    tools?: Array<{ functionDeclarations?: Array<{ name: string }>; googleSearch?: unknown }>;
+  };
+  assert.deepEqual(
+    request.tools?.flatMap((tool) => tool.functionDeclarations ?? []).map((tool) => tool.name),
+    ["exec_command"]
+  );
+  assert.equal(request.tools?.some((tool) => tool.googleSearch !== undefined), false);
+});
+
 test("(c) a Claude conversation already ending on user is unchanged", async () => {
   const request = await transform("antigravity/claude-opus-4-8", [
     { role: "user", parts: [{ text: "Hello" }] },
