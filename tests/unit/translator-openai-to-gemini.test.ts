@@ -486,8 +486,8 @@ test("OpenAI -> Gemini request gives googleSearch precedence over function tools
   assert.deepEqual((result as any).tools, [{ googleSearch: {} }]);
 });
 
-test("OpenAI -> Antigravity keeps googleSearch without function calling config", () => {
-  const result = openaiToAntigravityRequest(
+test("OpenAI -> Cloud Code Gemini keeps googleSearch precedence by default", () => {
+  const result = openaiToCloudCodeGeminiRequest(
     "gemini-2.5-pro",
     {
       messages: [{ role: "user", content: "Search the web" }],
@@ -499,8 +499,52 @@ test("OpenAI -> Antigravity keeps googleSearch without function calling config",
             parameters: { type: "object", properties: {} },
           },
         },
-        { type: "web_search_preview" },
+        { type: "web_search" },
       ],
+    },
+    false
+  );
+
+  assert.deepEqual((result as any).tools, [{ googleSearch: {} }]);
+});
+
+test("OpenAI -> Antigravity prefers executable functions over googleSearch", () => {
+  const result = openaiToAntigravityRequest(
+    "gemini-2.5-pro",
+    {
+      messages: [{ role: "user", content: "Run a tool" }],
+      tools: [
+        { type: "web_search_preview" },
+        {
+          type: "function",
+          function: {
+            name: "exec_command",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ],
+    },
+    false,
+    { projectId: "proj-tools" } as any
+  );
+
+  const tools = (result as any).request?.tools;
+  assert.equal(tools?.length, 1);
+  assert.deepEqual(
+    tools[0].functionDeclarations.map((tool: any) => tool.name),
+    ["exec_command"]
+  );
+  assert.deepEqual(result.request.toolConfig, {
+    functionCallingConfig: { mode: "VALIDATED" },
+  });
+});
+
+test("OpenAI -> Antigravity keeps googleSearch when it is the only tool", () => {
+  const result = openaiToAntigravityRequest(
+    "gemini-2.5-pro",
+    {
+      messages: [{ role: "user", content: "Search the web" }],
+      tools: [{ type: "web_search_preview" }],
     },
     false,
     { projectId: "proj-search" } as any
