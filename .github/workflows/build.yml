@@ -13,7 +13,7 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/supermanzjjhhhh/omniroute
-  IMAGE_TAG: memory-pressure-a1cf20658
+  IMAGE_TAG: sha-${{ github.sha }}
 
 jobs:
   build-image:
@@ -70,3 +70,28 @@ jobs:
             echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
             echo "- Source: \`${GITHUB_SHA}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Smoke-test published image
+        env:
+          CONTAINER_NAME: omniroute-image-smoke-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true' EXIT
+
+          docker pull "${IMAGE_NAME}:${IMAGE_TAG}"
+          docker run --detach --name "$CONTAINER_NAME" --publish 127.0.0.1::20128 \
+            "${IMAGE_NAME}:${IMAGE_TAG}"
+
+          port="$(docker port "$CONTAINER_NAME" 20128/tcp | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p')"
+          for attempt in $(seq 1 45); do
+            health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CONTAINER_NAME")"
+            if curl --fail --silent --show-error "http://127.0.0.1:${port}/healthz" >/dev/null \
+              && [ "$health" = healthy ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs "$CONTAINER_NAME"
+          docker inspect "$CONTAINER_NAME"
+          exit 1
