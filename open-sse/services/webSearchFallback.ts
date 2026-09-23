@@ -160,6 +160,10 @@ export function supportsNativeWebSearchFallbackBypass({
   // fall through to the native-bypass defaults below.
   interceptSearchOverride?: boolean;
 }): boolean {
+  // TokenRouter exposes Chat Completions only. Passing a Responses web_search tool through
+  // makes it validate as an anonymous function, so protocol safety must win over an explicit
+  // native-passthrough override on this target.
+  if (provider === "tokenrouter" && targetFormat === FORMATS.OPENAI) return false;
   if (typeof interceptSearchOverride === "boolean") {
     return !interceptSearchOverride;
   }

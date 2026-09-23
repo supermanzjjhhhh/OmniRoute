@@ -717,7 +717,11 @@ function closeToolCall(state, emit, idx, recordAsCompleted = true) {
       // translators) so stream.ts's completion-log summary reports finish_reason
       // "tool_calls" and message.tool_calls instead of "stop" with no tool calls.
       if (state.toolCalls instanceof Map) {
-        state.toolCalls.set(idx, {
+        // `for...in` yields a string key ("0"), while upstream translators such as
+        // Gemini→OpenAI store the same call under the numeric key (0). Normalize it
+        // so chained Gemini→OpenAI→Responses translation replaces that entry instead
+        // of leaving two identical calls in the completion-log summary.
+        state.toolCalls.set(normalizeOutputIndex(idx), {
           id: callId,
           index: normalizedIndex,
           type: isCustomTool ? "custom_tool_call" : "function",

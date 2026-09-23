@@ -299,6 +299,35 @@ test("#3384 interceptSearchOverride=false forces native passthrough even for a s
   );
 });
 
+test("TokenRouter Chat converts web_search despite a native-passthrough override", () => {
+  const { body, fallback } = prepareWebSearchFallbackBody(
+    {
+      tools: [{ type: "web_search", search_context_size: "medium" }],
+    },
+    {
+      provider: "tokenrouter",
+      sourceFormat: "openai-responses",
+      targetFormat: "openai",
+      nativeCodexPassthrough: false,
+      interceptSearchOverride: false,
+    }
+  );
+
+  assert.equal(fallback.enabled, true);
+  assert.equal(fallback.toolName, OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME);
+  const tool = (body.tools as Array<Record<string, unknown>>)[0];
+  const fn = tool.function as Record<string, unknown>;
+  assert.equal(tool.type, "function");
+  assert.equal(fn.name, OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME);
+  const parameters = fn.parameters as Record<string, unknown>;
+  assert.equal(parameters.type, "object");
+  assert.deepEqual(parameters.required, ["query"]);
+  assert.equal(
+    ((parameters.properties as Record<string, unknown>).query as Record<string, unknown>).type,
+    "string"
+  );
+});
+
 test("#3384 interceptSearchOverride=undefined falls through to the existing native-bypass defaults", () => {
   assert.equal(
     supportsNativeWebSearchFallbackBypass({
