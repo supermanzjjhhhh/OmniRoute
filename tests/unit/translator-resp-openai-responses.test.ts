@@ -185,6 +185,43 @@ test("OpenAI -> Responses: closing a tool call also records it in the shared sta
   assert.equal(recorded.function.arguments, '{"message":"hi"}');
 });
 
+test("OpenAI -> Responses: chained translators do not duplicate numeric tool-call keys", () => {
+  const state = initState(FORMATS.OPENAI_RESPONSES);
+  state.toolCalls.set(0, {
+    id: "call_2593712",
+    index: 0,
+    type: "function",
+    function: { name: "exec_command", arguments: '{"cmd":"echo ok"}' },
+  });
+
+  openaiToOpenAIResponsesResponse(
+    {
+      id: "chatcmpl-antigravity",
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: "call_2593712",
+                type: "function",
+                function: { name: "exec_command", arguments: '{"cmd":"echo ok"}' },
+              },
+            ],
+          },
+          finish_reason: "tool_calls",
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    },
+    state
+  );
+
+  assert.equal(state.toolCalls.size, 1);
+  assert.deepEqual([...state.toolCalls.keys()], [0]);
+});
+
 test("OpenAI -> Responses: flush on null closes text content and emits response.completed", () => {
   const events = collectEvents([
     {

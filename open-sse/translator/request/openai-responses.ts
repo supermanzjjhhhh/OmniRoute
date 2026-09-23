@@ -468,14 +468,20 @@ export function openaiResponsesToOpenAIRequest(
       continue;
     }
 
-    // Skip tool_search_call items. These are Responses-API-only metadata items
-    // emitted by Codex's dynamic tool-search optimization: they record that the
-    // model queried a subset of available tools, but carry no content that Chat
+    // Skip tool_search_call and hosted server-tool call items (web_search_call,
+    // file_search_call). These are Responses-API-only metadata items emitted by
+    // Codex's dynamic tool-search optimization or hosted tools: they record that
+    // the model queried tools or web/file search, but carry no content that Chat
     // Completions can represent. Throwing here would break every multi-turn
-    // conversation where Codex previously used tool_search (the whole session
-    // would carry tool_search_call items forward in `input`). Skipping matches
-    // the reasoning-item policy: display-only metadata, no chat side-effect.
-    if (itemType === "tool_search_call" || itemType === "tool_search_result") {
+    // conversation where Codex previously used search (the whole session would
+    // carry web_search_call items forward in `input`). Skipping matches the
+    // reasoning-item policy: display-only metadata, no chat side-effect.
+    if (
+      itemType === "tool_search_call" ||
+      itemType === "tool_search_result" ||
+      itemType === "web_search_call" ||
+      itemType === "file_search_call"
+    ) {
       continue;
     }
 
@@ -773,7 +779,10 @@ export function openaiResponsesToOpenAIRequest(
   // ("When using tool_choice, tools must be set"). Contradictory choices like "required"
   // or forced functions are preserved so the upstream error remains visible.
   const finalChatTools = Array.isArray(result.tools) ? result.tools : [];
-  if (finalChatTools.length === 0 && (result.tool_choice === "auto" || result.tool_choice === "none")) {
+  if (
+    finalChatTools.length === 0 &&
+    (result.tool_choice === "auto" || result.tool_choice === "none")
+  ) {
     delete result.tool_choice;
   }
 
