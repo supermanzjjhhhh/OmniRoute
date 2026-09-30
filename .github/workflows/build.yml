@@ -56,7 +56,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: |
             OMNIROUTE_BUILD_WORKERS=1
-            OMNIROUTE_BUILD_MEMORY_MB=6144
+            OMNIROUTE_BUILD_MEMORY_MB=10240
           cache-from: type=gha,scope=memory-pressure-arm64
           cache-to: type=gha,scope=memory-pressure-arm64,mode=min,ignore-error=true
 
