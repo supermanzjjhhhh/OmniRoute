@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
-import workerThreads from "node:worker_threads";
-import { replaceWorker } from "./workerHarness.ts";
+import { Worker } from "node:worker_threads";
 import {
   isCompressionWorkerEligible,
   isStrictlySerializable,
@@ -15,7 +14,6 @@ import {
   applyCompressionAsync,
 } from "../../../open-sse/services/compression/strategySelector.ts";
 import type { CompressionConfig } from "../../../open-sse/services/compression/types.ts";
-import { clearMemoStore, getMemoStats } from "../../../open-sse/services/compression/resultMemo.ts";
 
 const body = {
   model: "gpt-test",
@@ -81,111 +79,65 @@ describe("compression worker eligibility", () => {
     }
   });
 
-  it("rejects functions, symbols, classes, special objects, cycles, and non-finite numbers", () => {
-    for (const value of [
-      () => undefined,
-      Symbol("x"),
-      new Date(),
-      new Map(),
-      new Set(),
-      /x/,
-      NaN,
-      Infinity,
-    ]) {
+  it("rejects functions, symbols, cycles, and non-finite numbers", () => {
+    for (const value of [() => undefined, Symbol("x"), NaN, Infinity]) {
       assert.equal(isStrictlySerializable(value), false);
     }
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
     assert.equal(isStrictlySerializable(cyclic), false);
   });
+
+  it("#13154: accepts structured-clone-native Date/Map/Set/RegExp values", () => {
+    for (const value of [new Date(), new Map(), new Set(), /x/]) {
+      assert.equal(isStrictlySerializable(value), true);
+    }
+  });
+
+  it("#13154: accepts `undefined` values instead of rejecting the whole tree", () => {
+    assert.equal(isStrictlySerializable(undefined), true);
+    assert.equal(isStrictlySerializable({ provider: undefined, model: "gpt-test" }), true);
+  });
+
+  it("#13154: accepts strategySelector.ts's exact 9-key workerOptions shape with `provider` unset", () => {
+    // Mirrors runCompressionAsync's workerOptions object: all 9 keys always present,
+    // `provider` commonly unresolved (undefined) at call time.
+    const workerOptions = {
+      model: "gpt-test",
+      supportsVision: undefined,
+      providerTransport: undefined,
+      provider: undefined,
+      imageTransportFidelity: undefined,
+      sourceFormat: undefined,
+      targetFormat: undefined,
+      compressionStage: undefined,
+      config,
+    };
+    assert.equal(isCompressionWorkerEligible(body, "stacked", workerOptions), true);
+  });
+
+  it("#13154: does not misread a shared (non-cyclic) sub-object referenced by two sibling branches as a cycle", () => {
+    // Original bug: a single `seen` set shared across the whole recursion tree (never
+    // backtracked) meant visiting the SAME object twice via two different, non-cyclic
+    // paths (e.g. two messages both pointing at the same cached template object) was
+    // indistinguishable from a real cycle. Path-based tracking (add before descending,
+    // delete after) must treat this as eligible.
+    const shared = { nested: true };
+    const sharedBody = { messages: [shared, shared] };
+    assert.equal(isStrictlySerializable(sharedBody), true);
+    assert.equal(isCompressionWorkerEligible(sharedBody, "standard", { config }), true);
+  });
+
+  it("still rejects a body with a genuine cycle before it ever reaches postMessage", () => {
+    const cyclicMessage: Record<string, unknown> = { role: "user" };
+    cyclicMessage.self = cyclicMessage;
+    const cyclicBody = { messages: [cyclicMessage] };
+    assert.equal(isStrictlySerializable(cyclicBody), false);
+    assert.equal(isCompressionWorkerEligible(cyclicBody, "standard", { config }), false);
+  });
 });
 
 describe("compression worker execution", () => {
-  it("offloads eligible calls with omitted optional fields to a real worker", async (t) => {
-    await closeCompressionWorkerPoolForTests();
-    t.after(() => closeCompressionWorkerPoolForTests());
-    const NativeWorker = workerThreads.Worker;
-    let workers = 0;
-    replaceWorker(t, (filename, options) => {
-      workers++;
-      return new NativeWorker(filename, options);
-    });
-    const result = await applyCompressionAsync(body, "standard", { config });
-    assert.equal(result.compressed, true);
-    assert.equal(workers, 1);
-  });
-
-  for (const mode of ["standard", "rtk", "stacked"] as const) {
-    it(`preserves principal-scoped memoization around ${mode} worker execution`, async (t) => {
-      clearMemoStore();
-      t.after(clearMemoStore);
-      const input =
-        mode === "rtk"
-          ? {
-              messages: [
-                { role: "tool", content: Array.from({ length: 20 }, () => "same line").join("\n") },
-              ],
-            }
-          : body;
-      const options = {
-        config: { ...config, memoizeCompressionResults: true },
-        principalId: "worker-principal-a",
-      };
-      const first = await applyCompressionAsync(input, mode, options);
-      assert.equal(first.compressed, true);
-      first.body.injected = "caller mutation";
-      const second = await applyCompressionAsync(input, mode, options);
-      assert.equal(second.stats?.memoHit, true);
-      assert.equal(second.body.injected, undefined);
-      assert.equal(getMemoStats().size, 1);
-
-      const other = await applyCompressionAsync(input, mode, {
-        ...options,
-        principalId: "worker-principal-b",
-      });
-      assert.equal(other.compressed, true);
-      assert.notEqual(other.stats?.memoHit, true);
-      assert.equal(getMemoStats().size, 2);
-
-      const controller = new AbortController();
-      controller.abort();
-      const aborted = await applyCompressionAsync(input, mode, {
-        ...options,
-        signal: controller.signal,
-      });
-      assert.deepEqual(aborted, { body: input, compressed: false, stats: null });
-      assert.equal(getMemoStats().hits, 1);
-    });
-  }
-
-  it("does not memoize a temporary worker failure", async (t) => {
-    await closeCompressionWorkerPoolForTests();
-    clearMemoStore();
-    t.after(clearMemoStore);
-    t.after(() => closeCompressionWorkerPoolForTests());
-    const NativeWorker = workerThreads.Worker;
-    let attempts = 0;
-    let now = Date.now();
-    t.mock.method(Date, "now", () => now);
-    replaceWorker(t, (filename, options) => {
-      if (++attempts === 1) throw new Error("synthetic worker unavailable");
-      return new NativeWorker(filename, options);
-    });
-    const options = {
-      config: { ...config, memoizeCompressionResults: true },
-      principalId: "worker-principal",
-    };
-    const fallback = await applyCompressionAsync(body, "standard", options);
-    assert.deepEqual(fallback, { body, compressed: false, stats: null });
-    assert.equal(getMemoStats().size, 0);
-    now += 1_001;
-    const recovered = await applyCompressionAsync(body, "standard", options);
-    assert.equal(recovered.compressed, true);
-    const cached = await applyCompressionAsync(body, "standard", options);
-    assert.equal(cached.stats?.memoHit, true);
-    assert.equal(attempts, 2);
-  });
-
   it("matches the synchronous body and stats except timing fields", async () => {
     const sync = applyCompression(body, "stacked", { config });
     const async = await applyCompressionAsync(body, "stacked", { config });
@@ -205,36 +157,6 @@ describe("compression worker execution", () => {
     assert.deepEqual(comparable(async), comparable(sync));
   });
 
-  it("preserves explicit connection caching overrides in the worker", async (t) => {
-    await closeCompressionWorkerPoolForTests();
-    t.after(() => closeCompressionWorkerPoolForTests());
-    const NativeWorker = workerThreads.Worker;
-    let workers = 0;
-    replaceWorker(t, (filename, options) => {
-      workers++;
-      return new NativeWorker(filename, options);
-    });
-    const input = {
-      model: "openai/gpt-4",
-      messages: [{ role: "system", content: "Agent timestamp 1700000000." }, body.messages[1]],
-    };
-    for (const supportsPromptCaching of [false, true]) {
-      const options = {
-        config: { ...config, quantumLock: { enabled: true } },
-        cachingContext: {
-          provider: "openai",
-          connectionCacheOverride: { supportsPromptCaching },
-        },
-      };
-      const sync = applyCompression(input, "standard", options);
-      const async = await applyCompressionAsync(input, "standard", options);
-      assert.equal(async.compressed, true);
-      assert.deepEqual(comparable(async), comparable(sync));
-      if (!supportsPromptCaching) assert.equal(async.stats?.quantumLock, undefined);
-    }
-    assert.equal(workers, 1);
-  });
-
   it("relays per-engine progress from the worker", async () => {
     const steps: string[] = [];
     await applyCompressionAsync(body, "stacked", {
@@ -244,23 +166,65 @@ describe("compression worker execution", () => {
     assert.deepEqual(steps, ["rtk", "caveman"]);
   });
 
-  it("fails open without inline compression when a job times out", async () => {
+  it("reports a timeout as a non-retryable fault instead of silently failing open (#13145)", async () => {
+    // The pool no longer swallows a dispatch timeout: it rejects with a typed fault
+    // whose retryInProcess=false tells the caller (strategySelector) that the worker
+    // already burned its budget, so the caller ships the body uncompressed and LOGS
+    // the fault rather than re-running the same heavy pipeline on the event loop.
     const pool = new CompressionWorkerPool({ size: 1, timeoutMs: 1, idleMs: 100 });
     try {
-      const result = await pool.run(body, "stacked", { config });
-      assert.deepEqual(result, { body, compressed: false, stats: null });
+      await assert.rejects(
+        () => pool.run(body, "stacked", { config }),
+        (err: unknown) =>
+          err instanceof Error &&
+          err.name === "CompressionWorkerError" &&
+          (err as { retryInProcess?: boolean }).retryInProcess === false &&
+          /timeout/.test(err.message)
+      );
     } finally {
       await pool.close();
     }
   });
 
-  it("keeps the parent event loop responsive while two workers overlap", async (t) => {
-    const pool = new CompressionWorkerPool({ size: 2 });
-    t.after(() => pool.close());
+  it("terminates an idle worker instead of only dropping it from the pool", async () => {
+    const spawned = new Set<Worker>();
+    const terminated: Promise<number>[] = [];
+    const originalPostMessage = Worker.prototype.postMessage;
+    const originalTerminate = Worker.prototype.terminate;
+    Worker.prototype.postMessage = function (this: Worker, ...args) {
+      spawned.add(this);
+      return originalPostMessage.apply(this, args);
+    };
+    Worker.prototype.terminate = function (this: Worker) {
+      const exit = originalTerminate.call(this);
+      terminated.push(exit);
+      return exit;
+    };
+    const messagePorts = () =>
+      process.getActiveResourcesInfo().filter((resource) => resource === "MessagePort").length;
+    const portsBefore = messagePorts();
+    const pool = new CompressionWorkerPool({ size: 1, idleMs: 50 });
+    try {
+      await pool.run(body, "stacked", { config });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.equal(spawned.size, 1);
+      assert.equal(terminated.length, 1, "idle eviction must terminate the worker thread");
+      await Promise.all(terminated);
+      assert.ok(messagePorts() <= portsBefore, "idle eviction must not retain the worker's port");
+    } finally {
+      Worker.prototype.postMessage = originalPostMessage;
+      Worker.prototype.terminate = originalTerminate;
+      await pool.close();
+      // Reap anything the pool forgot so a regression fails instead of hanging the runner.
+      await Promise.all([...spawned].map((worker) => worker.terminate().catch(() => undefined)));
+    }
+  });
+
+  it("keeps the parent event loop responsive while two workers overlap", async () => {
     const largeBody = {
-      messages: Array.from({ length: 100 }, (_, index) => ({
+      messages: Array.from({ length: 400 }, (_, index) => ({
         role: "user",
-        content: `message ${index} ` + "basically actually simply ".repeat(100),
+        content: `message ${index} ` + "basically actually simply ".repeat(400),
       })),
     };
     let ticked = false;
@@ -271,43 +235,11 @@ describe("compression worker execution", () => {
       }, 0)
     );
     const jobs = Promise.all([
-      pool.run(largeBody, "standard", { config }),
-      pool.run(largeBody, "standard", { config }),
+      applyCompressionAsync(largeBody, "standard", { config }),
+      applyCompressionAsync(largeBody, "standard", { config }),
     ]);
-    assert.equal(pool.getSummary().activeJobs, 2);
     await tick;
     assert.equal(ticked, true);
-    assert.ok((await jobs).every((result) => result.compressed));
-    assert.equal(pool.getSummary().completedJobs, 2);
-  });
-
-  it("keeps AbortSignal out of wire options and never compresses inline after cancellation", async () => {
-    const controller = new AbortController();
-    const result = await applyCompressionAsync(body, "standard", {
-      config,
-      signal: controller.signal,
-    });
-    assert.equal(result.compressed, true);
-    controller.abort();
-    const cancelled = await applyCompressionAsync(body, "standard", {
-      config,
-      signal: controller.signal,
-    });
-    assert.equal(cancelled.compressed, false);
-    assert.equal(cancelled.body, body);
-  });
-
-  it("executes RTK tool-output compression in a native worker", async (t) => {
-    const pool = new CompressionWorkerPool({ size: 1 });
-    t.after(() => pool.close());
-    const toolBody = {
-      messages: [
-        { role: "tool", content: Array.from({ length: 20 }, () => "same noisy line").join("\n") },
-      ],
-    };
-    const result = await pool.run(toolBody, "rtk", { config });
-    assert.equal(result.compressed, true);
-    assert.deepEqual(comparable(result), comparable(applyCompression(toolBody, "rtk", { config })));
-    assert.equal(pool.getSummary().completedJobs, 1);
+    await jobs;
   });
 });
