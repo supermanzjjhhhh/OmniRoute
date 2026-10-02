@@ -230,8 +230,31 @@ ENV HOSTNAME=0.0.0.0
 # .maxPanel, issue #1905). Override at `docker run` time with
 # `-e OMNIROUTE_MEMORY_MB=2048` (or higher) if you raise fusionTuning.maxPanel
 # above the default cap.
+#
+# RAISING THIS REQUIRES RAISING THE CONTAINER LIMIT TOO. `--max-old-space-size`
+# caps ONLY the V8 old space. `external`/`arrayBuffers` (Buffer payloads, SSE
+# buffers, SQLite reads) and Node's native footprint (malloc arenas, code,
+# stacks) are charged to the cgroup on top of it — measured at ~600MB with a
+# ~200MB live heap. So heap + non-heap must fit inside `--memory`, and the
+# resourcePressure guard (open-sse/utils/resourcePressurePolicy.ts,
+# criticalRatio=0.92) sheds ALL chat traffic with 503 once
+# cgroup_working_set / cgroup_max crosses that line.
+#
+# 1024MB heap therefore needs `--memory=2g` or more. Setting
+# `-e OMNIROUTE_MEMORY_MB=1536` against the old `--memory=2304m` left only
+# 672MB for ~1.1GB of non-heap usage: the guard tripped on `cgroup_ratio` after
+# ~11h and every model returned 503 until an operator restarted the container.
+# Keep heap at or below ~40% of `--memory`.
 ENV OMNIROUTE_MEMORY_MB=1024
 ENV NODE_OPTIONS="--max-old-space-size=${OMNIROUTE_MEMORY_MB}"
+
+# Self-heal the "wedged forever" failure mode: when pressure stays critical,
+# exit so the supervisor restarts a clean process instead of leaving every
+# caller 503 until a human intervenes. Opt out with
+# `-e OMNIROUTE_PRESSURE_SELF_RESTART=0`. Requires a restart policy
+# (`--restart unless-stopped`) or the container simply stops instead of
+# recovering.
+ENV OMNIROUTE_PRESSURE_SELF_RESTART=1
 
 # Data directory inside Docker — must match the volume mount in docker-compose.yml
 ENV DATA_DIR=/app/data
