@@ -14,6 +14,7 @@ import { getCustomModels } from "@/lib/db/models";
 import { getProviderNodeById } from "@/lib/db/providers";
 import { requiresWebSessionCredential } from "@/shared/providers/webSessionCredentials";
 import { sanitizeErrorMessage } from "@omniroute/open-sse/utils/error";
+import { getModelTargetFormat } from "@omniroute/open-sse/config/providerModels";
 import { withRateLimit } from "@omniroute/open-sse/services/rateLimitManager";
 import {
   isCreditsExhausted,
@@ -35,7 +36,15 @@ const STREAMING_CHAT_TEST_MAX_TOKENS = 64;
 // Responses calls the same budget `max_output_tokens`; `max_tokens` is silently
 // ignored on that endpoint, which would let a reasoning model spend the whole
 // default budget before emitting any visible text.
-const RESPONSES_TEST_MAX_OUTPUT_TOKENS = 256;
+//
+// 1024, not 256: the probe spends reasoning tokens out of this same budget before
+// it emits a character, and how many is stochastic. Measured 2026-10-03 on
+// opencode muse-spark-1.3-contributor-free with this exact probe prompt, 8 runs
+// each: 256 failed 1/8 (reasoning peaked at 253), 512 failed 1/2 (509), and 1024
+// passed 8/8 (reasoning peaked at 164). A budget that fails one probe in eight
+// still marks a working model red, so it has to clear the observed peak by a
+// wide margin rather than sit just above the median.
+const RESPONSES_TEST_MAX_OUTPUT_TOKENS = 1024;
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -303,13 +312,26 @@ export function detectTestKind(modelStr: string, customModel: any, nodeApiType?:
   //
   // Last in the chain deliberately: a Responses-typed node can still host an
   // embedding or rerank model, and those endpoints stay right for it.
+  // A model the provider REGISTRY routes to /v1/responses is Responses-native even when the
+  // catalog row carries no apiFormat/supportedEndpoints — live-discovered models
+  // (opencode Zen publishes bare ids) never do. Probing those on the chat branch sends
+  // the Chat `max_tokens` budget as `max_output_tokens`, and on a reasoning model the
+  // whole budget is spent on reasoning: the upstream answers `response.incomplete`
+  // with zero text and the probe reports "Provider returned empty content" (measured
+  // 2026-10-03 on opencode muse-spark-1.3-contributor-free: 64 and 128 tokens always answer
+  // `response.incomplete`).
+  const providerPrefix = modelStr.includes("/") ? modelStr.slice(0, modelStr.indexOf("/")) : "";
+  const registryTargetFormat = providerPrefix
+    ? getModelTargetFormat(providerPrefix, modelStr)
+    : null;
   const isResponses =
     !isAudioTranscription &&
     !isRerank &&
     !isEmbedding &&
     (apiFormat === "responses" ||
       nodeType === "responses" ||
-      supportedEndpoints.includes("responses"));
+      supportedEndpoints.includes("responses") ||
+      registryTargetFormat === "openai-responses");
   // Non-chat generation endpoints (image, music, video) should NOT be dispatched
   // as chat completions — they incur billable generation costs (#13376).
   const isNonChatGeneration =

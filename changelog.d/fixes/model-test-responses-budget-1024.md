@@ -1,0 +1,1 @@
+- **fix(model-test):** the Responses health-probe budget goes from 256 to 1024 output tokens; the probe pays for the model's reasoning out of that same budget, and 256 failed 1 probe in 8 on `muse-spark-1.3-contributor-free` (reasoning peaked at 253) while 1024 passed 8 of 8
