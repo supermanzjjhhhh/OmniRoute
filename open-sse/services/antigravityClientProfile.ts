@@ -58,19 +58,11 @@ export function removeHeaderCaseInsensitive(headers: Record<string, string>, nam
   }
 }
 
-function getProjectHeaderValue(body: unknown): string | null {
-  const project =
-    body && typeof body === "object" ? (body as Record<string, unknown>).project : null;
-  if (typeof project !== "string" || project.trim().length === 0) return null;
-  if (project === "test-project" || project === "project-id") return null;
-  return project;
-}
-
 /** Apply the selected official client identity to a Cloud Code content request. */
 export function applyAntigravityClientProfileHeaders(
   headers: Record<string, string>,
   credentials: AntigravityProfileCredentials | null | undefined,
-  body: unknown
+  _body: unknown
 ): AntigravityClientProfile {
   const profile = getAntigravityClientProfile(credentials);
   const identityHeaders = getAntigravityContentHeaders(profile);
@@ -81,11 +73,12 @@ export function applyAntigravityClientProfileHeaders(
     removeHeaderCaseInsensitive(headers, name);
   }
 
-  const project = getProjectHeaderValue(body);
+  // Cloud Code rejects `x-goog-user-project` with 403 on streamGenerateContent
+  // (#2703 replayed 2703x in proxy_logs: every request burned a refused send
+  // before the header-stripped retry succeeded). The project travels in the
+  // request envelope's `project` field, which is what the official clients send.
+  // executeAttempt.ts keeps the strip-and-retry as a no-op safety net.
   removeHeaderCaseInsensitive(headers, "x-goog-user-project");
-  if (project) {
-    headers["x-goog-user-project"] = project;
-  }
 
   return profile;
 }
