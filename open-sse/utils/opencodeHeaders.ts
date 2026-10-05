@@ -8,7 +8,7 @@ import {
 
 /**
  * Default synthesized User-Agent. The upstream only parses the version, so this literal
- * exists to be recent enough, not to impersonate a build: any `opencode/<>=1.17>` passes.
+ * exists to be recent enough, not to impersonate a build: any `opencode/<>=1.18>` passes.
  * Overridable through the existing OPENCODE_USER_AGENT (or <PROVIDER>_USER_AGENT) knob.
  */
 export const DEFAULT_OPENCODE_USER_AGENT = "opencode/1.18.31";
@@ -18,7 +18,7 @@ export const OPENCODE_SESSION_PATTERN = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 /** Same shape for the request id, which the upstream accepts but does not validate. */
 export const OPENCODE_REQUEST_PATTERN = /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 
-const MINIMUM_USER_AGENT_MINOR = 17;
+const MINIMUM_USER_AGENT_MINOR = 18;
 const USER_AGENT_VERSION_RE = /opencode\/(?:[a-z]+\/)?v?(\d+)\.(\d+)/i;
 
 /** Whether a User-Agent already satisfies the upstream contract, so it must be kept. */

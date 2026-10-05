@@ -1,15 +1,19 @@
 /**
  * opencodeFreeTierContract.ts — the request contract OpenCode Zen's free tier enforces.
  *
- * Measured against the live endpoint on 2026-09-17, on three models and both the Chat
+ * Measured against the live endpoint on 2026-09-17 (re-measured 2026-10-06 on the Responses
+ * surface, where items 2 and 4 were found to have moved), on three models and both the Chat
  * Completions and Responses surfaces: the upstream answers 403 FreeTierError unless the
  * request carries all four of
  *
  *   1. `stream: true` in the body,
- *   2. a non-empty `tools` array (the content is not inspected),
+ *   2. a `tools` array naming all four of `bash`, `glob`, `grep`, `read` — lower-case, order
+ *      irrelevant, duplicates and extra names tolerated (measured 2026-10-06: dropping `glob`
+ *      or `grep` is still accepted, so the quartet is injected whole as an observed client
+ *      fingerprint rather than as a proven minimum),
  *   3. a session header shaped `ses_` + 12 hex + 14 base62 (the shape is checked, the
  *      value is not — 12 arbitrary hex digits pass),
- *   4. a `User-Agent` carrying `opencode/<version>` with version >= 1.17 (an older
+ *   4. a `User-Agent` carrying `opencode/<version>` with version >= 1.18 (an older
  *      version answers 426 UpgradeRequired rather than 403).
  *
  * Removing any single one of the four turns a 200 into a 403. Paid models on the same
@@ -163,7 +167,11 @@ export function requiresFreeTierRequestContract(
   return isGatedFreeTierRequest(surface, provider, model) && isBodyContractEnabled();
 }
 
-/** The placeholder tool name the official client uses for the same purpose. */
+/**
+ * The placeholder tool name the official client used for this purpose, kept as the exported
+ * default for callers that still ask for it. The gated path no longer sends it: the quartet
+ * above is what the upstream accepts today, and `_noop` is refused on the free models.
+ */
 const PLACEHOLDER_TOOL_NAME = "_noop";
 export const DEFAULT_PLACEHOLDER_TOOL_NAME = PLACEHOLDER_TOOL_NAME;
 
@@ -210,18 +218,40 @@ const PLACEHOLDER_TOOL_PARAMETERS = { type: "object", properties: {} } as const;
  * Which names go in is resolved by `resolvePlaceholderNames`, because the upstream does
  * inspect them.
  */
+/**
+ * Canonical fingerprint tool quartet required by the OpenCode free tier gate
+ * (measured on live endpoint 2026-10-06). Upstream refuses requests without all four with 403 FreeTierError.
+ */
+export const OPENCODE_FREE_TIER_FINGERPRINT_TOOLS = [
+  "bash",
+  "glob",
+  "grep",
+  "read",
+] as const;
+
 export function applyFreeTierRequestContract<T>(
   body: T,
   requestFormat: string | null,
-  placeholderNames: readonly string[] = [PLACEHOLDER_TOOL_NAME]
+  placeholderNames: readonly string[] = []
 ): T {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body;
   const record = body as Record<string, unknown>;
   const next: Record<string, unknown> = { ...record, stream: true };
 
   const existingNames = new Set(clientToolNamesOf(next));
-  const baseNames = placeholderNames.length > 0 ? placeholderNames : [PLACEHOLDER_TOOL_NAME];
-  const namesToAdd = baseNames.filter((name) => !existingNames.has(name));
+  const namesToAdd: string[] = [];
+
+  for (const name of OPENCODE_FREE_TIER_FINGERPRINT_TOOLS) {
+    if (!existingNames.has(name)) {
+      namesToAdd.push(name);
+    }
+  }
+
+  for (const name of placeholderNames) {
+    if (!existingNames.has(name) && !namesToAdd.includes(name)) {
+      namesToAdd.push(name);
+    }
+  }
 
   if (namesToAdd.length === 0) return next as T;
 
@@ -399,7 +429,7 @@ export function prepareFreeTierRequest<T>(
   return {
     body:
       chosen === "bare"
-        ? withStreaming(body)
+        ? withStreaming(body) // ponytail: upstream (2026-10-06) 403s on bare; kept for shape retry compat
         : applyFreeTierRequestContract(body, requestFormat, names),
     attempt,
   };

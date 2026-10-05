@@ -4,8 +4,8 @@
  * Since 2026-09-17 the free tier answers 403 FreeTierError unless the request carries
  * all four of: `stream: true`, a non-empty `tools` array, an `x-opencode-session` (or
  * `x-session-id`) shaped `ses_` + 12 hex + 14 base62, and a `User-Agent` containing
- * `opencode/<version >= 1.17>`. Removing any one of the four turns a 200 into a 403, and
- * a version below 1.17 answers 426 instead.
+ * `opencode/<version >= 1.18>`. Removing any one of the four turns a 200 into a 403, and
+ * a version below 1.18 answers 426 instead.
  *
  * Measured again on 2026-09-18, and the tools condition is narrower than it first looked:
  * the upstream inspects which names are declared. One made-up name, twelve made-up names
@@ -86,9 +86,9 @@ test("chat completions: the contract adds streaming and a placeholder tool, and 
   const body = applyFreeTierRequestContract(CHAT_BODY(), "openai") as Record<string, unknown>;
   assert.equal(body.stream, true);
   const tools = body.tools as Array<{ type: string; function: { name: string } }>;
-  assert.equal(tools.length, 1);
+  assert.equal(tools.length, 4);
   assert.equal(tools[0].type, "function");
-  assert.equal(tools[0].function.name, "_noop");
+  assert.deepEqual(tools.map((t) => t.function.name), ["bash", "glob", "grep", "read"]);
   // The upstream answers 400 `only "auto" is supported for tool_choice` (measured
   // 2026-09-18 on the Chat Completions surface), so none is imposed here either.
   assert.equal("tool_choice" in body, false);
@@ -103,7 +103,7 @@ test("the placeholder carries the names it is given, one entry each", () => {
   const tools = body.tools as Array<{ function: { name: string; parameters: object } }>;
   assert.deepEqual(
     tools.map((t) => t.function.name),
-    ["glob", "grep", "read"]
+    ["bash", "glob", "grep", "read"]
   );
   // Names only: an empty parameter object, so a borrowed name is a list entry rather than
   // a tool the model could usefully call.
@@ -118,7 +118,7 @@ test("responses: several placeholder names keep the flat shape and no tool_choic
   const tools = body.tools as Array<{ type: string; name: string }>;
   assert.deepEqual(
     tools.map((t) => t.name),
-    ["glob", "grep"]
+    ["bash", "glob", "grep", "read"]
   );
   assert.equal("tool_choice" in body, false);
 });
@@ -130,7 +130,7 @@ test("an empty tools array counts as no tools", () => {
     string,
     unknown
   >;
-  assert.equal((body.tools as unknown[]).length, 1);
+  assert.equal((body.tools as unknown[]).length, 4);
 });
 
 test("responses: the placeholder tool is flat and tool_choice stays absent", () => {
@@ -142,9 +142,9 @@ test("responses: the placeholder tool is flat and tool_choice stays absent", () 
   >;
   assert.equal(body.stream, true);
   const tools = body.tools as Array<{ type: string; name: string }>;
-  assert.equal(tools.length, 1);
+  assert.equal(tools.length, 4);
   assert.equal(tools[0].type, "function");
-  assert.equal(tools[0].name, "_noop");
+  assert.deepEqual(tools.map((t) => t.name), ["bash", "glob", "grep", "read"]);
   assert.equal("tool_choice" in body, false);
 });
 
@@ -157,9 +157,12 @@ test("client-supplied tools are never replaced, required placeholders are append
     "openai"
   ) as Record<string, unknown>;
   const tools = body.tools as Array<{ type: string; function?: { name: string } }>;
-  assert.equal(tools.length, 2);
+  assert.equal(tools.length, 5);
   assert.equal(tools[0].function?.name, "search");
-  assert.equal(tools[1].function?.name, "_noop");
+  assert.deepEqual(
+    tools.slice(1).map((t) => t.function?.name),
+    ["bash", "glob", "grep", "read"]
+  );
   assert.equal("tool_choice" in body, false);
   assert.equal(body.stream, true);
 });
@@ -167,7 +170,10 @@ test("client-supplied tools are never replaced, required placeholders are append
 test("when client-supplied tools already include placeholder tools, nothing extra is added", () => {
   const clientTools = [
     { type: "function", function: { name: "search", parameters: { type: "object" } } },
-    { type: "function", function: { name: "_noop", parameters: { type: "object" } } },
+    { type: "function", function: { name: "bash", parameters: { type: "object" } } },
+    { type: "function", function: { name: "glob", parameters: { type: "object" } } },
+    { type: "function", function: { name: "grep", parameters: { type: "object" } } },
+    { type: "function", function: { name: "read", parameters: { type: "object" } } },
   ];
   const body = applyFreeTierRequestContract(
     { ...CHAT_BODY(), tools: clientTools },
@@ -193,7 +199,7 @@ test("when client-supplied tools are present, multiple configured placeholders a
   assert.equal(tools[0].function?.name, "run_code");
   assert.deepEqual(
     tools.slice(1).map((t) => t.function?.name),
-    ["glob", "grep", "read", "edit", "write", "bash"]
+    ["bash", "glob", "grep", "read", "edit", "write"]
   );
 });
 
@@ -208,7 +214,7 @@ test("a client tool_choice is preserved", () => {
 test("applying the contract twice does not duplicate the placeholder tool", () => {
   const once = applyFreeTierRequestContract(CHAT_BODY(), "openai");
   const twice = applyFreeTierRequestContract(once, "openai") as Record<string, unknown>;
-  assert.equal((twice.tools as unknown[]).length, 1);
+  assert.equal((twice.tools as unknown[]).length, 4);
 });
 
 test("an unknown body format only gets the streaming flag", () => {
@@ -220,16 +226,21 @@ test("an unknown body format only gets the streaming flag", () => {
 
 test("the user-agent contract accepts a versioned opencode client and rejects the rest", () => {
   assert.equal(satisfiesOpencodeUserAgentContract(DEFAULT_OPENCODE_USER_AGENT), true);
-  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.17.0"), true);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.17.0"), false);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.17.20"), false);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.18.0"), true);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.18.31"), true);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/2.0.0"), true);
   assert.equal(satisfiesOpencodeUserAgentContract("opencode/beta/1.18.31/cli"), true);
   assert.equal(
     satisfiesOpencodeUserAgentContract("opencode/1.18.14 ai-sdk/provider-utils/4.0.23"),
     true
   );
-  // Measured: 1.16.0 answers 426 UpgradeRequired, so it does not satisfy the contract.
+  // Measured 2026-10-06: versions below 1.18 answer 426 UpgradeRequired.
   assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.16.0"), false);
   assert.equal(satisfiesOpencodeUserAgentContract("opencode-cli/1.0.0"), false);
   assert.equal(satisfiesOpencodeUserAgentContract("opencode"), false);
+  assert.equal(satisfiesOpencodeUserAgentContract("codex_cli_rs/0.60.0"), false);
   assert.equal(satisfiesOpencodeUserAgentContract("curl/8.5.0"), false);
   assert.equal(satisfiesOpencodeUserAgentContract(undefined), false);
 });
@@ -339,7 +350,7 @@ test("transformRequest: the contract is applied for a free model and skipped for
     null as never
   ) as Record<string, unknown>;
   assert.equal(free.stream, true);
-  assert.equal((free.tools as unknown[]).length, 1);
+  assert.equal((free.tools as unknown[]).length, 4);
 
   const paid = executor.transformRequest(
     "gpt-5.6-luna",
@@ -381,7 +392,7 @@ test("a JSON caller gets a JSON body back even though the upstream request was s
     })) as { response: Response };
 
     assert.equal(seen[0]?.stream, true, "the upstream request was streamed");
-    assert.equal((seen[0]?.tools as unknown[]).length, 1, "and carried the placeholder tool");
+    assert.equal((seen[0]?.tools as unknown[]).length, 4, "and carried the placeholder tool");
     assert.match(result.response.headers.get("content-type") ?? "", /application\/json/);
     const json = (await result.response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -511,7 +522,7 @@ test("with nothing observed and nothing configured, the built-in placeholder is 
   const tools = (body as Record<string, unknown>).tools as Array<{ function: { name: string } }>;
   assert.deepEqual(
     tools.map((t) => t.function.name),
-    ["_noop"]
+    ["bash", "glob", "grep", "read"]
   );
   // Nothing was borrowed, so a refusal here must not be charged against the store.
   assert.equal(attempt?.borrowed, false);
@@ -552,7 +563,7 @@ test("an accepted request teaches the names it carried, and a later bare request
   }>;
   assert.deepEqual(
     tools.map((t) => t.function.name),
-    ["glob", "grep"]
+    ["bash", "glob", "grep", "read"]
   );
   assert.equal(second.attempt?.borrowed, true);
 });
@@ -713,7 +724,7 @@ test("a session's service request borrows the list its own build request declare
   }>;
   assert.deepEqual(
     tools.map((t) => t.function.name),
-    ["glob", "grep"]
+    ["bash", "glob", "grep", "read"]
   );
   assert.equal(title.attempt?.borrowed, true);
 });
@@ -755,7 +766,7 @@ test("a session's own list wins over the shared one", () => {
   }>;
   assert.deepEqual(
     tools.map((t) => t.function.name),
-    ["own"]
+    ["bash", "glob", "grep", "read", "own"]
   );
 });
 
@@ -785,7 +796,7 @@ test("a session that has declared nothing yet falls back to the shared entry", (
   }>;
   assert.deepEqual(
     tools.map((t) => t.function.name),
-    ["shared"]
+    ["bash", "glob", "grep", "read", "shared"]
   );
 });
 
@@ -831,4 +842,180 @@ test("mergeClientToolsWithObserved: leaves the body untouched when nothing obser
     mergeClientToolsWithObserved(body, "openai", "opencode", "big-pickle", undefined, []),
     body
   );
+});
+
+
+// ── Free-Tier Fingerprint Quartet & Shadowing Regression Tests (2026-10-06) ──
+
+test("regression: quartet complete — caller tools first, quartet appended in order", () => {
+  const callerTools = [
+    { type: "function", function: { name: "custom_analyzer", parameters: { type: "object" } } },
+    { type: "function", function: { name: "custom_writer", parameters: { type: "object" } } },
+  ];
+  const body = applyFreeTierRequestContract(
+    { ...CHAT_BODY(), tools: callerTools },
+    "openai"
+  ) as Record<string, unknown>;
+  const tools = body.tools as Array<{ function?: { name: string } }>;
+  assert.equal(tools.length, 6);
+  assert.deepEqual(
+    tools.map((t) => t.function?.name),
+    ["custom_analyzer", "custom_writer", "bash", "glob", "grep", "read"]
+  );
+});
+
+test("regression: caller brings bash+read only — padded with missing glob+grep to full quartet", () => {
+  const callerTools = [
+    { type: "function", function: { name: "bash", parameters: { type: "object" } } },
+    { type: "function", function: { name: "read", parameters: { type: "object" } } },
+  ];
+  const body = applyFreeTierRequestContract(
+    { ...CHAT_BODY(), tools: callerTools },
+    "openai"
+  ) as Record<string, unknown>;
+  const tools = body.tools as Array<{ function?: { name: string } }>;
+  assert.equal(tools.length, 4);
+  assert.deepEqual(
+    tools.map((t) => t.function?.name),
+    ["bash", "read", "glob", "grep"]
+  );
+});
+
+test("regression: caller brings 17 codex tools — quartet appended to 21 total", () => {
+  const codexTools = Array.from({ length: 17 }, (_, i) => ({
+    type: "function",
+    function: { name: `codex_tool_${i + 1}`, parameters: { type: "object" } },
+  }));
+  const body = applyFreeTierRequestContract(
+    { ...CHAT_BODY(), tools: codexTools },
+    "openai"
+  ) as Record<string, unknown>;
+  const tools = body.tools as Array<{ function?: { name: string } }>;
+  assert.equal(tools.length, 21);
+  assert.deepEqual(
+    tools.slice(0, 17).map((t) => t.function?.name),
+    codexTools.map((t) => t.function.name)
+  );
+  assert.deepEqual(
+    tools.slice(17).map((t) => t.function?.name),
+    ["bash", "glob", "grep", "read"]
+  );
+});
+
+test("regression: shadowing guard — session observation does not drop quartet or pollute observation store", () => {
+  _resetToolObservationForTests();
+  const session = "ses_0123456789abABCDEFGHIJKLMN";
+  const codexTools = Array.from({ length: 17 }, (_, i) => ({
+    type: "function",
+    function: { name: `codex_tool_${i + 1}`, parameters: { type: "object" } },
+  }));
+
+  // Request 1: gated request with 17 codex tools
+  const req1 = prepareFreeTierRequest(
+    { ...CHAT_BODY(), tools: codexTools },
+    "openai",
+    "zen",
+    "opencode",
+    "muse-spark-1.3-contributor-free",
+    session
+  );
+  const tools1 = ((req1.body as Record<string, unknown>).tools as Array<{ function: { name: string } }>).map(
+    (t) => t.function.name
+  );
+  assert.equal(tools1.length, 21);
+  assert.ok(["bash", "glob", "grep", "read"].every((q) => tools1.includes(q)));
+
+  // Outcome accepted
+  noteFreeTierOutcome(req1.attempt, true);
+
+  // Observation store: 17 client tool names recorded, NOT contaminated with quartet
+  const observed = getObservedToolNames("opencode", "muse-spark-1.3-contributor-free", session);
+  assert.ok(observed);
+  assert.equal(observed.length, 17);
+  assert.deepEqual(observed, codexTools.map((t) => t.function.name));
+  assert.ok(!["bash", "glob", "grep", "read"].some((q) => observed.includes(q)));
+
+  // Request 2: same session, same 17 codex tools — quartet must NOT be shadowed
+  const req2 = prepareFreeTierRequest(
+    { ...CHAT_BODY(), tools: codexTools },
+    "openai",
+    "zen",
+    "opencode",
+    "muse-spark-1.3-contributor-free",
+    session
+  );
+  const tools2 = ((req2.body as Record<string, unknown>).tools as Array<{ function: { name: string } }>).map(
+    (t) => t.function.name
+  );
+  assert.equal(tools2.length, 21);
+  assert.ok(["bash", "glob", "grep", "read"].every((q) => tools2.includes(q)));
+
+  // Request 3: probe with tools: [] on same session — quartet must still be present
+  const probe = prepareFreeTierRequest(
+    { ...CHAT_BODY(), tools: [] },
+    "openai",
+    "zen",
+    "opencode",
+    "muse-spark-1.3-contributor-free",
+    session
+  );
+  const toolsProbe = ((probe.body as Record<string, unknown>).tools as Array<{ function: { name: string } }>).map(
+    (t) => t.function.name
+  );
+  assert.equal(toolsProbe.length, 21);
+  assert.ok(["bash", "glob", "grep", "read"].every((q) => toolsProbe.includes(q)));
+
+  // Observation store still clean
+  const observedAfter = getObservedToolNames("opencode", "muse-spark-1.3-contributor-free", session);
+  assert.deepEqual(observedAfter, codexTools.map((t) => t.function.name));
+});
+
+test("regression: body containing quartet applied twice is strictly idempotent", () => {
+  const initial = applyFreeTierRequestContract(CHAT_BODY(), "openai");
+  const once = applyFreeTierRequestContract(initial, "openai");
+  const twice = applyFreeTierRequestContract(once, "openai") as Record<string, unknown>;
+  const tools = twice.tools as Array<{ function: { name: string } }>;
+  assert.equal(tools.length, 4);
+  assert.deepEqual(
+    tools.map((t) => t.function.name),
+    ["bash", "glob", "grep", "read"]
+  );
+});
+
+test("regression: OPENCODE_FREE_TIER_PLACEHOLDER_TOOLS forms union with quartet", () => {
+  const saved = process.env.OPENCODE_FREE_TIER_PLACEHOLDER_TOOLS;
+  try {
+    process.env.OPENCODE_FREE_TIER_PLACEHOLDER_TOOLS = "foo,bar";
+    const { body } = prepareFreeTierRequest(
+      CHAT_BODY(),
+      "openai",
+      "zen",
+      "opencode",
+      "muse-spark-1.3-contributor-free"
+    );
+    const tools = ((body as Record<string, unknown>).tools as Array<{ function: { name: string } }>).map(
+      (t) => t.function.name
+    );
+    assert.deepEqual(tools, ["bash", "glob", "grep", "read", "foo", "bar"]);
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_FREE_TIER_PLACEHOLDER_TOOLS;
+    else process.env.OPENCODE_FREE_TIER_PLACEHOLDER_TOOLS = saved;
+  }
+});
+
+test("regression: unknown requestFormat only gets streaming flag, no tools injected", () => {
+  const body = applyFreeTierRequestContract(CHAT_BODY(), "claude") as Record<string, unknown>;
+  assert.equal(body.stream, true);
+  assert.equal("tools" in body, false);
+  assert.equal("tool_choice" in body, false);
+});
+
+test("regression: satisfiesOpencodeUserAgentContract version gate strictly requires >= 1.18", () => {
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.17.0"), false);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.17.20"), false);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.18.0"), true);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.18.31"), true);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/2.0.0"), true);
+  assert.equal(satisfiesOpencodeUserAgentContract("codex_cli_rs/0.60.0"), false);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode"), false);
 });
