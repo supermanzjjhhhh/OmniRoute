@@ -540,8 +540,25 @@ async function handleChatCoreInner({
     defaultThinkingEffort,
   });
   let { provider, model, extendedContext } = modelInfo;
+  // resolveOpencodeSessionIdentity reads only metadata + the six session-id fields, but this
+  // closure lived on the chatCore frame, so every in-flight frame pinned the whole multi-MB
+  // request body for as long as any sibling closure did. Hand it an equivalent, bounded view.
+  const opencodeSessionBodyRef = body && typeof body === "object"
+    ? {
+        metadata: (body as Record<string, unknown>).metadata,
+        session_id: (body as Record<string, unknown>).session_id,
+        sessionId: (body as Record<string, unknown>).sessionId,
+        thread_id: (body as Record<string, unknown>).thread_id,
+        threadId: (body as Record<string, unknown>).threadId,
+        conversation_id: (body as Record<string, unknown>).conversation_id,
+        conversationId: (body as Record<string, unknown>).conversationId,
+      }
+    : undefined;
   const getExecutorClientHeaders = () =>
-    buildExecutorClientHeaders(clientRawRequest?.headers, userAgent, { provider, body });
+    buildExecutorClientHeaders(clientRawRequest?.headers, userAgent, {
+      provider,
+      body: opencodeSessionBodyRef,
+    });
   // Keep the selected rule across format conversion, retries and refreshed credentials.
   // Each combo leg gets its own execution context; nothing is written to shared accounts.
   const reasoningRuleDirective = body?._omnirouteReasoningRule;
