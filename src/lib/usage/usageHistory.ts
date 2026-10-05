@@ -222,8 +222,12 @@ const pendingById = pendingState.pendingById;
 // so this never grows unboundedly with one-shot correlation ids.
 const pendingIdByCorrelation = pendingState.pendingIdByCorrelation;
 
-const DEFAULT_MAX_PENDING_REQUEST_AGE_MS = 60 * 60 * 1000;
-const MAX_PENDING_DETAILS = 5000;
+const DEFAULT_MAX_PENDING_REQUEST_AGE_MS = 15 * 60 * 1000;
+// ponytail: the pending list feeds a live dashboard tab, which only ever renders
+// the newest handful. 5000 retained previews (each still carrying up to four
+// truncated payload fields) kept hundreds of MB alive long after a burst of
+// aborted/503'd requests failed to finalize. Raise only if a real tab needs it.
+const MAX_PENDING_DETAILS = 500;
 const PENDING_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 let _pendingSweepTimer: ReturnType<typeof setInterval> | null = null;
 

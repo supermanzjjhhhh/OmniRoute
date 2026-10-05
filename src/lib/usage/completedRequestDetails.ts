@@ -2,7 +2,10 @@ import { getDbInstance } from "../db/core";
 import type { PendingRequestDetail } from "./usageHistory";
 
 const COMPLETED_DETAIL_TTL_MS = 120_000;
-const MAX_COMPLETED_DETAILS = 256;
+// ponytail: 256 entries x a few MB of streamChunks each was measured retaining
+// hundreds of MB after a long agentic session. The dashboard only ever renders the
+// most recent handful; raise it back if a live tab ever needs more.
+const MAX_COMPLETED_DETAILS = 64;
 /**
  * JON-562: completed details are a short-lived dashboard bridge, not a second payload store.
  * The 16 MiB estimated cache payload budget keeps room for normal bridge entries while bounding
@@ -26,6 +29,26 @@ function estimateRetainedBytes(value: unknown, seen = new WeakSet<object>()): nu
   if (typeof value !== "object" || seen.has(value)) return 0;
   seen.add(value);
 
+  // Object.entries() on these yields nothing (ArrayBuffer) or one entry per index
+  // (TypedArray), so they used to be accounted as 64 bytes each and blew straight
+  // past MAX_COMPLETED_DETAILS_BYTES. They are the bulk of a captured response.
+  if (value instanceof ArrayBuffer) return 64 + value.byteLength;
+  if (ArrayBuffer.isView(value)) {
+    return 64 + value.byteLength;
+  }
+  if (value instanceof Map) {
+    let bytes = 64;
+    for (const [key, entry] of value) {
+      bytes += estimateRetainedBytes(key, seen) + estimateRetainedBytes(entry, seen);
+    }
+    return bytes;
+  }
+  if (value instanceof Set) {
+    let bytes = 64;
+    for (const entry of value) bytes += estimateRetainedBytes(entry, seen);
+    return bytes;
+  }
+
   if (Array.isArray(value)) {
     return 32 + value.reduce((total, entry) => total + estimateRetainedBytes(entry, seen), 0);
   }
@@ -37,10 +60,25 @@ function estimateRetainedBytes(value: unknown, seen = new WeakSet<object>()): nu
   return bytes;
 }
 
+/**
+ * One SSE frame can be a whole tool-call argument block (hundreds of KB), so a
+ * chunk-count cap alone let 64 x 3 stages per entry dominate the cache budget.
+ * Clip each chunk; the count cap still bounds the array shape.
+ */
+const MAX_COMPLETED_STREAM_CHUNK_BYTES = 4 * 1024;
+
 function capStreamChunkList(values?: string[]): string[] | undefined {
-  if (!values || values.length <= MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE) return values;
-  const kept = values.slice(0, MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE);
-  kept.push(`[TRUNCATED_STREAM_CHUNKS: ${values.length - MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE}]`);
+  if (!values) return values;
+  const kept = values
+    .slice(0, MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE)
+    .map((chunk) =>
+      chunk.length > MAX_COMPLETED_STREAM_CHUNK_BYTES
+        ? `${chunk.slice(0, MAX_COMPLETED_STREAM_CHUNK_BYTES)}...[TRUNCATED_CHUNK]`
+        : chunk
+    );
+  if (values.length > MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE) {
+    kept.push(`[TRUNCATED_STREAM_CHUNKS: ${values.length - MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE}]`);
+  }
   return kept;
 }
 
