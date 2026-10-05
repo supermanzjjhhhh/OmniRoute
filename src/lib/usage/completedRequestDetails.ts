@@ -1,5 +1,9 @@
 import { getDbInstance } from "../db/core";
 import type { PendingRequestDetail } from "./usageHistory";
+import {
+  prunePendingPreview,
+  truncatePendingPreviewStrings,
+} from "./usageHistory/helpers";
 
 const COMPLETED_DETAIL_TTL_MS = 120_000;
 // ponytail: 256 entries x a few MB of streamChunks each was measured retaining
@@ -82,6 +86,34 @@ function capStreamChunkList(values?: string[]): string[] | undefined {
   return kept;
 }
 
+/**
+ * The completed-detail cache is a dashboard bridge, but the payloads it receives come straight
+ * off the request/response path and were never preview-clipped: a single 900 KB codex body sat
+ * in each of the MAX_COMPLETED_DETAILS entries for the whole TTL. Reuse the same bounded preview
+ * shape the pending list already applies so a cached entry costs KBs, not MBs.
+ */
+const PAYLOAD_FIELDS = [
+  "clientRequest",
+  "providerRequest",
+  "providerResponse",
+  "clientResponse",
+] as const;
+
+function capPayloads(detail: PendingRequestDetail): PendingRequestDetail {
+  const next: Record<string, unknown> = { ...detail };
+  let changed = false;
+  for (const field of PAYLOAD_FIELDS) {
+    const value = next[field];
+    if (value === undefined || value === null) continue;
+    const capped = truncatePendingPreviewStrings(prunePendingPreview(value));
+    if (capped !== value) {
+      next[field] = capped;
+      changed = true;
+    }
+  }
+  return changed ? (next as PendingRequestDetail) : detail;
+}
+
 function capStreamChunks(detail: PendingRequestDetail): PendingRequestDetail {
   const chunks = detail.streamChunks;
   if (!chunks) return detail;
@@ -152,7 +184,7 @@ export function getCompletedDetailsCacheStats(): {
  * @throws If `detail` contains a value that `structuredClone` cannot copy.
  */
 export function storeCompletedDetail(input: PendingRequestDetail): boolean {
-  const detail = capStreamChunks(input);
+  const detail = capPayloads(capStreamChunks(input));
   const inputBytes = estimateRetainedBytes(detail);
   if (inputBytes > MAX_COMPLETED_DETAILS_BYTES) {
     deleteCompletedDetail(detail.id);
