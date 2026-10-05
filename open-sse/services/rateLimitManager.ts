@@ -805,8 +805,17 @@ export async function withRateLimit(
   // it. Bottleneck dispatches from the job that frees the slot, so without
   // binding a queued request would borrow the output/logging/attribution of
   // another request.
-  const boundFn = AsyncResource.bind(wrappedFn);
+  // AsyncResource.bind() hands back only the bound function, so the resource it creates can
+  // never be destroyed: it stays registered with async_hooks holding this frame — and therefore
+  // the captured request task (body included) — for the life of the process. Own the resource and
+  // destroy it once the job leaves the limiter.
+  const jobResource = new AsyncResource("omniroute.rateLimitJob");
+  const boundFn = jobResource.bind(wrappedFn);
+  const destroyJobResource = () => {
+    if (!jobResource.isDestroyed) jobResource.emitDestroy();
+  };
   const scheduled = limiter.schedule(scheduleOpts, boundFn as unknown as () => Promise<unknown>);
+  scheduled.then(destroyJobResource, destroyJobResource);
   scheduled.catch(() => {});
   // If timeoutPromise or the abort wins while the job is still QUEUED,
   // abandonQueuedJob() removes it (see queuedJobCancel.ts); a job already past
