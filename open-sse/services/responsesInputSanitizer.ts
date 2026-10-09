@@ -1,3 +1,24 @@
+function toValidJsonString(value: unknown, fallback = "{}"): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    try {
+      JSON.parse(trimmed);
+      return trimmed;
+    } catch {
+      return fallback;
+    }
+  }
+  if (value && typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 import { isValidResponsesItemId } from "./responsesItemId.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -218,6 +239,27 @@ function sanitizeInputItem(item: unknown, options: SanitizeResponsesInputOptions
     !FUNCTION_NAME_VALID_RE.test(next.name)
   ) {
     next = { ...next, name: sanitizeFunctionName(next.name) };
+  }
+  if (next.type === "function_call") {
+    next = { ...next, arguments: toValidJsonString(next.arguments) };
+  }
+  if (Array.isArray(next.tool_calls)) {
+    next = {
+      ...next,
+      tool_calls: (next.tool_calls as unknown[]).map((tc) => {
+        const tcr = toRecord(tc);
+        if (!tcr) return tc;
+        const fn = toRecord(tcr.function);
+        if (!fn) return tc;
+        return {
+          ...tcr,
+          function: {
+            ...fn,
+            arguments: toValidJsonString(fn.arguments),
+          },
+        };
+      }),
+    };
   }
   return next;
 }
