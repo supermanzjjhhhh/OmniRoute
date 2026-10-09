@@ -19,14 +19,20 @@
  * Floor raised budgets only — explicit large budgets and non-muse-spark models
  * are untouched, and no budget is synthesized when the caller set none.
  */
-export const MUSE_SPARK_MIN_OUTPUT_TOKENS = 512;
+export const MUSE_SPARK_MIN_OUTPUT_TOKENS = 4096;
 
-export function applyMuseSparkMinOutputTokens(model: string, body: Record<string, unknown>): void {
+export function applyMuseSparkMinOutputTokens(
+  model: string,
+  body: Record<string, unknown>,
+  field?: "max_tokens" | "max_output_tokens"
+): void {
   if (!model.startsWith("muse-spark")) return;
-  const current = body.max_tokens;
+  const targetField =
+    field ?? (typeof body.max_output_tokens === "number" ? "max_output_tokens" : "max_tokens");
+  const current = body[targetField];
   if (typeof current !== "number" || !Number.isFinite(current)) return;
   if (current >= MUSE_SPARK_MIN_OUTPUT_TOKENS) return;
-  body.max_tokens = MUSE_SPARK_MIN_OUTPUT_TOKENS;
+  body[targetField] = MUSE_SPARK_MIN_OUTPUT_TOKENS;
 }
 
 /** The completion count to trust: the tracked one when the caller has it, else the payload's usage. */

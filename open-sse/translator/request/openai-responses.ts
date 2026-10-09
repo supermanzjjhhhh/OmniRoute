@@ -26,6 +26,7 @@ import {
   IMAGE_GENERATION_TOOL_TYPES,
   toRecord,
   toString,
+  toValidJsonString,
   normalizeVerbosity,
   normalizeResponsesReasoningEffort,
   shouldRequestClaudeSummarizedThinking,
@@ -119,8 +120,7 @@ function normalizeRoleBasedToolCalls(toolCalls: unknown): JsonRecord[] {
           type: "function",
           function: {
             name,
-            arguments:
-              typeof fn.arguments === "string" ? fn.arguments : JSON.stringify(fn.arguments ?? {}),
+            arguments: toValidJsonString(fn.arguments),
           },
         };
       })
@@ -425,10 +425,7 @@ export function openaiResponsesToOpenAIRequest(
         type: "function",
         function: {
           name: fnName,
-          arguments:
-            typeof item.arguments === "string"
-              ? item.arguments
-              : JSON.stringify(item.arguments ?? {}),
+          arguments: toValidJsonString(item.arguments),
         },
       });
       currentAssistantMsg.tool_calls = toolCalls;

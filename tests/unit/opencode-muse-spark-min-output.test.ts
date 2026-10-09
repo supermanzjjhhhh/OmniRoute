@@ -27,6 +27,12 @@ test("RED: muse-spark tiny max_tokens is raised to the floor", () => {
   assert.equal(body.max_tokens, MUSE_SPARK_MIN_OUTPUT_TOKENS);
 });
 
+test("RED: muse-spark tiny max_output_tokens is raised to the floor", () => {
+  const body: Record<string, unknown> = { max_output_tokens: 128 };
+  applyMuseSparkMinOutputTokens("muse-spark-1.3-contributor-free", body);
+  assert.equal(body.max_output_tokens, MUSE_SPARK_MIN_OUTPUT_TOKENS);
+});
+
 test("RED: all muse-spark id variants are covered by the prefix match", () => {
   for (const model of ["muse-spark-1", "muse-spark-1.2", "muse-spark-1.2-contributor"]) {
     const body: Record<string, unknown> = { max_tokens: 100 };

@@ -16,6 +16,7 @@ import {
   toRecord,
   toArray,
   toString,
+  toValidJsonString,
   clampCallId,
   imageUrlToText,
   normalizeVerbosity,
@@ -304,7 +305,7 @@ export function openaiToOpenAIResponsesRequest(
             type: "function_call",
             call_id: clampCallId(toString(toolCall.id).trim() || generateToolCallId()),
             name: fnName,
-            arguments: toString(fn.arguments, "{}"),
+            arguments: toValidJsonString(fn.arguments),
             status: "completed",
           });
         }
@@ -319,7 +320,7 @@ export function openaiToOpenAIResponsesRequest(
             type: "function_call",
             call_id: clampCallId(`call_${fnName}`),
             name: fnName,
-            arguments: toString(fc.arguments, "{}"),
+            arguments: toValidJsonString(fc.arguments),
             status: "completed",
           });
         }

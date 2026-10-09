@@ -44,6 +44,27 @@ export function toString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+export function toValidJsonString(value: unknown, fallback = "{}"): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    try {
+      JSON.parse(trimmed);
+      return trimmed;
+    } catch {
+      return fallback;
+    }
+  }
+  if (value && typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 export function imageUrlToText(value: unknown): string {
   if (typeof value === "string") return value;
   const record = toRecord(value);

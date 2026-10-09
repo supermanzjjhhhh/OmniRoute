@@ -66,3 +66,60 @@ test("Responses -> Chat drops role-based tool_calls with empty name or id", () =
 
   assert.equal(result.messages[1].tool_calls, undefined);
 });
+
+const { openaiToOpenAIResponsesRequest } =
+  await import("../../open-sse/translator/request/openai-responses/toResponses.ts");
+
+test("Responses -> Chat normalizes empty or invalid JSON arguments to {}", () => {
+  const result = openaiResponsesToOpenAIRequest(
+    "muse-spark-1.3-contributor-free",
+    {
+      model: "muse-spark-1.3-contributor-free",
+      input: [
+        { role: "user", content: "Run" },
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            { id: "call_empty", type: "function", function: { name: "get_cwd", arguments: "" } },
+            { id: "call_broken", type: "function", function: { name: "read_file", arguments: "{\"path\":" } },
+          ],
+        },
+      ],
+    },
+    false,
+    { provider: "opencode" }
+  ) as { messages: Array<Record<string, unknown>> };
+
+  assert.deepEqual(result.messages[1].tool_calls, [
+    { id: "call_empty", type: "function", function: { name: "get_cwd", arguments: "{}" } },
+    { id: "call_broken", type: "function", function: { name: "read_file", arguments: "{}" } },
+  ]);
+});
+
+test("Chat -> Responses normalizes empty or invalid JSON arguments to {}", () => {
+  const result = openaiToOpenAIResponsesRequest(
+    "muse-spark-1.3-contributor-free",
+    {
+      model: "muse-spark-1.3-contributor-free",
+      messages: [
+        { role: "user", content: "Run" },
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            { id: "call_empty", type: "function", function: { name: "get_cwd", arguments: "" } },
+            { id: "call_broken", type: "function", function: { name: "read_file", arguments: "{incomplete" } },
+          ],
+        },
+      ],
+    },
+    false,
+    { provider: "opencode" }
+  ) as { input: Array<Record<string, unknown>> };
+
+  const calls = result.input.filter((item) => item.type === "function_call");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].arguments, "{}");
+  assert.equal(calls[1].arguments, "{}");
+});
