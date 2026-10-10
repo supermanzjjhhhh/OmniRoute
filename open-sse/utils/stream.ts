@@ -2610,6 +2610,7 @@ export function createSSEStream(options: StreamOptions = {}) {
                 restoreOpenAIToolNames(parsed, toolNameMap),
               abortFailure: (failure: StreamFailurePayload, publicMessage: string) =>
                 abortStreamFailure(controller, failure, publicMessage),
+              requestToolIdentityMap,
             };
 
             for (const line of normalizedTailLines) {
@@ -2660,7 +2661,11 @@ export function createSSEStream(options: StreamOptions = {}) {
                   if (isResponses) {
                     const idsNormalized = normalizeResponsesSseIds(flushedParsed);
                     const usageNormalized = normalizeUsage(flushedParsed);
-                    if (idsNormalized || usageNormalized) {
+                    const identityChanged = restoreResponsesPassthroughFunctionCallIdentity(
+                      flushedParsed,
+                      requestToolIdentityMap
+                    );
+                    if (idsNormalized || usageNormalized || identityChanged) {
                       output = `data: ${JSON.stringify(flushedParsed)}\n\n`;
                     }
                   } else if (!isClaude) {

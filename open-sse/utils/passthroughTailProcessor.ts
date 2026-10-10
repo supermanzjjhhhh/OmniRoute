@@ -1,3 +1,4 @@
+import { resolveRequestToolIdentity } from "../translator/response/openai-responses/requestToolIdentity.ts";
 import { extractUsage } from "./usageTracking.ts";
 import { parseSSEDataPayload } from "./streamHelpers.ts";
 import {
@@ -49,6 +50,7 @@ export type PassthroughTailProcessorContext = {
   toResponsesCompletedWithToolCalls: (parsed: JsonRecord) => JsonRecord;
   restoreOpenAIToolNames: (parsed: JsonRecord) => boolean;
   abortFailure: (failure: StreamFailurePayload, publicMessage: string) => void;
+  requestToolIdentityMap?: Map<string, { namespace: string; name: string }> | null;
 };
 
 function asRecord(value: unknown): JsonRecord {
@@ -153,6 +155,27 @@ function handleResponsesTailPayload(
       }
     }
   }
+  let completedItemsRestored = false;
+  if (
+    parsed.type === "response.completed" &&
+    Array.isArray(asRecord(parsed.response).output)
+  ) {
+    for (const item of asRecord(parsed.response).output as unknown[]) {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const fc = item as JsonRecord;
+        if (fc.type === "function_call" && typeof fc.name === "string") {
+          const identity = resolveRequestToolIdentity(context.requestToolIdentityMap, fc.name);
+          if (identity) {
+            const changed = fc.name !== identity.name || fc.namespace !== identity.namespace;
+            fc.namespace = identity.namespace;
+            fc.name = identity.name;
+            if (changed) completedItemsRestored = true;
+          }
+        }
+      }
+    }
+  }
+
   if (
     parsed.type === "response.completed" &&
     Array.isArray(asRecord(parsed.response).output) &&
@@ -187,6 +210,7 @@ function handleResponsesTailPayload(
   );
 
   if (
+    completedItemsRestored ||
     stripped ||
     backfilled ||
     textualToolCallBackfilled ||
