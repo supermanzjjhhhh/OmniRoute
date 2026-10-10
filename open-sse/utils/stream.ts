@@ -1,3 +1,4 @@
+import { resolveRequestToolIdentity } from "../translator/response/openai-responses/requestToolIdentity.ts";
 import { translateResponse, initState } from "../translator/index.ts";
 import { FORMATS } from "../translator/formats.ts";
 import { appendRequestLog } from "@/lib/usageDb";
@@ -261,15 +262,13 @@ function restoreResponsesPassthroughFunctionCallIdentity(
   parsed: JsonRecord,
   requestToolIdentityMap: Map<string, { namespace: string; name: string }> | null | undefined
 ): boolean {
-  if (!(requestToolIdentityMap instanceof Map)) return false;
-
   const restoreItem = (item: unknown): boolean => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
     const functionCall = item as JsonRecord;
     if (functionCall.type !== "function_call" || typeof functionCall.name !== "string")
       return false;
 
-    const identity = requestToolIdentityMap.get(functionCall.name);
+    const identity = resolveRequestToolIdentity(requestToolIdentityMap, functionCall.name);
     if (!identity) return false;
 
     const changed =
@@ -288,6 +287,16 @@ function restoreResponsesPassthroughFunctionCallIdentity(
       (changed: boolean, item: unknown) => restoreItem(item) || changed,
       false
     );
+  }
+
+  if (parsed.type === "response.function_call_arguments.done" && typeof parsed.name === "string") {
+    const identity = resolveRequestToolIdentity(requestToolIdentityMap, parsed.name);
+    if (identity) {
+      const changed = parsed.name !== identity.name || parsed.namespace !== identity.namespace;
+      parsed.name = identity.name;
+      parsed.namespace = identity.namespace;
+      return changed;
+    }
   }
 
   return false;
@@ -1688,6 +1697,14 @@ export function createSSEStream(options: StreamOptions = {}) {
                     parsed.item?.type === "reasoning"
                   )
                     reasoningObserver.note(parsed, Date.now());
+
+                  // #7936 — restore `namespace` + `name` fields on passthrough
+                  // Responses function_call items for downstream Codex clients.
+                  const passthroughIdentityRestored = restoreResponsesPassthroughFunctionCallIdentity(
+                    parsed as JsonRecord,
+                    requestToolIdentityMap
+                  );
+
                   if (
                     parsed.type === "response.output_item.added" &&
                     parsed.item?.type === "function_call"
@@ -1787,18 +1804,12 @@ export function createSSEStream(options: StreamOptions = {}) {
                       parsed.response.output
                     );
                   }
-                  // #7936 — restore `namespace` + `name` fields on passthrough
-                  // Responses function_call items for downstream Codex clients.
-                  if (
-                    parsed.type === "response.output_item.added" ||
-                    parsed.type === "response.output_item.done" ||
-                    parsed.type === "response.completed"
-                  ) {
+                  const identityChanged =
+                    passthroughIdentityRestored ||
                     restoreResponsesPassthroughFunctionCallIdentity(
                       parsed as JsonRecord,
                       requestToolIdentityMap
                     );
-                  }
                   if (
                     parsed.type === "response.completed" &&
                     passthroughResponsesPendingFunctionCalls.size > 0
@@ -1838,6 +1849,7 @@ export function createSSEStream(options: StreamOptions = {}) {
                   const backfilled = backfillResponsesCompletedOutput(parsed, backfillCandidates);
                   const usageNormalized = normalizeUsage(parsed);
                   if (
+                    identityChanged ||
                     stripped ||
                     backfilled ||
                     textualToolCallBackfilled ||

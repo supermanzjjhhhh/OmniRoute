@@ -24,25 +24,37 @@ const NAMESPACE_TOOL_PREFIX = "mcp__";
  * stateless-upstream-by-default proxy for the Responses API, so nothing
  * persists the prior turn's identity map across separate HTTP requests).
  *
- * Recovers `{namespace, name}` by splitting the wire name on its LAST `__`
- * separator, mirroring `flattenNamespaceToolName`'s own construction
- * (`${nsName}__${leaf}`, with leaf never containing its own `__`). Scoped to
- * wire names that start with the `mcp__` namespace-container convention so it
- * cannot attach a spurious `namespace` to a flat, non-namespaced tool that
- * happens to contain `__`.
- *
- * Known gap: a wire name hash-truncated by `flattenNamespaceToolName` (>64
- * chars) loses its `__` boundary and cannot be recovered here.
+ * Recovers `{namespace, name}` by:
+ * 1. Splitting dot-separated wire names ("mcp__<server>.<tool>" or "<server>.<tool>").
+ * 2. Splitting "__"-separated wire names ("mcp__<server>__<tool>") on the LAST "__" separator.
  */
 function splitFlattenedNamespaceWireName(toolName: string): RequestToolIdentity | null {
-  if (!toolName.startsWith(NAMESPACE_TOOL_PREFIX)) return null;
+  if (!toolName) return null;
 
-  const lastSeparator = toolName.lastIndexOf("__");
-  if (lastSeparator <= 0) return null;
+  // Dot-separated format: "mcp__<server>.<tool>" or "<server>.<tool>"
+  const dotIndex = toolName.indexOf(".");
+  if (dotIndex > 0) {
+    const rawNs = toolName.slice(0, dotIndex);
+    const leaf = toolName.slice(dotIndex + 1);
+    if (rawNs && leaf) {
+      const namespace = rawNs.startsWith(NAMESPACE_TOOL_PREFIX)
+        ? rawNs
+        : `${NAMESPACE_TOOL_PREFIX}${rawNs}`;
+      return { namespace, name: leaf };
+    }
+  }
 
-  const namespace = toolName.slice(0, lastSeparator);
-  const name = toolName.slice(lastSeparator + 2);
-  return namespace && name ? { namespace, name } : null;
+  // __-separated wire format: "mcp__<server>__<leaf>"
+  if (toolName.startsWith(NAMESPACE_TOOL_PREFIX)) {
+    const lastSeparator = toolName.lastIndexOf("__");
+    if (lastSeparator >= NAMESPACE_TOOL_PREFIX.length) {
+      const namespace = toolName.slice(0, lastSeparator);
+      const name = toolName.slice(lastSeparator + 2);
+      if (namespace && name) return { namespace, name };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -76,7 +88,14 @@ export function resolveRequestToolIdentity(identityMap: unknown, toolName: strin
         : [];
   for (const candidate of candidates) {
     const identity = asRequestToolIdentity(candidate);
-    if (identity && `${identity.namespace}.${identity.name}` === toolName) return identity;
+    if (!identity) continue;
+    if (`${identity.namespace}.${identity.name}` === toolName) return identity;
+    const bareNs = identity.namespace.startsWith(NAMESPACE_TOOL_PREFIX)
+      ? identity.namespace.slice(NAMESPACE_TOOL_PREFIX.length)
+      : identity.namespace;
+    if (`${bareNs}.${identity.name}` === toolName) return identity;
+    if (`${NAMESPACE_TOOL_PREFIX}${bareNs}.${identity.name}` === toolName) return identity;
+    if (`${bareNs}__${identity.name}` === toolName) return identity;
   }
 
   // The wire-name split only stands in for a request that declared no
@@ -89,5 +108,17 @@ export function resolveRequestToolIdentity(identityMap: unknown, toolName: strin
       : identityMap && typeof identityMap === "object" && !Array.isArray(identityMap)
         ? Object.keys(identityMap).length
         : 0;
-  return ledgerSize === 0 ? splitFlattenedNamespaceWireName(toolName) : null;
+
+  if (ledgerSize === 0) {
+    return splitFlattenedNamespaceWireName(toolName);
+  }
+
+  // If the ledger was populated but the candidate loop had no match:
+  // An explicit "mcp__<server>.<tool>" wire call carries the MCP prefix
+  // and dot separator, so it is an unambiguous namespaced tool call.
+  if (toolName.startsWith(NAMESPACE_TOOL_PREFIX) && toolName.includes(".")) {
+    return splitFlattenedNamespaceWireName(toolName);
+  }
+
+  return null;
 }
