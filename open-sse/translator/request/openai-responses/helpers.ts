@@ -49,15 +49,19 @@ export function toValidJsonString(value: unknown, fallback = "{}"): string {
     const trimmed = value.trim();
     if (!trimmed) return fallback;
     try {
-      JSON.parse(trimmed);
-      return trimmed;
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return trimmed;
+      }
+      return fallback;
     } catch {
       return fallback;
     }
   }
-  if (value && typeof value === "object") {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
     try {
-      return JSON.stringify(value);
+      const s = JSON.stringify(value);
+      return typeof s === "string" && s.startsWith("{") ? s : fallback;
     } catch {
       return fallback;
     }

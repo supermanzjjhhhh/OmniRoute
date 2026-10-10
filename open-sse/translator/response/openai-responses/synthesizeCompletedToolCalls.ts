@@ -78,12 +78,14 @@ function baseChunk(state): Record<string, unknown> {
 function resolveArgsStr(rawArgs, toolName, toolSchema): string {
   const argsToEmit = stripEmptyOptionalToolArgs(rawArgs, toolName, toolSchema);
   if (argsToEmit != null) {
-    return typeof argsToEmit === "string" ? argsToEmit : JSON.stringify(argsToEmit);
+    const s = typeof argsToEmit === "string" ? argsToEmit.trim() : JSON.stringify(argsToEmit);
+    return s || "{}";
   }
   if (rawArgs != null) {
-    return typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs);
+    const s = typeof rawArgs === "string" ? rawArgs.trim() : JSON.stringify(rawArgs);
+    return s || "{}";
   }
-  return "";
+  return "{}";
 }
 
 /**
@@ -126,20 +128,18 @@ function buildToolCallChunks(state, fcItem): Record<string, unknown>[] {
     ],
   });
 
-  const argsStr = resolveArgsStr(fcItem.arguments, toolName, toolSchema);
-  if (argsStr) {
-    state.currentToolCallArgsBuffer = argsStr;
-    chunks.push({
-      ...baseChunk(state),
-      choices: [
-        {
-          index: 0,
-          delta: { tool_calls: [{ index: currentIndex, function: { arguments: argsStr } }] },
-          finish_reason: null,
-        },
-      ],
-    });
-  }
+  const argsStr = resolveArgsStr(fcItem.arguments, toolName, toolSchema) || "{}";
+  state.currentToolCallArgsBuffer = argsStr;
+  chunks.push({
+    ...baseChunk(state),
+    choices: [
+      {
+        index: 0,
+        delta: { tool_calls: [{ index: currentIndex, function: { arguments: argsStr } }] },
+        finish_reason: null,
+      },
+    ],
+  });
 
   // Advance state as output_item.done would
   state.toolCallIndex++;
