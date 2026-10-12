@@ -95,6 +95,39 @@ test("#4041 withCodexPreferredModel accepts a pre-parsed body and avoids re-clon
   assert.equal(result.body, body);
 });
 
+test("Responses preserves native aliases while keeping Codex preference for bare GPT IDs", async () => {
+  const [{ withCodexPreferredModel }, { setModelAlias }] = await Promise.all([
+    import("../../src/app/api/v1/responses/route.ts"),
+    import("../../src/lib/db/models/aliases.ts"),
+  ]);
+
+  // Use the real SQLite-backed native alias store in this test's isolated DATA_DIR.
+  await setModelAlias("my-domestic", "9router/my-domestic");
+  await setModelAlias("gpt-domestic", "9router/my-domestic");
+
+  for (const model of ["my-domestic", "gpt-domestic", "9router/my-domestic", "nr/my-domestic"]) {
+    const request = new Request("http://localhost/v1/responses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, input: "hello" }),
+    });
+
+    const result = await withCodexPreferredModel(request);
+
+    assert.equal(result.body?.model, model, `must preserve native model id: ${model}`);
+    assert.strictEqual(result.request, request, `must not rewrite native model request: ${model}`);
+  }
+
+  const bareGpt = new Request("http://localhost/v1/responses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "gpt-5.5", input: "hello" }),
+  });
+  const rewritten = await withCodexPreferredModel(bareGpt);
+  assert.equal(rewritten.body?.model, "codex/gpt-5.5");
+  assert.notStrictEqual(rewritten.request, bareGpt);
+});
+
 // ─── Part C: wrapped routes parse once before invoking their handler ─────────
 
 test("#4041 the body is parsed AT MOST ONCE through withInjectionGuard + inner handler", async () => {

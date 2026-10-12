@@ -4,6 +4,7 @@ import { CORS_HEADERS } from "@/shared/utils/cors";
 import { createInjectionGuard } from "@/middleware/promptInjectionGuard";
 import { resolveResponsesApiModel } from "@/app/api/internal/codex-responses-ws/modelResolution";
 import { getModelInfo, getComboForModel } from "@/sse/services/model";
+import { getModelAliases } from "@/models";
 import { generateRequestId } from "@/shared/utils/requestId";
 import {
   admitChatRequest,
@@ -75,7 +76,9 @@ export async function withCodexPreferredModel(
     const { model, changed } = await resolveResponsesApiModel(
       body.model,
       getModelInfo,
-      async (name) => !!(await getComboForModel(name))
+      async (name) =>
+        !!(await getComboForModel(name)) ||
+        Object.prototype.hasOwnProperty.call(await getModelAliases(), name)
     );
     if (!changed) return { request, body };
 
