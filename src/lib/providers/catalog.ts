@@ -216,7 +216,10 @@ export function isManagedProviderConnectionId(providerId: string): boolean {
   if (supportsDualAuthProvider(providerId)) return true;
 
   const entry = resolveStaticProviderCatalogEntry(providerId);
-  return !!(entry && MANAGED_PROVIDER_CONNECTION_CATEGORIES.has(entry.category));
+  return !!(
+    entry &&
+    (MANAGED_PROVIDER_CONNECTION_CATEGORIES.has(entry.category) || entry.id === "9router")
+  );
 }
 
 export function resolveCompatibleProviderCatalogEntry(

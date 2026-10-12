@@ -1195,26 +1195,12 @@ export async function getProviderCredentials(
 
     // No-auth providers (e.g. opencode) need no DB connection — return synthetic credentials
     // so the executor receives a valid credentials object without auth headers being added.
-    const resolvedId = provider === "nr" ? "9router" : resolveProviderId(provider);
-    // The native executor owns its service key; it does not use a provider connection row.
-    const isNineRouter = resolvedId === "9router";
-    let forcedConnectionId =
-      typeof options.forcedConnectionId === "string" && options.forcedConnectionId.trim().length > 0
-        ? options.forcedConnectionId.trim()
-        : null;
-    if (
-      isNineRouter &&
-      (options.lease ||
-        (forcedConnectionId && forcedConnectionId !== SYNTHETIC_NOAUTH_CONNECTION_ID))
-    ) {
-      invalidateManagedLease(options, "CONNECTION_INELIGIBLE");
-      return null;
-    }
+    const resolvedId = resolveProviderId(provider);
     const providerMaps: Record<string, { noAuth?: boolean } | undefined>[] = [
       NOAUTH_PROVIDERS as Record<string, { noAuth?: boolean } | undefined>,
       WEB_COOKIE_PROVIDERS as Record<string, { noAuth?: boolean } | undefined>,
     ];
-    if (isNineRouter || providerMaps.some((map) => map[resolvedId]?.noAuth)) {
+    if (providerMaps.some((map) => map[resolvedId]?.noAuth)) {
       if (await isNoAuthProviderBlockedBySettings(resolvedId)) return null;
       // #3061: there is only one synthetic "noauth" connection for a no-auth
       // provider. If the caller already tried and excluded it (account-fallback
@@ -1226,9 +1212,7 @@ export async function getProviderCredentials(
         excludeConnectionId,
         options.excludeConnectionIds
       );
-      const optionalKey = isNineRouter
-        ? null
-        : await loadOptionalNoAuthApiKeyCredentials(resolvedId, excludedForNoAuth);
+      const optionalKey = await loadOptionalNoAuthApiKeyCredentials(resolvedId, excludedForNoAuth);
       if (
         optionalKey &&
         (!allowedConnections ||
@@ -1259,11 +1243,6 @@ export async function getProviderCredentials(
               )
             : null;
         }
-        if (isNineRouter) {
-          return excludedForNoAuth.has(SYNTHETIC_NOAUTH_CONNECTION_ID)
-            ? null
-            : buildSyntheticNoAuthCredentials();
-        }
         return await maybeSyntheticNoAuthFallback(resolvedId, excludedForNoAuth);
       }
     }
@@ -1272,6 +1251,10 @@ export async function getProviderCredentials(
     const allowRateLimitedConnections =
       allowSuppressedConnections || options.allowRateLimitedConnections === true;
     const bypassQuotaPolicy = options.bypassQuotaPolicy === true;
+    let forcedConnectionId =
+      typeof options.forcedConnectionId === "string" && options.forcedConnectionId.trim().length > 0
+        ? options.forcedConnectionId.trim()
+        : null;
     const excludedConnectionIds = normalizeExcludedConnectionIds(
       excludeConnectionId,
       options.excludeConnectionIds

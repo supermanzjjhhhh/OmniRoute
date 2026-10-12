@@ -7,158 +7,91 @@ import path from "node:path";
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "omniroute-native-9router-"));
 process.env.DATA_DIR = fixture;
 process.env.NODE_ENV = "test";
+process.env.INITIAL_PASSWORD = "fixture-only-management-password";
+process.env.API_KEY_SECRET = "native-registration-fixture-only-secret";
 process.env.DISABLE_SQLITE_AUTO_BACKUP = "true";
 const core = await import("../../src/lib/db/core.ts");
-const db = core.getDbInstance();
-db.prepare(
-  "UPDATE version_manager SET status = ?, api_key = ?, port = ?, provider_expose = ? WHERE tool = ?"
-).run("running", "nr_fixture_only", 20130, 1, "9router");
-const { getProviderCredentials, getProviderCredentialsWithQuotaPreflight } =
-  await import("../../src/sse/services/auth.ts");
-const { updateSettings } = await import("../../src/lib/db/settings.ts");
-const { recordModelLockoutFailure, clearAllModelLockouts } =
-  await import("../../open-sse/services/accountFallback.ts");
+const { createProviderConnection, updateProviderConnection } =
+  await import("../../src/lib/db/providers.ts");
+const { getProviderCredentials } = await import("../../src/sse/services/auth.ts");
+const { isManagedProviderConnectionId } = await import("../../src/lib/providers/catalog.ts");
 
 test.after(() => {
-  clearAllModelLockouts();
   core.resetDbInstance();
   fs.rmSync(fixture, { recursive: true, force: true });
 });
 
-for (const provider of ["9router", "nr"]) {
-  test(`${provider}: native service does not need a provider connection row`, async () => {
-    assert.equal(
-      db.prepare("SELECT count(*) AS n FROM provider_connections WHERE provider = ?").get(provider)
-        .n,
-      0
-    );
-    const credentials = await getProviderCredentials(provider, null, null, "my-domestic");
-    assert.ok(
-      credentials,
-      "Native executor must be reachable without a duplicated provider connection"
-    );
-    assert.equal(credentials.connectionId, "noauth");
-    assert.equal(
-      credentials.apiKey,
-      null,
-      "Service key belongs to the native executor, not the connection selector"
-    );
+test("embedded 9router uses the existing managed provider registration gate", () => {
+  assert.equal(isManagedProviderConnectionId("9router"), true);
+  assert.equal(isManagedProviderConnectionId("nr"), true);
+  assert.equal(isManagedProviderConnectionId("cliproxyapi"), false);
+  assert.equal(isManagedProviderConnectionId("unknown-provider"), false);
+});
+
+test("9router requires a normal active connection and preserves selection constraints", async () => {
+  assert.equal(await getProviderCredentials("9router", null, null, "my-domestic"), null);
+  const connection = await createProviderConnection({
+    provider: "9router",
+    authType: "apikey",
+    name: "Native fixture",
+    apiKey: "fixture-connection-key-not-service-key",
+    isActive: true,
+    testStatus: "active",
   });
-  test(`${provider}: quota wrapper preserves the native runtime identity`, async () => {
-    const credentials = await getProviderCredentialsWithQuotaPreflight(
-      provider,
-      null,
-      null,
-      "my-domestic"
+  for (const provider of ["9router", "nr"]) {
+    const selected = await getProviderCredentials(provider, null, null, "my-domestic");
+    assert.equal(selected?.connectionId, connection.id);
+    assert.equal(selected?.apiKey, "fixture-connection-key-not-service-key");
+    assert.equal(await getProviderCredentials(provider, connection.id, null, "my-domestic"), null);
+    assert.deepEqual(
+      await getProviderCredentials(provider, null, ["not-this-connection"], "my-domestic"),
+      { blockedByKeyPolicy: true, blockedCount: 1 }
     );
-    assert.ok(credentials);
-    assert.equal(credentials.connectionId, "noauth");
-  });
-  test(`${provider}: excluded synthetic identity is not selected again`, async () => {
     assert.equal(
       await getProviderCredentials(provider, null, null, "my-domestic", {
-        excludeConnectionIds: ["noauth"],
+        forcedConnectionId: "not-this-connection",
       }),
       null
     );
-  });
-  test(`${provider}: unrelated connection allowlist does not authorize the service`, async () => {
-    assert.equal(
-      await getProviderCredentials(provider, null, ["unrelated-user-connection"], "my-domestic"),
-      null
-    );
-  });
-  test(`${provider}: explicit synthetic allowlist permits the service`, async () => {
-    assert.ok(await getProviderCredentials(provider, null, ["noauth"], "my-domestic"));
-  });
-  test(`${provider}: forcing a nonexistent ordinary connection cannot silently switch to the service`, async () => {
-    assert.equal(
-      await getProviderCredentials(provider, null, null, "my-domestic", {
-        forcedConnectionId: "unrelated-user-connection",
-      }),
-      null
-    );
-  });
-}
-for (const provider of ["9router", "nr"]) {
-  test(`${provider}: the single exclusion argument is normalized`, async () => {
-    assert.equal(await getProviderCredentials(provider, " noauth ", null, "my-domestic"), null);
-  });
-  test(`${provider}: the synthetic identity can be explicitly pinned`, async () => {
-    assert.ok(
-      await getProviderCredentials(provider, null, null, "my-domestic", {
-        forcedConnectionId: "noauth",
-      })
-    );
-  });
-  test(`${provider}: an exclusive lease cannot silently acquire a synthetic connection`, async () => {
-    assert.equal(
-      await getProviderCredentials(provider, null, null, "my-domestic", {
-        lease: {
-          apiKeyId: "fixture-client",
-          mode: "acquire",
-          context: { leaseOwnerId: "vlo_" + "A".repeat(43), generation: 1 },
-        },
-      }),
-      null
-    );
-  });
-  for (const blocked of ["9router", "nr"]) {
-    test(`${provider}: blocklist entry ${blocked} remains authoritative`, async () => {
-      await updateSettings({ blockedProviders: [blocked] });
-      try {
-        assert.equal(await getProviderCredentials(provider, null, null, "my-domestic"), null);
-      } finally {
-        await updateSettings({ blockedProviders: [] });
-      }
-    });
   }
-  test(`${provider}: model-only cooldown is preserved without blocking other models`, async () => {
-    recordModelLockoutFailure("9router", "noauth", "my-domestic", "model_capacity", 400, 1800_000);
-    try {
-      const locked = await getProviderCredentials(provider, null, null, "my-domestic");
-      assert.ok(locked && "allRateLimited" in locked);
-      assert.equal(locked.allRateLimited, true);
-      assert.ok(await getProviderCredentials(provider, null, null, "different-fixture-model"));
-    } finally {
-      clearAllModelLockouts();
-    }
-  });
-}
-for (const provider of ["9router", "nr"]) {
-  test(`${provider}: forced synthetic IDs use the existing whitespace normalization`, async () => {
-    assert.ok(
-      await getProviderCredentials(provider, null, null, "my-domestic", {
-        forcedConnectionId: " noauth ",
+  await updateProviderConnection(connection.id, { isActive: false });
+  assert.equal(await getProviderCredentials("9router", null, null, "my-domestic"), null);
+  await updateProviderConnection(connection.id, { isActive: true });
+  assert.equal(
+    (await getProviderCredentials("9router", null, null, "my-domestic"))?.connectionId,
+    connection.id
+  );
+});
+
+test("public provider API registers 9router without bypassing validation or management auth", async () => {
+  const { POST } = await import("../../src/app/api/providers/route.ts");
+  const { createApiKey } = await import("../../src/lib/db/apiKeys.ts");
+  const admin = await createApiKey("Fixture admin", "fixture-machine", ["manage"]);
+  const user = await createApiKey("Fixture user", "fixture-machine", ["chat"]);
+  const post = (body: Record<string, unknown>, key = admin.key) =>
+    POST(
+      new Request("http://localhost/api/providers", {
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
       })
     );
-    assert.ok(
-      await getProviderCredentials(provider, null, null, "my-domestic", { forcedConnectionId: " " })
-    );
-  });
-}
-for (const provider of ["9router", "nr"]) {
-  test(`${provider}: an ineligible request lease is invalidated instead of retained`, async () => {
-    const leaseDb = await import("../../src/lib/db/exclusiveConnectionLeases.ts");
-    const owner = `vlo_${provider === "9router" ? "C".repeat(43) : "D".repeat(43)}`;
-    const acquired = leaseDb.acquireExclusiveConnectionLease({
-      leaseOwnerId: owner,
-      apiKeyId: "fixture-client",
-      provider: "codex",
-      connectionId: "fixture-held-connection",
+  for (const provider of ["9router", "nr"]) {
+    const response = await post({
+      provider,
+      name: `Fixture ${provider}`,
+      apiKey: "managed-service-marker-not-a-secret",
     });
-    assert.equal(acquired.kind, "ACQUIRED");
-    assert.ok(leaseDb.getActiveExclusiveConnectionLease(owner));
-    assert.equal(
-      await getProviderCredentials(provider, null, null, "my-domestic", {
-        lease: {
-          apiKeyId: "fixture-client",
-          mode: "request",
-          context: { leaseOwnerId: owner, generation: acquired.lease.generation },
-        },
-      }),
-      null
-    );
-    assert.equal(leaseDb.getActiveExclusiveConnectionLease(owner), null);
-  });
-}
+    assert.equal(response.status, 201);
+    const payload = await response.json();
+    assert.equal(payload.connection.provider, "9router");
+    assert.equal(Object.hasOwn(payload.connection, "apiKey"), false);
+  }
+  assert.equal((await post({ provider: "cliproxyapi", apiKey: "fixture-marker" })).status, 400);
+  assert.equal((await post({ provider: "9router" })).status, 400);
+  assert.equal((await post({ provider: "9router", apiKey: "" })).status, 400);
+  assert.equal(
+    (await post({ provider: "9router", apiKey: "fixture-marker" }, user.key)).status,
+    403
+  );
+});

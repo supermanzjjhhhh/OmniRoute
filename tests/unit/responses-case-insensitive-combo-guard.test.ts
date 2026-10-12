@@ -43,7 +43,7 @@ test("provider-prefixed models pass through unchanged", async () => {
   }
 });
 
-test("Responses route guards Codex rewrites with native combos and model aliases", () => {
+test("Responses route uses the downstream combo resolver for the Codex rewrite guard", () => {
   const source = readFileSync(
     new URL("../../src/app/api/v1/responses/route.ts", import.meta.url),
     "utf8"
@@ -53,11 +53,7 @@ test("Responses route guards Codex rewrites with native combos and model aliases
     source,
     /import \{ getModelInfo, getComboForModel \} from "@\/sse\/services\/model"/
   );
-  assert.match(source, /import \{ getModelAliases \} from "@\/models"/);
-  assert.match(
-    source,
-    /async \(name\) =>\s*!!\(await getComboForModel\(name\)\)\s*\|\|\s*Object\.prototype\.hasOwnProperty\.call\(await getModelAliases\(\), name\)/
-  );
+  assert.match(source, /async \(name\) => !!\(await getComboForModel\(name\)\)/);
   assert.doesNotMatch(source, /getComboByName\(name\)/);
 });
 

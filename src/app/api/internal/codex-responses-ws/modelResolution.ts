@@ -71,15 +71,15 @@ export async function resolveCodexWsModelInfo(
  *
  * @param requestedModel the model id from the Responses API request body
  * @param resolve a getModelInfo-style resolver
- * @param hasExplicitRoute optional predicate — preserve native combos and DB aliases
- *        for downstream routing instead of applying the codex preference.
+ * @param isCombo optional predicate — when the bare id is a combo name, skip the codex
+ *        rewrite so downstream combo routing resolves it (#3227/#3233).
  * @returns { model, changed } — model is the (possibly rewritten) id;
  *          changed=true means a codex/ prefix was applied.
  */
 export async function resolveResponsesApiModel(
   requestedModel: string,
   resolve: ModelResolver,
-  hasExplicitRoute?: (name: string) => Promise<boolean> | boolean
+  isCombo?: (name: string) => Promise<boolean> | boolean
 ): Promise<{ model: string; changed: boolean }> {
   if (!requestedModel || requestedModel.includes("/")) {
     return { model: requestedModel, changed: false };
@@ -96,12 +96,11 @@ export async function resolveResponsesApiModel(
   // #3227/#3233: a bare combo name (e.g. "n8n-text", "paid-premium") must NOT be
   // force-prefixed to codex/ — Codex accepts arbitrary model strings, so the rewrite
   // would shadow the combo and route to codex. Let downstream combo routing handle it.
-  // Explicit DB model aliases have the same priority; let the native resolver handle them.
-  if (hasExplicitRoute) {
+  if (isCombo) {
     try {
-      if (await hasExplicitRoute(requestedModel)) return { model: requestedModel, changed: false };
+      if (await isCombo(requestedModel)) return { model: requestedModel, changed: false };
     } catch {
-      // Explicit-route lookup unavailable — preserve the existing preference fallback.
+      // combo lookup unavailable — fall through to normal codex-preference resolution
     }
   }
 
