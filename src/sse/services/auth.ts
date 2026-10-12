@@ -1206,8 +1206,10 @@ export async function getProviderCredentials(
       isNineRouter &&
       (options.lease ||
         (forcedConnectionId && forcedConnectionId !== SYNTHETIC_NOAUTH_CONNECTION_ID))
-    )
+    ) {
+      invalidateManagedLease(options, "CONNECTION_INELIGIBLE");
       return null;
+    }
     const providerMaps: Record<string, { noAuth?: boolean } | undefined>[] = [
       NOAUTH_PROVIDERS as Record<string, { noAuth?: boolean } | undefined>,
       WEB_COOKIE_PROVIDERS as Record<string, { noAuth?: boolean } | undefined>,

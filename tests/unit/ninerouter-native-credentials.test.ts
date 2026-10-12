@@ -137,3 +137,28 @@ for (const provider of ["9router", "nr"]) {
     );
   });
 }
+for (const provider of ["9router", "nr"]) {
+  test(`${provider}: an ineligible request lease is invalidated instead of retained`, async () => {
+    const leaseDb = await import("../../src/lib/db/exclusiveConnectionLeases.ts");
+    const owner = `vlo_${provider === "9router" ? "C".repeat(43) : "D".repeat(43)}`;
+    const acquired = leaseDb.acquireExclusiveConnectionLease({
+      leaseOwnerId: owner,
+      apiKeyId: "fixture-client",
+      provider: "codex",
+      connectionId: "fixture-held-connection",
+    });
+    assert.equal(acquired.kind, "ACQUIRED");
+    assert.ok(leaseDb.getActiveExclusiveConnectionLease(owner));
+    assert.equal(
+      await getProviderCredentials(provider, null, null, "my-domestic", {
+        lease: {
+          apiKeyId: "fixture-client",
+          mode: "request",
+          context: { leaseOwnerId: owner, generation: acquired.lease.generation },
+        },
+      }),
+      null
+    );
+    assert.equal(leaseDb.getActiveExclusiveConnectionLease(owner), null);
+  });
+}
