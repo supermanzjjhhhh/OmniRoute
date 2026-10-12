@@ -128,11 +128,12 @@ export class NineRouterExecutor extends BaseExecutor {
   transformRequest(
     model: string,
     body: unknown,
-    _stream: boolean,
+    stream: boolean | undefined,
     _credentials: ProviderCredentials | null
   ): unknown {
     if (!body || typeof body !== "object") return body;
     const transformed = { ...(body as Record<string, unknown>) };
+    transformed.stream = stream ?? transformed.stream === true;
     if (transformed.model !== model) transformed.model = model;
     return transformed;
   }

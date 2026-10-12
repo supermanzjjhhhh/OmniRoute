@@ -171,6 +171,15 @@ describe("NineRouterExecutor", () => {
       assert.equal(result.model, "same");
     });
 
+    for (const bodyStream of [undefined, false, true]) {
+      it(`keeps legacy body stream=${bodyStream} when the execution flag is absent`, () => {
+        const exec = new NineRouterExecutor();
+        const body = { messages: [], ...(bodyStream === undefined ? {} : { stream: bodyStream }) };
+        const result = exec.transformRequest("m", body, undefined, {}) as Record<string, unknown>;
+        assert.equal(result.stream, bodyStream === true);
+      });
+    }
+
     it("returns non-object body as-is", () => {
       const exec = new NineRouterExecutor();
       assert.equal(exec.transformRequest("m", "raw-string", true, {}), "raw-string");
@@ -346,6 +355,37 @@ describe("NineRouterExecutor", () => {
       });
       assert.equal(capturedBody.model, "cx/gpt-5-mini");
     });
+
+    for (const [name, bodyStream, stream] of [
+      ["omitted body stream defaults to non-streaming", undefined, false],
+      ["explicit non-streaming", false, false],
+      ["streaming", true, true],
+      ["execution true with omitted body stream", undefined, true],
+      ["execution true overrides body false", false, true],
+      ["execution false overrides body true", true, false],
+    ] as const) {
+      it(`forwards wire stream: ${name}`, async () => {
+        registerSupervisor(makeFakeSupervisor("running"));
+        let wireBody: Record<string, unknown> | undefined;
+        globalThis.fetch = async (_input: unknown, init?: RequestInit) => {
+          wireBody = JSON.parse(String(init?.body));
+          return new Response("{}", { status: 200 });
+        };
+        const exec = new NineRouterExecutor();
+        const body = { messages: [], ...(bodyStream === undefined ? {} : { stream: bodyStream }) };
+        const original = structuredClone(body);
+        const result = await exec.execute({
+          model: "9router/cx/gpt-5-mini",
+          body,
+          stream,
+          credentials: {},
+        });
+        assert.equal(result.response.status, 200);
+        assert.equal(wireBody?.stream, stream);
+        assert.equal(wireBody?.model, "cx/gpt-5-mini");
+        assert.deepEqual(body, original, "caller body must not be mutated");
+      });
+    }
 
     it("re-reads port from registry on each call (not cached in constructor)", async () => {
       // First supervisor at port 20130
