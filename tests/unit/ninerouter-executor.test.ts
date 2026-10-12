@@ -183,7 +183,7 @@ describe("NineRouterExecutor", () => {
   });
 
   describe("Anthropic-shape detection → endpoint selection", () => {
-    async function captureUrl(body: unknown) {
+    async function captureUrl(body: unknown, requestFormat?: string) {
       const sup = makeFakeSupervisor("running");
       registerSupervisor(sup);
       let capturedUrl = "";
@@ -192,9 +192,27 @@ describe("NineRouterExecutor", () => {
         return new Response("{}", { status: 200 });
       };
       const exec = new NineRouterExecutor("http://127.0.0.1:20130");
-      await exec.execute({ model: "m", body, stream: true, credentials: {} });
+      await exec.execute({ model: "m", body, stream: true, credentials: {}, requestFormat });
       return capturedUrl;
     }
+
+    it("uses the translated OpenAI wire format for content arrays", async () => {
+      const url = await captureUrl(
+        { messages: [{ role: "user", content: [{ type: "text", text: "fixture" }] }] },
+        "openai"
+      );
+      assert.equal(url, "http://127.0.0.1:20130/v1/chat/completions");
+    });
+
+    it("uses the translated Anthropic wire format when explicitly selected", async () => {
+      const url = await captureUrl({ messages: [{ role: "user", content: "fixture" }] }, "claude");
+      assert.equal(url, "http://127.0.0.1:20130/v1/messages");
+    });
+
+    it("uses the Responses endpoint for translated Responses wire format", async () => {
+      const url = await captureUrl({ input: "fixture" }, "openai-responses");
+      assert.equal(url, "http://127.0.0.1:20130/v1/responses");
+    });
 
     it("uses /v1/messages for Anthropic shape (top-level system)", async () => {
       const url = await captureUrl({

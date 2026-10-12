@@ -107,7 +107,13 @@ export class NineRouterExecutor extends BaseExecutor {
     return false;
   }
 
-  private selectEndpoint(body: unknown): "/v1/messages" | "/v1/chat/completions" {
+  private selectEndpoint(
+    body: unknown,
+    requestFormat?: string | null
+  ): "/v1/messages" | "/v1/chat/completions" | "/v1/responses" {
+    if (requestFormat === "openai") return "/v1/chat/completions";
+    if (requestFormat === "claude") return "/v1/messages";
+    if (requestFormat === "openai-responses") return "/v1/responses";
     return this.isAnthropicShape(body) ? "/v1/messages" : "/v1/chat/completions";
   }
 
@@ -156,7 +162,7 @@ export class NineRouterExecutor extends BaseExecutor {
     // G-01: strip "9router/" prefix before forwarding to upstream
     const innerModel = input.model.replace(/^9router\//, "");
 
-    const endpoint = this.selectEndpoint(input.body);
+    const endpoint = this.selectEndpoint(input.body, input.requestFormat);
     const url = `${dynamicBaseUrl}${endpoint}`;
     const shape = endpoint === "/v1/messages" ? "anthropic" : "openai";
     const headers = this.buildHeaders(dynamicCredentials, input.stream);
