@@ -3,6 +3,9 @@ import { NOAUTH_PROVIDERS } from "@/shared/constants/providers";
 import { getCombos } from "@/lib/db/combos";
 import { isComboNameAllowedForKey } from "@/shared/utils/apiKeyPolicy";
 import { getSettings } from "@/lib/db/settings";
+import { getVersionManagerTool } from "@/lib/db/versionManager";
+import { getSupervisor } from "@/lib/services/registry";
+import { getServiceModels } from "@/lib/services/modelSync";
 import { getUserDatabaseSettings } from "@/lib/db/databaseSettings";
 import { createLazyConnectionView } from "@/lib/db/providers/lazyConnectionView";
 import { extractAliasBackedModels } from "./aliasBackedModels";
@@ -51,6 +54,7 @@ import {
 import { getAllActiveSyncedModels } from "@/lib/db/models/activeSyncedCatalog";
 import {
   getModelCatalogCacheVersion,
+  invalidateModelCatalogCache,
   getCachedRawProviderConnections,
   getCachedProviderNodes,
 } from "@/lib/db/readCache";
@@ -92,6 +96,7 @@ import {
 } from "@/shared/utils/noAuthProviders";
 import { getSourcedTokenLimit, getTokenLimit } from "@omniroute/open-sse/services/contextManager";
 import { extractApiKey } from "@/sse/services/auth";
+import { allowlistPermitsSyntheticNoAuth } from "@/sse/services/noAuthAllowlist";
 import type { ComboModelStep } from "@/lib/combos/steps";
 import {
   type CustomModelEntry,
@@ -179,6 +184,7 @@ export type CatalogResponseOptions = {
 };
 
 const BUILTIN_AUTO_YIELD_INTERVAL = 2;
+let lastNineRouterCatalogSnapshot = "";
 
 function yieldCatalogBuildTurn(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -227,10 +233,33 @@ export async function getUnifiedModelsResponse(
   }
 
   try {
+    const nineRouterServiceModels =
+      getSupervisor("9router")?.getStatus().state === "running" &&
+      (await getVersionManagerTool("9router"))?.providerExpose === true
+        ? getServiceModels("9router")
+            .filter(
+              (model) =>
+                typeof model?.id === "string" &&
+                model.id.trim().length > 0 &&
+                model.available !== false
+            )
+            .map((model): SyncedAvailableModel => ({
+              id: model.id.startsWith("9router/") ? model.id.slice("9router/".length) : model.id,
+              name: typeof model.name === "string" && model.name.trim() ? model.name : model.id,
+              source: "imported",
+            }))
+            .filter((model) => model.id.trim().length > 0)
+        : [];
+    // Native service state/cache writes do not bump the existing catalog generation.
+    const nineRouterCatalogSnapshot = JSON.stringify(nineRouterServiceModels);
+    if (nineRouterCatalogSnapshot !== lastNineRouterCatalogSnapshot) {
+      lastNineRouterCatalogSnapshot = nineRouterCatalogSnapshot;
+      invalidateModelCatalogCache();
+    }
     return await resolveCachedCatalogResponse(
       request,
       { corsHeaders, diagnosticHeaders },
-      buildCatalogPayload,
+      (request) => buildCatalogPayload(request, nineRouterServiceModels),
       {
         // #10831: a disabled router hides auto/* just as hideAutoCombos does, so
         // the two collapse into one cache dimension — the resulting catalogs are
@@ -257,9 +286,10 @@ export async function getUnifiedModelsResponse(
 }
 
 async function buildCatalogPayload(
-  request: Request
+  request: Request,
+  nineRouterServiceModels: SyncedAvailableModel[]
 ): Promise<{ body: string; headers: Record<string, string>; status: number; cacheTTL: number }> {
-  const built = await buildUnifiedModelsResponseCore(request);
+  const built = await buildUnifiedModelsResponseCore(request, {}, nineRouterServiceModels);
   const body = await built.text();
   const headers: Record<string, string> = {};
   built.headers.forEach((value, key) => {
@@ -285,7 +315,8 @@ async function buildCatalogPayload(
  */
 async function buildUnifiedModelsResponseCore(
   request: Request,
-  corsHeaders: Record<string, string> = {}
+  corsHeaders: Record<string, string> = {},
+  nineRouterServiceModels: SyncedAvailableModel[] = []
 ) {
   const diagnosticHeaders = getCatalogDiagnosticsHeaders({ request });
   // #9147: this builder walks connections + model registries at catalog scale with no
@@ -473,6 +504,7 @@ async function buildUnifiedModelsResponseCore(
 
     // Build set of active provider aliases
     const activeAliases = new Set();
+    const nineRouterModelIds = new Set(nineRouterServiceModels.map((model) => model.id));
     const connectionsByProvider = new Map<string, typeof connections>();
     const registerConnectionKey = (
       key: string | null | undefined,
@@ -539,6 +571,11 @@ async function buildUnifiedModelsResponseCore(
 
     const providerSupportsModel = (providerKey: string, modelId: string) => {
       const providerId = aliasToProviderId[providerKey] || providerKey;
+      if (providerId === "9router" && nineRouterModelIds.has(modelId))
+        return (
+          !blockedProviders.has(providerId) &&
+          !blockedProviders.has(providerIdToAlias[providerId] || providerId)
+        );
       const alias = providerIdToAlias[providerId] || providerKey;
       // noAuth providers have no connection rows — treat every model as eligible. (#2798)
       const isNoAuth = isNoAuthProviderKey(providerId, providerKey, alias);
@@ -1007,6 +1044,13 @@ async function buildUnifiedModelsResponseCore(
     } catch (e) {
       // DB unavailable — log and fall through; static models remain as defaults.
       console.log("[catalog] Could not fetch synced available models:", e);
+    }
+    if (nineRouterServiceModels.length > 0) {
+      activeAliases.add("9router");
+      syncedModelsByProvider["9router"] = [
+        ...(syncedModelsByProvider["9router"] || []),
+        ...nineRouterServiceModels,
+      ];
     }
     const providersWithSyncedModels = new Set(
       Object.keys(syncedModelsByProvider).filter((pid) => {
@@ -2020,6 +2064,11 @@ async function buildUnifiedModelsResponseCore(
         const catalogScope = keyMeta.catalogScope ?? "all";
         const filtered = [];
         for (const m of models) {
+          if (
+            m.owned_by === "9router" &&
+            !allowlistPermitsSyntheticNoAuth(keyMeta.allowedConnections)
+          )
+            continue;
           const isComboRow = m.owned_by === "combo";
           if (catalogScope === "combos" && !isComboRow) continue;
           if (catalogScope === "models" && isComboRow) continue;
