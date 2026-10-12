@@ -9,7 +9,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AsyncLocalStorage } from "node:async_hooks";
+import { AsyncLocalStorage, createHook } from "node:async_hooks";
 
 import * as rateLimitManager from "../../open-sse/services/rateLimitManager.ts";
 
@@ -44,9 +44,7 @@ test("queued jobs see their own async context, not the slot-freer's", async (t) 
   let pC;
   try {
     const pA = store.run("A", () =>
-      rateLimitManager.withRateLimit("openai", conn, null, () =>
-        gateA.then(() => job("A"))
-      )
+      rateLimitManager.withRateLimit("openai", conn, null, () => gateA.then(() => job("A")))
     );
 
     // Wait until A holds the only slot before queueing B and C.
@@ -103,3 +101,49 @@ test("a job scheduled outside any context sees no store", async (t) => {
     await rateLimitManager.__resetRateLimitManagerForTests();
   }
 });
+
+for (const outcome of ["resolve", "reject"] as const) {
+  test(`job resource is destroyed exactly once after ${outcome}`, async (t) => {
+    const conn = `queue-context-destroy-${outcome}`;
+    rateLimitManager.enableRateLimitProtection(conn);
+    const resources = new Map<number, number>();
+    const hook = createHook({
+      init(id, type) {
+        if (type === "omniroute.rateLimitJob") resources.set(id, 0);
+      },
+      destroy(id) {
+        if (resources.has(id)) resources.set(id, resources.get(id)! + 1);
+      },
+    });
+    t.after(async () => {
+      hook.disable();
+      await rateLimitManager.__resetRateLimitManagerForTests();
+    });
+    hook.enable();
+
+    const failure = new Error("expected job failure");
+    const scheduled = store.run(outcome, () =>
+      rateLimitManager.withRateLimit(
+        "openai",
+        conn,
+        null,
+        async () => {
+          assert.equal(store.getStore(), outcome);
+          assert.equal(await readAfterTick(), outcome);
+          if (outcome === "reject") throw failure;
+          return outcome;
+        },
+        null,
+        10_000
+      )
+    );
+    if (outcome === "reject") await assert.rejects(scheduled, (error) => error === failure);
+    else assert.equal(await scheduled, outcome);
+
+    // async_hooks delivers destroy notifications on a later event-loop turn.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(resources.size, 1, "one real job resource must be created");
+    assert.deepEqual([...resources.values()], [1], "job resource must be destroyed once");
+  });
+}
