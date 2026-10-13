@@ -604,8 +604,8 @@ test("completedDetails cache evicts oldest entries when bounded", () => {
   }
 
   assert.ok(
-    usageHistory.getCompletedDetails().size <= 256,
-    "completedDetails should remain bounded"
+    usageHistory.getCompletedDetails().size <= 64,
+    "completedDetails should remain bounded by the current 64-entry policy"
   );
   assert.equal(usageHistory.getCompletedDetails().has(ids[0]), false);
   assert.equal(usageHistory.getCompletedDetails().has(ids[ids.length - 1]), true);
@@ -648,19 +648,18 @@ test("JON-562 cache budget wording does not claim a hard process memory ceiling"
   assert.doesNotMatch(source, /hard process-wide ceiling/i);
 });
 
-test("JON-562 completedDetails enforces a byte budget as well as the 256-entry cap", () => {
+test("JON-562 completedDetails evicts oldest entries when estimated bytes exceed the budget", () => {
   usageHistory.clearPendingRequests();
-  const chunkBytes = Math.floor(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES * 0.6);
+  const modelBytes = Math.floor(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES * 0.6);
 
   for (let index = 0; index < 2; index += 1) {
     assert.equal(
       completedRequestDetails.storeCompletedDetail({
         id: `JON-562-budget-${index}`,
-        model: "gpt-4.1",
+        model: "m".repeat(modelBytes),
         provider: "openai",
         connectionId: "conn-JON-562-budget",
         startedAt: Date.now() + index,
-        streamChunks: { client: ["x".repeat(chunkBytes)] },
       }),
       true
     );
@@ -674,7 +673,7 @@ test("JON-562 completedDetails enforces a byte budget as well as the 256-entry c
   assert.equal(usageHistory.getCompletedDetails().has("JON-562-budget-1"), true);
 });
 
-test("JON-562 oversized completed detail is rejected and replacement clears its timer", () => {
+test("JON-562 oversized replacement is rejected and clears the replaced entry timer", () => {
   usageHistory.clearPendingRequests();
   const id = "JON-562-oversized-replacement";
   const base = {
@@ -697,7 +696,7 @@ test("JON-562 oversized completed detail is rejected and replacement clears its 
   assert.equal(
     completedRequestDetails.storeCompletedDetail({
       ...base,
-      streamChunks: { client: [oversized] },
+      model: oversized,
     }),
     false
   );
@@ -709,17 +708,13 @@ test("JON-562 oversized completed detail is rejected and replacement clears its 
   });
 });
 
-test("JON-562 finalize schedules no cleanup timer when an oversized detail is not stored", () => {
+test("JON-562 finalize schedules no cleanup timer when an over-budget detail is not stored", () => {
   usageHistory.clearPendingRequests();
-  const model = "gpt-4.1";
+  const model = `gpt-4.1${"x".repeat(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES + 1)}`;
   const provider = "openai";
   const connectionId = "conn-JON-562-oversized-finalize";
   const id = usageHistory.trackPendingRequest(model, provider, connectionId, true);
   assert.ok(id);
-  usageHistory.updatePendingRequestStreamChunks(model, provider, connectionId, {
-    client: ["x".repeat(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES + 1)],
-  });
-
   assert.equal(usageHistory.finalizePendingRequestById(id, { status: 200 }), true);
   assert.equal(usageHistory.getCompletedDetails().has(id), false);
   assert.equal(completedRequestDetails.getCompletedDetailsCacheStats().cleanupTimers, 0);

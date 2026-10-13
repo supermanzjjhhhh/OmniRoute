@@ -12,9 +12,8 @@ process.env.DATA_DIR = TEST_DATA_DIR;
 
 const core = await import("../../src/lib/db/core.ts");
 const { writeCallArtifact } = await import("../../src/lib/usage/callLogArtifacts.ts");
-const { maybeEnrichCompletedDetail } = await import(
-  "../../src/lib/usage/completedRequestDetails.ts"
-);
+const { maybeEnrichCompletedDetail, storeCompletedDetail, getCompletedDetails } =
+  await import("../../src/lib/usage/completedRequestDetails.ts");
 
 type PipelinePayloads = { providerResponse?: unknown; clientResponse?: unknown };
 
@@ -42,8 +41,10 @@ function seedRow(id: string, connectionId: string, pipeline: PipelinePayloads | 
     .run({ id, timestamp: new Date().toISOString(), connectionId, artifact: relativePath });
 }
 
-// maybeEnrichCompletedDetail is fire-and-forget (`void (async () => …)`), so the
-// assertion waits on the mutation instead of on a returned promise.
+// maybeEnrichCompletedDetail is fire-and-forget (`void (async () => …)`) and only
+// lets scalars cross into the async closure — never the detail object itself. The
+// merged result lands on the cached copy, so the assertion waits for that cache
+// entry instead of for a mutation of the argument.
 async function enrich(id: string, connectionId: string) {
   const detail = {
     id,
@@ -54,12 +55,15 @@ async function enrich(id: string, connectionId: string) {
     providerResponse: null,
     clientResponse: null,
   };
+  storeCompletedDetail(detail as never);
   maybeEnrichCompletedDetail(detail as never, connectionId);
   const deadline = Date.now() + 5000;
-  while (Date.now() < deadline && detail.providerResponse === null) {
+  while (Date.now() < deadline) {
+    const cached = getCompletedDetails().get(id);
+    if (cached && cached.providerResponse !== null) return cached;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  return detail;
+  return getCompletedDetails().get(id) ?? (detail as never);
 }
 
 test("completed-detail enrichment prefers the pipeline over the body", async (t) => {

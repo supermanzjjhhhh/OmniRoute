@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getProviderConnections } from "@/lib/db/providers";
 import { getCachedSettings } from "@/lib/db/readCache";
 import { getWalMaintenanceState } from "@/lib/db/walMaintenance";
-import { buildHealthPayload } from "@/lib/monitoring/observability";
+import { buildHealthPayload, projectHealthPressure } from "@/lib/monitoring/observability";
+import { getResourcePressureDecision } from "@omniroute/open-sse/utils/resourcePressure.ts";
 import { readRunningBuildSha } from "@/lib/monitoring/buildSha";
 import { APP_CONFIG } from "@/shared/constants/config";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
@@ -62,7 +63,11 @@ function publicHealthView(payload: unknown): Record<string, unknown> {
 }
 
 function serveHealthPayload(fullView: boolean, payload: unknown) {
-  return NextResponse.json(fullView ? payload : publicHealthView(payload));
+  return NextResponse.json(
+    fullView
+      ? projectHealthPressure(payload, getResourcePressureDecision())
+      : publicHealthView(payload)
+  );
 }
 
 function scheduleHealthPayloadRefresh(): void {
@@ -101,7 +106,8 @@ function refreshDeepHealthVerdict(): void {
           await import("@/lib/monitoring/observability");
         const { getCachedSettings } = await import("@/lib/db/readCache");
         const settings = (await getCachedSettings()) as Record<string, unknown>;
-        const deepHealthUrl = typeof settings.deepHealthUrl === "string" ? settings.deepHealthUrl : "";
+        const deepHealthUrl =
+          typeof settings.deepHealthUrl === "string" ? settings.deepHealthUrl : "";
         if (!deepHealthUrl) return;
         const deepHealthToken =
           typeof settings.deepHealthToken === "string" ? settings.deepHealthToken : undefined;
@@ -136,7 +142,7 @@ export async function GET(request: Request) {
     return serveHealthPayload(fullView, withDeepHealth(payload, wantDeep));
   } catch (error) {
     console.error("[API] GET /api/monitoring/health error:", error);
-    return NextResponse.json({
+    return serveHealthPayload(fullView, {
       status: "degraded",
       error: "Health check partially unavailable",
       timestamp: new Date().toISOString(),

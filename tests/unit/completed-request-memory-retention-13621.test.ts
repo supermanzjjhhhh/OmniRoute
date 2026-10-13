@@ -83,7 +83,11 @@ test("#13621 completed stream diagnostics are capped per stage", () => {
     const values = stored!.streamChunks?.[stage];
     assert.ok(values);
     assert.equal(values!.length, 65, `${stage} keeps 64 chunks plus a truncation marker`);
-    assert.equal(values![0], chunks[0]);
+    assert.equal(
+      values![0],
+      `${chunks[0].slice(0, 4 * 1024)}...[TRUNCATED_CHUNK]`,
+      `${stage} clips large chunks before caching them`
+    );
     assert.match(values![64], /^\[TRUNCATED_STREAM_CHUNKS: 36\]$/);
   }
 });

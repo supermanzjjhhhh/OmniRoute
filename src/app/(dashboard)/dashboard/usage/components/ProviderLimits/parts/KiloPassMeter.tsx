@@ -15,8 +15,8 @@ interface KiloPassMeterProps {
   balance?: number | null;
 }
 
-function formatCurrency(value: number, currency: string = "USD"): string {
-  return value.toLocaleString(undefined, {
+function formatCurrency(value: number, locale: string, currency: string = "USD"): string {
+  return value.toLocaleString(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
@@ -119,7 +119,7 @@ export default function KiloPassMeter({
           {translateUsageOrFallback(t, "kiloPassUsageLabel", "This month's usage")}
         </span>
         <span className="text-[12px] font-bold tabular-nums" style={{ color: colors.text }}>
-          {formatCurrency(model.used)} / {formatCurrency(model.total)}
+          {formatCurrency(model.used, locale)} / {formatCurrency(model.total, locale)}
         </span>
       </div>
 
@@ -129,7 +129,7 @@ export default function KiloPassMeter({
           aria-valuemin={0}
           aria-valuemax={model.total}
           aria-valuenow={model.progressValue}
-          aria-valuetext={`${formatCurrency(model.used)} of ${formatCurrency(model.total)}`}
+          aria-valuetext={`${formatCurrency(model.used, locale)} of ${formatCurrency(model.total, locale)}`}
           aria-label={translateUsageOrFallback(t, "kiloPassMeterLabel", "Kilo Pass usage meter")}
           className="flex h-3 min-w-0 overflow-hidden rounded-full bg-bg-subtle ring-1 ring-inset ring-border/60"
         >
@@ -175,7 +175,7 @@ export default function KiloPassMeter({
                 <span>{translateUsageOrFallback(t, "kiloPassPaid", "Paid")}</span>
               </div>
               <span className="block pt-0.5 font-semibold tabular-nums">
-                {formatCurrency(model.paid)}
+                {formatCurrency(model.paid, locale)}
               </span>
             </div>
           )}
@@ -189,7 +189,7 @@ export default function KiloPassMeter({
                 <span>{translateUsageOrFallback(t, "kiloPassBonus", "Available bonus")}</span>
               </div>
               <span className="block pt-0.5 font-semibold tabular-nums">
-                {formatCurrency(model.bonus)}
+                {formatCurrency(model.bonus, locale)}
               </span>
             </div>
           )}
@@ -205,7 +205,9 @@ export default function KiloPassMeter({
             account_balance_wallet
           </span>
           <span>{translateUsageOrFallback(t, "kiloPassRemaining", "Remaining")}</span>
-          <span className="font-semibold tabular-nums">{formatCurrency(model.remaining)}</span>
+          <span className="font-semibold tabular-nums">
+            {formatCurrency(model.remaining, locale)}
+          </span>
         </div>
       </div>
 
@@ -239,7 +241,7 @@ export default function KiloPassMeter({
             </span>
           </div>
           <span className="font-semibold tabular-nums text-text-main">
-            {formatCurrency(balance)}
+            {formatCurrency(balance, locale)}
           </span>
         </div>
       )}

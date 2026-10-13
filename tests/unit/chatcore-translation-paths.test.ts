@@ -2977,10 +2977,10 @@ test("chatCore records Claude prompt cache and cache usage metadata in call logs
   assert.equal(result.success, true);
   assert.ok(detail);
   assert.equal(detail.requestBody._omniroute.claudePromptCache.applied, true);
-  // Breakpoints: system[2] (1), message content (1), assistant response (1). Tools cache_control is stripped by base.ts.
-  assert.equal(detail.requestBody._omniroute.claudePromptCache.totalBreakpoints, 3);
+  // Breakpoints: system, user, assistant, tools (relay keeps tool cache_control).
+  assert.equal(detail.requestBody._omniroute.claudePromptCache.totalBreakpoints, 4);
   assert.equal(detail.responseBody._omniroute.claudePromptCache.applied, true);
-  assert.equal(detail.responseBody._omniroute.claudePromptCache.totalBreakpoints, 3);
+  assert.equal(detail.responseBody._omniroute.claudePromptCache.totalBreakpoints, 4);
   assert.equal(typeof detail.responseBody._omniroute.claudePromptCache.anthropicBeta, "string");
   assert.match(detail.responseBody._omniroute.claudePromptCache.anthropicBeta, /prompt-caching/i);
   assert.deepEqual(detail.responseBody._omniroute.claudePromptCacheUsage, {
