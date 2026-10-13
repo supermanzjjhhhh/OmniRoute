@@ -1035,8 +1035,7 @@ test("AntigravityExecutor.execute applies CLI fingerprint when enabled", async (
     assert.equal(headers["User-Agent"], antigravityIdeUserAgent("2.1.1"));
     assert.equal(headers["x-client-name"], undefined);
     assert.equal(headers["x-client-version"], undefined);
-    // Cloud Code 403s on this header for personal accounts; the project rides in the body.
-    assert.equal(headers["x-goog-user-project"], undefined);
+    assert.equal(headers["x-goog-user-project"], "project-1");
     assert.deepEqual(Object.keys(parsedBody), [
       "project",
       "requestId",

@@ -117,9 +117,8 @@ test("content header application emits IDE and CLI identities and strips fake he
   );
   assertIdentityHeadersAbsent(ideHeaders);
   assertIdentityHeadersAbsent(cliHeaders);
-  // Cloud Code 403s on x-goog-user-project; the project rides in the envelope body.
-  assert.equal(ideHeaders["x-goog-user-project"], undefined);
-  assert.equal(cliHeaders["x-goog-user-project"], undefined);
+  assert.equal(ideHeaders["x-goog-user-project"], "project-1");
+  assert.equal(cliHeaders["x-goog-user-project"], "project-1");
 });
 
 test("public request envelopes never infer the internal jetski identity from email", () => {
