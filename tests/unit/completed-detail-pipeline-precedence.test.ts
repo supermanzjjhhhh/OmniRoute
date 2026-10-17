@@ -12,9 +12,18 @@ process.env.DATA_DIR = TEST_DATA_DIR;
 
 const core = await import("../../src/lib/db/core.ts");
 const { writeCallArtifact } = await import("../../src/lib/usage/callLogArtifacts.ts");
-const { maybeEnrichCompletedDetail } = await import(
-  "../../src/lib/usage/completedRequestDetails.ts"
-);
+const {
+  maybeEnrichCompletedDetail,
+  storeCompletedDetail,
+  getCompletedDetails,
+  clearCompletedDetails,
+} = await import("../../src/lib/usage/completedRequestDetails.ts");
+
+test.after(() => {
+  clearCompletedDetails();
+  core.resetDbInstance();
+  fs.rmSync(TEST_DATA_DIR, { recursive: true, force: true });
+});
 
 type PipelinePayloads = { providerResponse?: unknown; clientResponse?: unknown };
 
@@ -43,7 +52,7 @@ function seedRow(id: string, connectionId: string, pipeline: PipelinePayloads | 
 }
 
 // maybeEnrichCompletedDetail is fire-and-forget (`void (async () => …)`), so the
-// assertion waits on the mutation instead of on a returned promise.
+// assertion observes the bounded cache, not the caller object released by the request path.
 async function enrich(id: string, connectionId: string) {
   const detail = {
     id,
@@ -54,12 +63,17 @@ async function enrich(id: string, connectionId: string) {
     providerResponse: null,
     clientResponse: null,
   };
+  assert.equal(storeCompletedDetail(detail as never), true);
   maybeEnrichCompletedDetail(detail as never, connectionId);
   const deadline = Date.now() + 5000;
-  while (Date.now() < deadline && detail.providerResponse === null) {
+  while (Date.now() < deadline && getCompletedDetails().get(id)?.providerResponse == null) {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  return detail;
+  const cached = getCompletedDetails().get(id);
+  assert.ok(cached, "the completed cache keeps the enriched preview");
+  assert.equal(detail.providerResponse, null, "enrichment must not pin the caller payload");
+  assert.equal(detail.clientResponse, null, "enrichment must not mutate the caller");
+  return cached;
 }
 
 test("completed-detail enrichment prefers the pipeline over the body", async (t) => {

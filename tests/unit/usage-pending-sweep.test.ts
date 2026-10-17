@@ -14,6 +14,8 @@ const {
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
+const DEFAULT_MAX_AGE_MS = 15 * MINUTE_MS;
+const PENDING_DETAIL_CAP = 500;
 
 test("sweepStalePendingRequests marks over-age pending details and keeps counts", () => {
   clearPendingRequests();
@@ -61,7 +63,7 @@ test("sweepStalePendingRequests is a no-op when nothing is stale", () => {
   clearPendingRequests();
 });
 
-test("sweepStalePendingRequests defaults to a one hour max pending age", () => {
+test("sweepStalePendingRequests defaults to a 15 minute max pending age", () => {
   clearPendingRequests();
 
   const staleId = trackPendingRequest("m", "p", "old", true);
@@ -73,8 +75,8 @@ test("sweepStalePendingRequests defaults to a one hour max pending age", () => {
   const recent = getPendingById().get(recentId);
   assert.ok(stale && recent);
 
-  stale.startedAt = now - 61 * MINUTE_MS;
-  recent.startedAt = now - 59 * MINUTE_MS;
+  stale.startedAt = now - DEFAULT_MAX_AGE_MS - MINUTE_MS;
+  recent.startedAt = now - DEFAULT_MAX_AGE_MS + MINUTE_MS;
 
   const removed = sweepStalePendingRequests(now);
 
@@ -111,12 +113,12 @@ test("pending sweep max age can be overridden through environment", () => {
   }
 });
 
-test("invalid pending sweep max age falls back to one hour", () => {
+test("invalid pending sweep max age falls back to 15 minutes", () => {
   const previous = process.env.MAX_PENDING_REQUEST_AGE_MS;
   process.env.MAX_PENDING_REQUEST_AGE_MS = "not-a-number";
 
   try {
-    assert.equal(getMaxPendingRequestAgeMs(), HOUR_MS);
+    assert.equal(getMaxPendingRequestAgeMs(), DEFAULT_MAX_AGE_MS);
   } finally {
     if (previous === undefined) delete process.env.MAX_PENDING_REQUEST_AGE_MS;
     else process.env.MAX_PENDING_REQUEST_AGE_MS = previous;
@@ -150,8 +152,16 @@ test("trackPendingRequest reuses the same id across a combo's target-attempt ret
   });
 
   assert.equal(secondId, firstId, "retry attempt must reuse the first attempt's id");
-  assert.equal(getPendingById().has(firstId), true, "reused id is live again under the new attempt");
-  assert.equal(getPendingById().get(firstId)?.model, "model-b", "entry reflects the NEW attempt's target");
+  assert.equal(
+    getPendingById().has(firstId),
+    true,
+    "reused id is live again under the new attempt"
+  );
+  assert.equal(
+    getPendingById().get(firstId)?.model,
+    "model-b",
+    "entry reflects the NEW attempt's target"
+  );
 
   clearPendingRequests();
 });
@@ -253,14 +263,14 @@ test("entries without an account are marked in the map and still fall under the 
     // The cap is the only removal path and still reaches map-only entries:
     // age sweep marks but never removes, so push past the cap with fresh
     // entries sharing one account (bounded: exactly the cap overflow).
-    for (let i = 0; i < 5000; i++) {
+    for (let i = 0; i < PENDING_DETAIL_CAP; i++) {
       trackPendingRequest("m", "p", "c-fresh-cap", true);
     }
-    assert.ok(getPendingById().size > 5000);
+    assert.ok(getPendingById().size > PENDING_DETAIL_CAP);
     const sizeBefore = getPendingById().size;
     const removedByCap = sweepStalePendingRequests(now, HOUR_MS);
-    assert.equal(removedByCap, sizeBefore - 5000);
-    assert.equal(getPendingById().size, 5000);
+    assert.equal(removedByCap, sizeBefore - PENDING_DETAIL_CAP);
+    assert.equal(getPendingById().size, PENDING_DETAIL_CAP);
     assert.equal(getPendingById().has(requestId), false);
   } finally {
     clearPendingRequests();
@@ -331,13 +341,13 @@ test("marked entries are removed first when the pending map exceeds the cap", ()
     for (const id of markedIds) assert.equal(getPendingById().get(id)?.stale, true);
 
     // Fill past the cap with fresh entries.
-    for (let i = 0; i < 5000; i++) {
+    for (let i = 0; i < PENDING_DETAIL_CAP; i++) {
       trackPendingRequest("m", "p", `c-fresh-${i}`, true);
     }
-    assert.ok(getPendingById().size > 5000);
+    assert.ok(getPendingById().size > PENDING_DETAIL_CAP);
 
     const removed = sweepStalePendingRequests(now, HOUR_MS);
-    assert.equal(getPendingById().size, 5000);
+    assert.equal(getPendingById().size, PENDING_DETAIL_CAP);
     assert.equal(removed, 3);
     for (const id of markedIds) assert.equal(getPendingById().has(id), false);
   } finally {
