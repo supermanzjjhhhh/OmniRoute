@@ -30,7 +30,14 @@ childEnv.NODE_OPTIONS = buildStandaloneNodeOptions(childEnv, maxOldSpaceMb);
 // rather than trusting the spoofable Host header.
 const entry = existsSync("server-ws.mjs") ? "server-ws.mjs" : "server.js";
 
-spawnWithForwardedSignals(process.execPath, [entry], {
+// #inspect: forward inspector flags to the standalone entry process
+// so parent supervisor / container wrappers do not collide on port binding.
+const inspectFlag =
+  process.env.OMNIROUTE_INSPECT_FLAG ||
+  (process.env.OMNIROUTE_INSPECT ? "--inspect=0.0.0.0:9230" : null);
+const nodeArgs = inspectFlag ? [inspectFlag, entry] : [entry];
+
+spawnWithForwardedSignals(process.execPath, nodeArgs, {
   stdio: "inherit",
   env: childEnv,
 });

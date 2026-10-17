@@ -17,3 +17,16 @@ test("run-standalone.mjs spawns with process.execPath instead of hardcoded 'node
     "run-standalone.mjs must spawn using process.execPath"
   );
 });
+
+test("run-standalone.mjs supports forwarding inspect flags via OMNIROUTE_INSPECT_FLAG or OMNIROUTE_INSPECT", () => {
+  assert.match(
+    scriptSrc,
+    /OMNIROUTE_INSPECT_FLAG/,
+    "run-standalone.mjs must support OMNIROUTE_INSPECT_FLAG"
+  );
+  assert.match(
+    scriptSrc,
+    /spawnWithForwardedSignals\(\s*process\.execPath\s*,\s*nodeArgs/,
+    "run-standalone.mjs must pass nodeArgs to spawnWithForwardedSignals"
+  );
+});
