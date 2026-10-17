@@ -1,3 +1,5 @@
+import { isCodexCompactionWebReplay } from "../executors/codex/compactionReplay.ts";
+
 function toValidJsonString(value: unknown, fallback = "{}"): string {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -28,6 +30,7 @@ import { isValidResponsesItemId } from "./responsesItemId.ts";
 type JsonRecord = Record<string, unknown>;
 type SanitizeResponsesInputOptions = {
   dropInternalAssistantMessages?: boolean;
+  preserveWebSearchCalls?: boolean;
   // Codex's multi_agent_v2 uses a proprietary `agent_message` input-item type to pass
   // tasks/replies between a parent thread and a sub-agent. The real Codex/ChatGPT backend
   // understands this type; every other Responses-API upstream (e.g. Muse Spark 1.3 /
@@ -232,6 +235,7 @@ function sanitizeInputItem(item: unknown, options: SanitizeResponsesInputOptions
     next = convertAgentMessageItem(next);
   }
 
+  if (options.preserveWebSearchCalls && next.type === "web_search_call") return next;
   next = sanitizeInputItemId(next);
   if (isResponsesMessageItem(next)) {
     next = sanitizeMessageContent(next);
@@ -324,5 +328,6 @@ export function sanitizeCodexResponsesInput(
   body.input = sanitizeResponsesInputItems(input, false, {
     dropInternalAssistantMessages: !nativeCodexPassthrough,
     preserveAgentMessages: nativeCodexPassthrough,
+    preserveWebSearchCalls: isCodexCompactionWebReplay(body),
   });
 }

@@ -59,6 +59,10 @@ export {
 } from "./codex/quota.ts";
 import { isCodexFreePlan, normalizeCodexTools } from "./codex/tools.ts";
 import {
+  ensureCodexCompactionReplayTools,
+  isCodexCompactionWebReplay,
+} from "./codex/compactionReplay.ts";
+import {
   CODEX_EFFORT_ORDER as EFFORT_ORDER,
   CODEX_ULTRA_ALIAS_MODELS,
   getCodexAliasEffortCap,
@@ -1249,6 +1253,7 @@ export class CodexExecutor extends BaseExecutor {
 
     const nativeCodexPassthrough = body?._nativeCodexPassthrough === true;
     const isCompactRequest = isCompactResponsesEndpoint(credentials?.requestEndpointPath);
+    ensureCodexCompactionReplayTools(body, isCompactRequest);
     const requestDefaults = getCodexRequestDefaults(credentials?.providerSpecificData);
     const thinkingBudgetConfig = getThinkingBudgetConfig();
     const allowConnectionReasoningDefaults = thinkingBudgetConfig.mode === ThinkingMode.PASSTHROUGH;
@@ -1390,6 +1395,7 @@ export class CodexExecutor extends BaseExecutor {
       dropImageGeneration:
         isCodexFreePlan(credentials?.providerSpecificData) || getCodexModelScope(model) === "spark",
       preserveCustomTools: nativeCodexPassthrough,
+      preserveWebSearchPreviewVersion: isCodexCompactionWebReplay(body),
       defaultFunctionStrict: nativeCodexPassthrough ? undefined : false,
     });
 
@@ -1505,6 +1511,7 @@ export class CodexExecutor extends BaseExecutor {
 
     applyReasoningInputPolicy(body, "responses", {
       provider: "codex",
+      preserveWebSearchCalls: isCodexCompactionWebReplay(body),
       preserveEncryptedReasoning:
         credentials?.providerSpecificData?.preserveEncryptedReasoning === true,
     });
