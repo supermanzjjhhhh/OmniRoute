@@ -543,17 +543,18 @@ async function handleChatCoreInner({
   // resolveOpencodeSessionIdentity reads only metadata + the six session-id fields, but this
   // closure lived on the chatCore frame, so every in-flight frame pinned the whole multi-MB
   // request body for as long as any sibling closure did. Hand it an equivalent, bounded view.
-  const opencodeSessionBodyRef = body && typeof body === "object"
-    ? {
-        metadata: (body as Record<string, unknown>).metadata,
-        session_id: (body as Record<string, unknown>).session_id,
-        sessionId: (body as Record<string, unknown>).sessionId,
-        thread_id: (body as Record<string, unknown>).thread_id,
-        threadId: (body as Record<string, unknown>).threadId,
-        conversation_id: (body as Record<string, unknown>).conversation_id,
-        conversationId: (body as Record<string, unknown>).conversationId,
-      }
-    : undefined;
+  const opencodeSessionBodyRef =
+    body && typeof body === "object"
+      ? {
+          metadata: (body as Record<string, unknown>).metadata,
+          session_id: (body as Record<string, unknown>).session_id,
+          sessionId: (body as Record<string, unknown>).sessionId,
+          thread_id: (body as Record<string, unknown>).thread_id,
+          threadId: (body as Record<string, unknown>).threadId,
+          conversation_id: (body as Record<string, unknown>).conversation_id,
+          conversationId: (body as Record<string, unknown>).conversationId,
+        }
+      : undefined;
   const getExecutorClientHeaders = () =>
     buildExecutorClientHeaders(clientRawRequest?.headers, userAgent, {
       provider,
@@ -3261,6 +3262,7 @@ async function handleChatCoreInner({
                           upstreamExtraHeaders: buildUpstreamHeadersForExecute(modelToCall),
                           clientHeaders: getExecutorClientHeaders(),
                           clientResponseFormat,
+                          requestFormat: targetFormat,
                           onCredentialsRefreshed,
                           skipUpstreamRetry,
                           contextEditing: { enabled: contextEditingEnabled },
@@ -3459,6 +3461,7 @@ async function handleChatCoreInner({
                               upstreamExtraHeaders: buildUpstreamHeadersForExecute(modelToCall),
                               clientHeaders: getExecutorClientHeaders(),
                               clientResponseFormat,
+                              requestFormat: targetFormat,
                               onCredentialsRefreshed,
                               skipUpstreamRetry,
                               contextEditing: { enabled: contextEditingEnabled },
@@ -4578,6 +4581,7 @@ async function handleChatCoreInner({
                 upstreamExtraHeaders: buildUpstreamHeadersForExecute(retryModelId),
                 clientHeaders: getExecutorClientHeaders(),
                 clientResponseFormat,
+                requestFormat: targetFormat,
                 onCredentialsRefreshed,
                 skipUpstreamRetry: isCombo,
                 contextEditing: { enabled: contextEditingEnabled },

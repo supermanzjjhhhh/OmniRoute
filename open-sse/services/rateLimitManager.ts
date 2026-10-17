@@ -812,7 +812,7 @@ export async function withRateLimit(
   const jobResource = new AsyncResource("omniroute.rateLimitJob");
   const boundFn = jobResource.bind(wrappedFn);
   const destroyJobResource = () => {
-    if (!jobResource.isDestroyed) jobResource.emitDestroy();
+    jobResource.emitDestroy();
   };
   const scheduled = limiter.schedule(scheduleOpts, boundFn as unknown as () => Promise<unknown>);
   scheduled.then(destroyJobResource, destroyJobResource);

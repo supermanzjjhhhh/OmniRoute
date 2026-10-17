@@ -216,6 +216,8 @@ export type ExecuteInput = {
    * this to apply client-format-aware policies such as `</think>` close-marker
    * suppression. */
   clientResponseFormat?: string | null;
+  /** Actual upstream wire format after translation, not the client response format. */
+  requestFormat?: string | null;
   /** Callback to persist tokens that are proactively refreshed during execution.
    * Accepts a partial credentials patch (e.g. `{ accessToken, refreshToken }` or
    * `{ testStatus: "expired", isActive: false }`); the caller merges into the

@@ -26,6 +26,8 @@ jobs:
           nproc
           free -h
           df -h /
+          total_kib="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
+          test "$total_kib" -ge $((14 * 1024 * 1024))
 
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -34,6 +36,47 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            memory=12g
+            memory-swap=12g
+            cpu-period=100000
+            cpu-quota=200000
+
+      - name: Build production-runtime test base
+        run: |
+          docker buildx build --platform linux/arm64 --target base --load \
+            --tag "omniroute-test-base:${GITHUB_SHA}" .
+
+      - name: Verify release compatibility on Node 26
+        run: |
+          docker run --rm --memory=4g --memory-swap=4g --cpus=2 \
+            --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
+            --env PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+            --env NEXT_TELEMETRY_DISABLED=1 \
+            --env DISABLE_SQLITE_AUTO_BACKUP=true \
+            --entrypoint bash "omniroute-test-base:${GITHUB_SHA}" -ec '
+              apt-get update
+              apt-get install -y --no-install-recommends python3 make g++ git
+              cp -a /checkout/. /work/
+              git config --global --add safe.directory /work
+              npm ci --include=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts
+              (cd node_modules/better-sqlite3 && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --force_build=1)
+              node -e "require(\"better-sqlite3\") (\":memory:\").close()"
+              node --max-old-space-size=1536 node_modules/typescript/bin/tsc --pretty false -p tsconfig.typecheck-core.json
+              node --max-old-space-size=768 --import tsx/esm \
+                --import ./open-sse/utils/setupPolyfill.ts --import ./tests/_setup/isolateDataDir.ts \
+                --test --test-force-exit --test-timeout=60000 --test-concurrency=1 \
+                tests/unit/resource-pressure*.test.ts \
+                tests/unit/monitoring-*health*.test.ts \
+                tests/unit/completed-detail-pipeline-precedence.test.ts \
+                tests/unit/completed-request-memory-retention-13621.test.ts \
+                tests/unit/usage-pending-sweep.test.ts \
+                tests/unit/ninerouter-executor.test.ts \
+                tests/unit/ninerouter-native-credentials.test.ts \
+                tests/unit/rate-limit-queue-context.test.ts \
+                tests/unit/extract-zip-14482-exposure.test.ts
+            '
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4.6.0
@@ -61,26 +104,31 @@ jobs:
           cache-to: type=gha,scope=memory-pressure-arm64,mode=min,ignore-error=true
 
       - name: Verify published manifest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          docker buildx imagetools inspect "${IMAGE_NAME}:${IMAGE_TAG}"
+          test -n "$IMAGE_DIGEST"
+          echo "IMAGE_DIGEST=$IMAGE_DIGEST"
+          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}"
           {
             echo "### ARM64 image"
             echo
             echo "- Image: \`${IMAGE_NAME}:${IMAGE_TAG}\`"
-            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Digest: \`${IMAGE_DIGEST}\`"
             echo "- Source: \`${GITHUB_SHA}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Smoke-test published image
         env:
           CONTAINER_NAME: omniroute-image-smoke-${{ github.run_id }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
           trap 'docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true' EXIT
 
-          docker pull "${IMAGE_NAME}:${IMAGE_TAG}"
+          docker pull "${IMAGE_NAME}@${IMAGE_DIGEST}"
           docker run --detach --name "$CONTAINER_NAME" --publish 127.0.0.1::20128 \
-            "${IMAGE_NAME}:${IMAGE_TAG}"
+            --memory=2g --memory-swap=2g --cpus=1 "${IMAGE_NAME}@${IMAGE_DIGEST}"
 
           port="$(docker port "$CONTAINER_NAME" 20128/tcp | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p')"
           for attempt in $(seq 1 45); do
@@ -93,5 +141,5 @@ jobs:
           done
 
           docker logs "$CONTAINER_NAME"
-          docker inspect "$CONTAINER_NAME"
+          docker inspect --format '{{json .State}}' "$CONTAINER_NAME"
           exit 1
