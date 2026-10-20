@@ -156,7 +156,9 @@ test("#14629 models without learned caps keep transparent first attempts", async
     credentials: {},
   });
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].body, { ...body, model: "cx/glm-5.3" });
+  // 15a0267169 makes the executor forward its streaming state explicitly, because
+  // buildHeaders keys `Accept` off it; the body therefore always carries `stream`.
+  assert.deepEqual(calls[0].body, { ...body, model: "cx/glm-5.3", stream: false });
   assert.deepEqual(result.transformedBody, calls[0].body);
 });
 
@@ -196,7 +198,7 @@ for (const { field, extra, endpoint } of [
     assert.equal(calls[1].signal, calls[0].signal);
     controller.abort();
     assert.equal(calls[1].signal?.aborted, true);
-    const expected = { ...originalBody, model: "vendor/model-with/slashes" };
+    const expected = { ...originalBody, model: "vendor/model-with/slashes", stream: false };
     delete expected[field];
     assert.deepEqual(calls[1].body, expected);
     assert.deepEqual(result.transformedBody, expected);
@@ -253,7 +255,11 @@ for (const { label, status, message, extra } of [
     assert.equal(result.response.status, status);
     assert.deepEqual(await result.response.json(), responseBody);
     assert.deepEqual(result.transformedBody, calls[0].body);
-    assert.deepEqual(calls[0].body, { ...body, model: "vendor/negative-control" });
+    assert.deepEqual(calls[0].body, {
+      ...body,
+      model: "vendor/negative-control",
+      stream: false,
+    });
   });
 }
 
@@ -313,6 +319,7 @@ test("#14629 field recovery follows reasoning recovery with the current body", a
   assert.deepEqual(calls[2].body, {
     model: "vendor/reasoning-model",
     messages: [],
+    stream: false,
     reasoning_effort: "low",
   });
   assert.deepEqual(result.transformedBody, calls[2].body);
@@ -352,7 +359,12 @@ for (const { name, requested, accepted } of [
     const execute = (model: string) =>
       executor.execute({ model, body, stream: false, credentials: {} });
     assert.equal((await execute("9router/vendor/model/with-slashes")).response.status, 200);
-    const expected = { messages: [], ...accepted, model: "vendor/model/with-slashes" };
+    const expected = {
+      messages: [],
+      ...accepted,
+      model: "vendor/model/with-slashes",
+      stream: false,
+    };
     assert.deepEqual(calls[1].body, expected);
 
     const repeated = await execute("9router/vendor/model/with-slashes");
@@ -367,7 +379,11 @@ for (const { name, requested, accepted } of [
 
     await execute("9router/other/model/with-slashes");
     assert.equal(calls.length, 5);
-    assert.deepEqual(calls[4].body, { ...originalBody, model: "other/model/with-slashes" });
+    assert.deepEqual(calls[4].body, {
+      ...originalBody,
+      model: "other/model/with-slashes",
+      stream: false,
+    });
     assert.deepEqual(body, originalBody);
   });
 }
