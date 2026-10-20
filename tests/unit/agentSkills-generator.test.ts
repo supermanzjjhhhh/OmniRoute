@@ -718,7 +718,11 @@ test("report has all required fields with correct types", async () => {
 // ── serializeFrontmatter escaping (js/incomplete-sanitization regression) ──────
 
 test("serializeFrontmatter escapes backslashes before quotes → valid round-trippable YAML", async () => {
-  const { parse } = await import("yaml");
+  // `yaml` is only a transitive dependency (tap-parser → tap-yaml); its ESM interop
+  // varies by hoisted version and there `parse` lives on the namespace default, which
+  // made this throw "parse is not a function". `js-yaml` is a direct dependency and
+  // parses the same block.
+  const { load: parse } = await import("js-yaml");
   const fm = {
     name: 'name with "quote"',
     description: 'line1\nline2: path C:\\Users\\x with "q" and trailing \\',

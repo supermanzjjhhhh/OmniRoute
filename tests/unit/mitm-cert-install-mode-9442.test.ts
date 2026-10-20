@@ -149,6 +149,9 @@ test("ensureSystemCertMode is a no-op when the cert is already 0644", async () =
   resetCaptured();
   const destFile = path.join(tmpRoot, "correct-mode-9442.crt");
   fs.writeFileSync(destFile, "fake-cert", { mode: 0o644 });
+  // `mode:` is masked by the process umask, so a host running under umask 0077
+  // creates the file 0600 and this case failed without any product change.
+  fs.chmodSync(destFile, 0o644);
   assert.equal(fs.statSync(destFile).mode & 0o777, 0o644);
 
   await ensureSystemCertMode(destFile, "");

@@ -627,8 +627,18 @@ function getDeclaredToolNames(state) {
 // back by exact dotted-suffix match against the declared names. A name the
 // #7936 identity ledger already resolves is left alone.
 function canonicalizeEmittedToolName(state, name) {
-  if (!name || resolveRequestToolIdentity(state.requestToolIdentityMap, name)) return name;
-  const result = canonicalizeDeclaredToolName(name, getDeclaredToolNames(state));
+  const declaredNames = getDeclaredToolNames(state);
+  // Pass the declared set through: a dotted spelling that matches a declared flat name
+  // (`functions.exec` for `exec`) must not be claimed by the namespace splitter, or it
+  // returns early here and Codex rejects the undeclared name (#16645 behaviour).
+  if (
+    !name ||
+    resolveRequestToolIdentity(state.requestToolIdentityMap, name, {
+      explicitNames: declaredNames,
+    })
+  )
+    return name;
+  const result = canonicalizeDeclaredToolName(name, declaredNames);
   if (result.unresolved) {
     if (!state.warnedToolNames) state.warnedToolNames = new Set();
     if (!state.warnedToolNames.has(name)) {

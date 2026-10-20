@@ -146,6 +146,18 @@ export function resolveRequestToolIdentity(
         ? Object.keys(identityMap).length
         : 0;
 
+  const explicit =
+    options.explicitNames === undefined || options.explicitNames === null
+      ? null
+      : new Set(options.explicitNames);
+
+  // A request that declared its own tools is self-describing, so the wire-name split
+  // must not invent a namespace for a spelling it did not declare: a Chat upstream that
+  // echoes `functions.exec` for the declared flat `exec` is a provider prefix, not
+  // `mcp__functions`/`exec` (Codex rejects that as `unsupported call: functions.exec`).
+  // Pass-through / `previous_response_id` turns declare nothing and keep the fallback.
+  if (explicit && explicit.size > 0) return null;
+
   if (ledgerSize === 0) {
     return splitFlattenedNamespaceWireName(toolName);
   }

@@ -326,7 +326,12 @@ test("getCliRuntimeStatus ignores suspicious known-path binaries and symlink esc
   process.env.PATH = process.platform === "win32" ? process.env.PATH || "" : "/bin:/usr/bin";
 
   const cliRuntime = await importFresh("suspicious-size");
-  const suspiciousStatus = await cliRuntime.getCliRuntimeStatus("qoder");
+  // Assert the classifier directly rather than through getCliRuntimeStatus(): the
+  // candidate list also contains path.dirname(process.execPath) (nvm / version-manager
+  // Node bin), which no environment variable can isolate — on a machine with a real
+  // qodercli installed there, the run correctly reports installed:true and this
+  // assertion said false.
+  const suspiciousStatus = await cliRuntime.checkKnownPath(path.join(binDir, scriptName));
 
   assert.equal(suspiciousStatus.installed, false);
   assert.equal(suspiciousStatus.reason, "suspicious_size");

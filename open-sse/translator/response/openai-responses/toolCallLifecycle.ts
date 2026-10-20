@@ -5,6 +5,9 @@ type ToolMetadata = {
   customToolNames?: Iterable<string> | null;
   toolSchemas?: ReadonlyMap<string, unknown> | null;
   requestToolIdentityMap?: unknown;
+  /** Names the client declared in `tools[]` (see collectDeclaredToolNames). Without them
+   * the selection cannot tell a provider-injected `functions.exec` from a namespace. */
+  declaredToolNames?: Iterable<string> | null;
 };
 type SelectedTool = { name: string; namespace?: string; custom: boolean };
 
@@ -32,6 +35,7 @@ export class ToolCallLifecycle {
           : [];
     this.declaredNames = new Set([
       ...(this.metadata.customToolNames || []),
+      ...(metadata.declaredToolNames || []),
       ...(metadata.toolSchemas?.keys() || []),
       ...identities,
     ]);
@@ -120,7 +124,7 @@ export class ToolCallLifecycle {
       !literalFlat && (declared || this.declaredNames.size === 0)
         ? (this.identities.get(declared) ??
           resolveRequestToolIdentity(this.metadata.requestToolIdentityMap, name, {
-            explicitNames: this.metadata.toolSchemas?.keys(),
+            explicitNames: this.declaredNames,
           }))
         : null;
     return {
