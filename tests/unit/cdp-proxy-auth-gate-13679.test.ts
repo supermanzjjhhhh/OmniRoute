@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { before, test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -10,8 +10,10 @@ const PROXY_SCRIPT = path.resolve(
   __dirname,
   "../../docker/chatgpt-web-codex-browser/cdp-proxy.mjs"
 );
-const UPSTREAM_PORT = 9222; // upstreamPort in cdp-proxy.mjs
-const PROXY_PORT = 9223; // listenPort in cdp-proxy.mjs
+// Reserved at runtime (see before() below) rather than the container defaults: a host
+// already listening on 9222/9223 made this fail with EADDRINUSE before any assertion.
+let UPSTREAM_PORT = 9222; // upstreamPort in cdp-proxy.mjs
+let PROXY_PORT = 9223; // listenPort in cdp-proxy.mjs
 const TOKEN = "test-secret-token-13679";
 const TOKEN_HEADER = "X-Omni-Cdp-Token";
 
@@ -21,6 +23,29 @@ const TOKEN_HEADER = "X-Omni-Cdp-Token";
 // which requires an `X-Omni-Cdp-Token` header once CDP_BRIDGE_TOKEN is set
 // (#12571). This proves cdp-proxy.mjs must gate requests the same way once an
 // operator opts in via CDP_PROXY_TOKEN.
+
+/** Reserve two free loopback ports so the suite does not need 9222/9223 to be idle. */
+async function reserveFreePorts(): Promise<[number, number]> {
+  const held: http.Server[] = [];
+  const take = (): Promise<number> =>
+    new Promise((resolve, reject) => {
+      const probe = http.createServer();
+      held.push(probe);
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", () => {
+        const address = probe.address();
+        resolve(typeof address === "object" && address ? address.port : 0);
+      });
+    });
+  const first = await take();
+  const second = await take();
+  await Promise.all(held.map((s) => new Promise((r) => s.close(r))));
+  return [first, second];
+}
+
+before(async () => {
+  [UPSTREAM_PORT, PROXY_PORT] = await reserveFreePorts();
+});
 
 function waitForListening(server: http.Server): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -75,7 +100,12 @@ function startUpstream(): Promise<{ server: http.Server; receivedAnyRequest: () 
 function startProxy(): ChildProcess {
   return spawn(process.execPath, [PROXY_SCRIPT], {
     stdio: ["ignore", "ignore", "pipe"],
-    env: { ...process.env, CDP_PROXY_TOKEN: TOKEN },
+    env: {
+      ...process.env,
+      CDP_PROXY_TOKEN: TOKEN,
+      CDP_PROXY_UPSTREAM_PORT: String(UPSTREAM_PORT),
+      CDP_PROXY_LISTEN_PORT: String(PROXY_PORT),
+    },
   });
 }
 
