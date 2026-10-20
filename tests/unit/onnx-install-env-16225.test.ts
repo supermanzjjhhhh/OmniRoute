@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const parserPath = join(root, "node_modules/onnxruntime-node/script/install-utils.js");

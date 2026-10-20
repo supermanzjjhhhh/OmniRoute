@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 test("both observers retain incremental command logs even on failure", () => {
   const workflow = parse(

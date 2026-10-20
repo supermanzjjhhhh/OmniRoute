@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 type Step = { run?: string; uses?: string; if?: string; with?: Record<string, unknown> };
 const workflow: {

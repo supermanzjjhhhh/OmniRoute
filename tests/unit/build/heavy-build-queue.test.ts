@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 const workflow = parse(
   readFileSync(new URL("../../../.github/workflows/ci.yml", import.meta.url), "utf8")

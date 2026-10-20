@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const action = parse(readFileSync(join(root, ".github/actions/npm-ci-retry/action.yml"), "utf8"));

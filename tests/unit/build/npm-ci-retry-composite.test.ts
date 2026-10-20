@@ -10,7 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 const ACTION = path.resolve(
   import.meta.dirname,

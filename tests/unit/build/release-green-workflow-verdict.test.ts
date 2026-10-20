@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 const root = new URL("../../../", import.meta.url);
 type Step = { name?: string; id?: string; run?: string; if?: string; env?: Record<string, string> };
