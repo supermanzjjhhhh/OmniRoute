@@ -36,12 +36,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-        with:
-          driver-opts: |
-            memory=12g
-            memory-swap=12g
-            cpu-period=100000
-            cpu-quota=300000
 
       - name: Build production-runtime test base
         run: |
