@@ -138,7 +138,11 @@ for (const status of [403, 451]) {
       );
       assert.equal(response.status, 200);
       assert.equal(bodies.length, 2);
-      assert.deepEqual(toolNamesOf(bodies[0]), ["read", "bash"]);
+      // The free-tier contract appends the whole fingerprint quartet to whatever the
+      // client declared (client tools keep their shape and order); it does not only add
+      // the configured placeholder. Assert the client's own tools survive, not that the
+      // body carries nothing else.
+      assert.deepEqual(toolNamesOf(bodies[0]), ["read", "bash", "glob", "grep"]);
       assert.ok(toolNamesOf(bodies[1]).includes("read"));
       assert.ok(toolNamesOf(bodies[1]).includes("edit"));
       await response.body?.cancel();

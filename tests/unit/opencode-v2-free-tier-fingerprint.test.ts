@@ -71,8 +71,11 @@ test("flag off: the synthesized identity is the current one, byte for byte", () 
       project: "global",
     });
   }
-  // The 1.17 rule stands: a current 1.x OpenCode client keeps its own UA.
-  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.17.0"), true);
+  // Measured 2026-10 on muse-spark-*-contributor-free: 1.17.x answers 426
+  // UpgradeRequired, so the floor moved to 1.18 (d7620e2652) and a 1.17.x client UA is
+  // replaced rather than forwarded.
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.17.0"), false);
+  assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.18.0"), true);
   assert.equal(satisfiesOpencodeUserAgentContract("opencode/beta/1.18.31/cli"), true);
   assert.equal(satisfiesOpencodeUserAgentContract("opencode/1.16.0"), false);
 });
@@ -183,27 +186,33 @@ test("contract body: v1 placeholders and tool_choice by default, v2 schemas when
     tools: Array<{ function: { name: string; description: string; parameters: unknown } }>;
   };
   assert.equal(v1.tool_choice, "none");
-  assert.deepEqual(v1.tools[0].function.parameters, {
+  // The quartet (d7620e2652) is appended before the caller-supplied names, so `read` and
+  // `shell` sit after bash/glob/grep at indices 3 and 4.
+  assert.deepEqual(
+    v1.tools.map((t) => t.function.name),
+    ["bash", "glob", "grep", "read", "shell"]
+  );
+  assert.deepEqual(v1.tools[3].function.parameters, {
     type: "object",
     properties: { filePath: { type: "string" } },
     required: ["filePath"],
   });
-  assert.deepEqual(v1.tools[1].function.parameters, { type: "object", properties: {} });
-  assert.match(v1.tools[0].function.description, /^Do not call this tool/);
+  assert.deepEqual(v1.tools[4].function.parameters, { type: "object", properties: {} });
+  assert.match(v1.tools[3].function.description, /^Do not call this tool/);
 
   const v2 = applyFreeTierRequestContract(body(), "openai", ["read", "shell"], true) as typeof v1;
   assert.equal("tool_choice" in v2, false);
-  const read = v2.tools[0].function.parameters as { required: string[]; properties: object };
+  const read = v2.tools[3].function.parameters as { required: string[]; properties: object };
   // #16998 (Junior-HJ): the v2 CLI schemas close the object like the real client does.
   assert.equal((read as { additionalProperties?: boolean }).additionalProperties, false);
   assert.deepEqual(read.required, ["path"]);
   assert.deepEqual(Object.keys(read.properties), ["path", "offset", "limit"]);
-  const shell = v2.tools[1].function.parameters as { required: string[]; properties: object };
+  const shell = v2.tools[4].function.parameters as { required: string[]; properties: object };
   assert.equal((shell as { additionalProperties?: boolean }).additionalProperties, false);
   assert.deepEqual(shell.required, ["command"]);
   assert.deepEqual(Object.keys(shell.properties), ["command", "workdir", "timeout", "background"]);
-  assert.match(v2.tools[0].function.description, /^Read the contents of a file or directory\./);
-  assert.match(v2.tools[1].function.description, /^Execute a shell command/);
+  assert.match(v2.tools[3].function.description, /^Read the contents of a file or directory\./);
+  assert.match(v2.tools[4].function.description, /^Execute a shell command/);
 
   // A tool_choice other than "none" travels unchanged under v2 too.
   const auto = applyFreeTierRequestContract(
