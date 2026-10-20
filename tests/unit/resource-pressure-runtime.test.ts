@@ -366,3 +366,40 @@ describe("ResourcePressureRuntime stale-while-revalidate cache", () => {
     second.dispose();
   });
 });
+
+describe("merged immediate RSS admission and observability", () => {
+  it("uses the same immediate RSS rejection before any cached sample exists", (t) => {
+    const runtime = createResourcePressureRuntime({
+      heapThresholdMb: null,
+      rssThresholdMb: 300,
+      immediateHeapUsedMb: () => 100,
+      immediateRssUsedMb: () => 301,
+      sample: async () => signals(0),
+      nowMs: () => 0,
+    });
+    t.after(() => runtime.dispose());
+    const decision = runtime.getDecision();
+    assert.equal(decision.shouldReject, true);
+    assert.equal(decision.reason, "rss_absolute");
+    const guard = runtime.check();
+    assert.ok(guard);
+    assert.equal(guard.status, 503);
+    assert.equal(runtime.getDecision().reason, decision.reason);
+    assert.equal(runtime.getObservation().state.reason, "rss_absolute");
+  });
+
+  it("keeps heap-first diagnostics when both immediate limits are exceeded", (t) => {
+    const runtime = createResourcePressureRuntime({
+      heapThresholdMb: 200,
+      rssThresholdMb: 300,
+      immediateHeapUsedMb: () => 201,
+      immediateRssUsedMb: () => 301,
+      sample: async () => signals(0),
+      nowMs: () => 0,
+    });
+    t.after(() => runtime.dispose());
+    assert.equal(runtime.getDecision().reason, "v8_heap_absolute");
+    assert.equal(runtime.check()?.status, 503);
+    assert.equal(runtime.getObservation().state.reason, "v8_heap_absolute");
+  });
+});

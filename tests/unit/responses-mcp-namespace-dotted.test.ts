@@ -32,11 +32,20 @@ test("matches candidate in populated identityMap for dot-separated tool names", 
   const identityMap = new Map([["mcp__codegraph__codegraph_explore", identity]]);
 
   // Dotted with mcp__
-  assert.deepEqual(resolveRequestToolIdentity(identityMap, "mcp__codegraph.codegraph_explore"), identity);
+  assert.deepEqual(
+    resolveRequestToolIdentity(identityMap, "mcp__codegraph.codegraph_explore"),
+    identity
+  );
   // Dotted without mcp__
-  assert.deepEqual(resolveRequestToolIdentity(identityMap, "codegraph.codegraph_explore"), identity);
+  assert.deepEqual(
+    resolveRequestToolIdentity(identityMap, "codegraph.codegraph_explore"),
+    identity
+  );
   // Original wire name
-  assert.deepEqual(resolveRequestToolIdentity(identityMap, "mcp__codegraph__codegraph_explore"), identity);
+  assert.deepEqual(
+    resolveRequestToolIdentity(identityMap, "mcp__codegraph__codegraph_explore"),
+    identity
+  );
 });
 
 test("preserves non-namespace flat tools when identityMap is populated", () => {

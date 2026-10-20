@@ -156,10 +156,7 @@ function handleResponsesTailPayload(
     }
   }
   let completedItemsRestored = false;
-  if (
-    parsed.type === "response.completed" &&
-    Array.isArray(asRecord(parsed.response).output)
-  ) {
+  if (parsed.type === "response.completed" && Array.isArray(asRecord(parsed.response).output)) {
     for (const item of asRecord(parsed.response).output as unknown[]) {
       if (item && typeof item === "object" && !Array.isArray(item)) {
         const fc = item as JsonRecord;

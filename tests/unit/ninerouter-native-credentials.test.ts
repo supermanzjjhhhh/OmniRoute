@@ -45,7 +45,7 @@ test("9router requires a normal active connection and preserves selection constr
     assert.equal(await getProviderCredentials(provider, connection.id, null, "my-domestic"), null);
     assert.deepEqual(
       await getProviderCredentials(provider, null, ["not-this-connection"], "my-domestic"),
-      { blockedByKeyPolicy: true, blockedCount: 1 }
+      { blockedByKeyPolicy: true, blockedCount: 1, connectionRestrictionSources: [] }
     );
     assert.equal(
       await getProviderCredentials(provider, null, null, "my-domestic", {
