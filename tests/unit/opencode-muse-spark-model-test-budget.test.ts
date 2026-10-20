@@ -42,27 +42,27 @@ test.after(() => {
 });
 
 test("detectTestKind reads Responses-ness off the provider registry", () => {
-  assert.equal(
-    runner.detectTestKind(`oc/${MODEL_ID}`, null).isResponses,
-    true,
-    "the oc alias must resolve to the same Responses route as the provider id"
-  );
-  assert.equal(runner.detectTestKind(`opencode/${MODEL_ID}`, null).isResponses, true);
-  assert.equal(runner.detectTestKind(`opencode/${MODEL_ID}`, null).isEmbedding, false);
+  assert.equal(runner.detectTestKind(`opencode-zen/${MODEL_ID}`, null).isResponses, true);
+  assert.equal(runner.detectTestKind(`opencode-zen/${MODEL_ID}`, null).isEmbedding, false);
+  // v3.8.52 removed the keyless `opencode` provider (alias `oc`, migration 207), so
+  // that prefix must NOT resolve any more — a resurrected alias would dispatch real
+  // traffic to a provider the release deleted.
+  assert.equal(runner.detectTestKind(`oc/${MODEL_ID}`, null).isResponses, false);
 });
 
 test("detectTestKind leaves the opencode chat models on the chat branch", () => {
   // The fix must not move every opencode model onto /v1/responses: the free
   // chat models answer on /chat/completions and only there.
-  assert.equal(runner.detectTestKind("oc/space-bunny-free", null).isResponses, false);
+  assert.equal(runner.detectTestKind("opencode-zen/space-bunny-free", null).isResponses, false);
   assert.equal(runner.detectTestKind("oc/mimo-v2.6-flash-free", null).isResponses, false);
   assert.equal(runner.detectTestKind("openai/gpt-4o", null).isResponses, false);
 });
 
 test("a Muse Spark contributor model is probed on the internal /v1/responses route", async () => {
   const connection = await providersDb.createProviderConnection({
-    provider: "opencode",
-    authType: "no-auth",
+    provider: "opencode-zen",
+    authType: "api-key",
+    apiKey: "sk-zen-muse-budget-probe",
     name: "OpenCode Muse Budget Probe",
     providerSpecificData: { fingerprints: ["22222222222222222222222222222222"] },
   });
@@ -78,7 +78,7 @@ test("a Muse Spark contributor model is probed on the internal /v1/responses rou
 
   try {
     await runner.runSingleModelTest({
-      providerId: "opencode",
+      providerId: "opencode-zen",
       modelId: MODEL_ID,
       connectionId: String(connection.id),
       timeoutMs: 15_000,
