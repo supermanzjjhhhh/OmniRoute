@@ -326,7 +326,12 @@ function finishOk(
     response: clientTranslate.response,
     responseForMemoryExtraction: clientTranslate.responseForMemoryExtraction,
     providerBody: body,
-    providerRequest: input.translatedBody ?? {},
+    // The live post-transform body is what actually shipped (native-Claude stripping,
+    // cloaking and sanitizers all mutate it in place). Falling back to `translatedBody`
+    // here would log the pre-executor body whenever the capture has already been
+    // released — see providerRequestLogging.ts `release()`.
+    providerRequest:
+      (params.transformedBody as Record<string, unknown> | null) ?? input.translatedBody ?? {},
     usage,
     responsePayloadFormat: params.responsePayloadFormat,
     looksLikeSSE: params.looksLikeSSE,

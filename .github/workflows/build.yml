@@ -1,225 +1,72 @@
-name: Build ARM64 GHCR Image
+name: Build App
 
+# Manual-only since #11946. The hosted 7 GB runner can no longer build this tree — 19 of
+# the last 30 runs died with "The runner has received a shutdown signal" (VM out of
+# memory) ~8 min into `next build`, release/v3.8.51 itself included, even with the 10 GB
+# swapfile below. Triggered on `push: branches: ["**"]` it painted every branch and every
+# PR red while producing an artefact nothing downloads. The bundle is validated where a
+# build actually fits:
+#   - main:       ci.yml `Build` (self-hosted omni-build pool) on every merge
+#   - release/**: nightly-release-green.yml (same pool, continuous)
+# Dispatch this workflow by hand when a hosted build artefact is genuinely needed.
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
-
-concurrency:
-  group: memory-pressure-arm64-image
-  cancel-in-progress: false
-
-env:
-  IMAGE_NAME: ghcr.io/supermanzjjhhhh/omniroute
-  IMAGE_TAG: sha-${{ github.sha }}
 
 jobs:
-  build-image:
-    name: Build and push runner-base (ARM64)
-    runs-on: ubuntu-24.04-arm
+  build:
+    name: Fast Production Build
+    runs-on: ubuntu-latest
     steps:
-      - name: Record runner resources
+      - name: Expand Virtual Memory (Native 10GB Swap)
         run: |
-          uname -a
-          nproc
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile /swapfile
+          sudo fallocate -l 10G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=10240
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
           free -h
-          df -h /
-          total_kib="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
-          test "$total_kib" -ge $((14 * 1024 * 1024))
 
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build production-runtime test base
-        run: |
-          docker buildx build --platform linux/arm64 --target base --load \
-            --tag "omniroute-test-base:${GITHUB_SHA}" .
-
-      - name: Verify release compatibility on Node 26
-        run: |
-          docker run --rm --memory=6g --memory-swap=6g --cpus=2 \
-            --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
-            --env PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-            --env NEXT_TELEMETRY_DISABLED=1 \
-            --env DISABLE_SQLITE_AUTO_BACKUP=true \
-            --env NODE_OPTIONS=--max-old-space-size=1536 \
-            --entrypoint bash "omniroute-test-base:${GITHUB_SHA}" -ec '
-              apt-get update
-              apt-get install -y --no-install-recommends python3 make g++ git
-              cp -a /checkout/. /work/
-              git config --global --add safe.directory /work
-              # vitest resolves its binary through node_modules/.bin, which npm run
-              # injects but a bare command inside this shell does not.
-              export PATH="$PWD/node_modules/.bin:$PATH"
-              npm ci --include=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts
-              (cd node_modules/better-sqlite3 && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --force_build=1)
-              node -e "require(\"better-sqlite3\") (\":memory:\").close()"
-              node --max-old-space-size=1536 node_modules/typescript/bin/tsc --pretty false -p tsconfig.typecheck-core.json
-              node --max-old-space-size=768 --import tsx/esm \
-                --import ./open-sse/utils/setupPolyfill.ts --import ./tests/_setup/isolateDataDir.ts \
-                --test --test-force-exit --test-timeout=60000 --test-concurrency=1 \
-                tests/unit/resource-pressure*.test.ts \
-                tests/unit/monitoring-*health*.test.ts \
-                tests/unit/completed-detail-pipeline-precedence.test.ts \
-                tests/unit/completed-request-memory-retention-13621.test.ts \
-                tests/unit/usage-pending-sweep.test.ts \
-                tests/unit/ninerouter-executor.test.ts \
-                tests/unit/ninerouter-native-credentials.test.ts \
-                tests/unit/rate-limit-queue-context.test.ts \
-                tests/unit/extract-zip-14482-exposure.test.ts
-              # Deliberate, previously-green file list instead of the full glob: the
-              # in-container full run stalls on tests/unit/glm-reset-cards.test.ts, which
-              # passes standalone. This list covers every fork-conflict surface.
-              node --max-old-space-size=1536 --expose-gc --import tsx/esm \
-                --import ./open-sse/utils/setupPolyfill.ts --import ./tests/_setup/isolateDataDir.ts \
-                --test --test-force-exit --test-timeout=60000 --test-concurrency=1 \
-                tests/unit/13145-compression-worker-failure-fallback.test.ts \
-                tests/unit/active-request-stream-chunks-lifecycle.test.ts \
-                tests/unit/anthropic-fallback-policy-16406.test.ts \
-                tests/unit/antigravity-claude-prefill-strip.test.ts \
-                tests/unit/antigravity-client-profile.test.ts \
-                tests/unit/assemble-standalone-compression-worker-externals-15011.test.ts \
-                tests/unit/build/run-standalone-execpath.test.mjs \
-                tests/unit/chatcore-executor-client-headers.test.ts \
-                tests/unit/codex-compaction-web-replay-15901.test.ts \
-                tests/unit/completed-detail-pipeline-precedence.test.ts \
-                tests/unit/completed-request-memory-retention-13621.test.ts \
-                tests/unit/compression-worker-gate-13154-repro.test.ts \
-                tests/unit/compression/compression-progress.test.ts \
-                tests/unit/compression/compression-worker-file-resolution.test.ts \
-                tests/unit/compression/compression-worker-leak.test.ts \
-                tests/unit/compression/compression-worker-lifecycle.test.ts \
-                tests/unit/compression/compression-worker-pool-jam.test.ts \
-                tests/unit/compression/compression-worker.test.ts \
-                tests/unit/compression/worker-pool-idle-eviction-12812.test.ts \
-                tests/unit/compression/workerHarness.ts \
-                tests/unit/execute-chat-resource-pressure-breaker.test.ts \
-                tests/unit/executor-antigravity.test.ts \
-                tests/unit/extract-zip-14482-exposure.test.ts \
-                tests/unit/model-family-fallback-policy.test.ts \
-                tests/unit/monitoring-deep-health.test.ts \
-                tests/unit/monitoring-health-cached-credential.test.ts \
-                tests/unit/monitoring-health-pressure.test.ts \
-                tests/unit/monitoring-health-public-view.test.ts \
-                tests/unit/ninerouter-executor.test.ts \
-                tests/unit/ninerouter-native-credentials.test.ts \
-                tests/unit/opencode-free-tier-refusal-rotation.test.ts \
-                tests/unit/opencode-free-tier-request-contract.test.ts \
-                tests/unit/opencode-muse-spark-min-output.test.ts \
-                tests/unit/opencode-muse-spark-model-test-budget.test.ts \
-                tests/unit/opencode-request-shape-retry.test.ts \
-                tests/unit/rate-limit-queue-context.test.ts \
-                tests/unit/reasoning-input-policy-single-target-fallback.test.ts \
-                tests/unit/reasoning-input-policy-summary-11108.test.ts \
-                tests/unit/refactor-buildHeaders-opencode.test.ts \
-                tests/unit/resource-pressure-admission-recovery.test.ts \
-                tests/unit/resource-pressure-gate-recovery.test.ts \
-                tests/unit/resource-pressure-policy.test.ts \
-                tests/unit/resource-pressure-recovery-driver.test.ts \
-                tests/unit/resource-pressure-runtime.test.ts \
-                tests/unit/resource-pressure-sampler.test.ts \
-                tests/unit/resource-pressure-self-restart.test.ts \
-                tests/unit/resource-pressure-singleton-dedup.test.ts \
-                tests/unit/resource-pressure-throttle-proof.test.ts \
-                tests/unit/resource-pressure.test.ts \
-                tests/unit/responses-chat-translation-gaps.test.ts \
-                tests/unit/responses-input-sanitizer-agent-message.test.ts \
-                tests/unit/responses-input-sanitizer-name.test.ts \
-                tests/unit/responses-mcp-namespace-dotted.test.ts \
-                tests/unit/services/installers/ninerouter.test.ts \
-                tests/unit/translator-openai-responses-custom-tool-1007.test.ts \
-                tests/unit/translator-openai-responses-empty-input-419.test.ts \
-                tests/unit/translator-openai-responses-empty-input-github-400.test.ts \
-                tests/unit/translator-openai-responses-empty-tool-calls.test.ts \
-                tests/unit/translator-openai-responses-image-output-8459.test.ts \
-                tests/unit/translator-openai-responses-post-toolcall-content.test.ts \
-                tests/unit/translator-openai-responses-req.test.ts \
-                tests/unit/translator-openai-responses-system-content-parts.test.ts \
-                tests/unit/translator-openai-responses-tool-calls.test.ts \
-                tests/unit/translator-openai-to-gemini.test.ts \
-                tests/unit/translator-request-openai-responses.test.ts \
-                tests/unit/translator-resp-openai-responses-completed-synthesis.test.ts \
-                tests/unit/translator-resp-openai-responses-namespace-identity.test.ts \
-                tests/unit/translator-resp-openai-responses-roundtrip.test.ts \
-                tests/unit/translator-resp-openai-responses.test.ts \
-                tests/unit/translator-responses-cache-usage.test.ts \
-                tests/unit/translator-responses-json-object-hint.test.ts \
-                tests/unit/usage-pending-sweep.test.ts \
-                tests/unit/web-search-fallback-format.test.ts
-              npm run test:vitest -- --maxWorkers=2 --maxConcurrency=4
-            '
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4.6.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: "24"
+          cache: npm
 
-      - name: Build and push ARM64 image
-        id: build
-        uses: docker/build-push-action@v7
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ONNXRUNTIME_NODE_INSTALL: "skip"
+
+      - name: Build Next.js app & CLI bundle
+        run: |
+          npm run build:release
+        env:
+          # Hosted artifact builds run with less memory than the opt-in 64 GB
+          # CI build slot. Keep Webpack here without overriding the latter's
+          # separately measured Turbopack policy (#16169). Validated 2026-10-18 on the
+          # hosted runner (run 39151150605): webpack compiled in 7.1 min, job 17 min.
+          # This is the floor docker-publish.yml must not go below
+          # (tests/unit/docker-publish-build-heap-14325.test.ts).
+          NODE_OPTIONS: "--max-old-space-size=10240"
+          OMNIROUTE_BUILD_MEMORY_MB: "10240"
+          OMNIROUTE_USE_TURBOPACK: "0"
+
+      - name: Archive build outputs
+        run: |
+          tar -czf omniroute-build.tar.gz .build dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          context: .
-          target: runner-base
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          build-args: |
-            OMNIROUTE_BUILD_WORKERS=1
-            OMNIROUTE_BUILD_MEMORY_MB=10240
-          cache-from: type=gha,scope=memory-pressure-arm64
-          cache-to: type=gha,scope=memory-pressure-arm64,mode=min,ignore-error=true
-
-      - name: Verify published manifest
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          test -n "$IMAGE_DIGEST"
-          echo "IMAGE_DIGEST=$IMAGE_DIGEST"
-          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}"
-          {
-            echo "### ARM64 image"
-            echo
-            echo "- Image: \`${IMAGE_NAME}:${IMAGE_TAG}\`"
-            echo "- Digest: \`${IMAGE_DIGEST}\`"
-            echo "- Source: \`${GITHUB_SHA}\`"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Smoke-test published image
-        env:
-          CONTAINER_NAME: omniroute-image-smoke-${{ github.run_id }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          trap 'docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true' EXIT
-
-          docker pull "${IMAGE_NAME}@${IMAGE_DIGEST}"
-          docker run --detach --name "$CONTAINER_NAME" --publish 127.0.0.1::20128 \
-            --memory=3g --memory-swap=3g --cpus=1 \
-            --env OMNIROUTE_MEMORY_MB=2048 --env NODE_OPTIONS=--max-old-space-size=2048 \
-            "${IMAGE_NAME}@${IMAGE_DIGEST}"
-
-          port="$(docker port "$CONTAINER_NAME" 20128/tcp | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p')"
-          for attempt in $(seq 1 45); do
-            health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CONTAINER_NAME")"
-            if curl --fail --silent --show-error "http://127.0.0.1:${port}/healthz" >/dev/null \
-              && [ "$health" = healthy ]; then
-              exit 0
-            fi
-            sleep 2
-          done
-
-          docker logs "$CONTAINER_NAME"
-          docker inspect --format '{{json .State}}' "$CONTAINER_NAME"
-          exit 1
+          name: omniroute-build
+          path: omniroute-build.tar.gz
+          retention-days: 7

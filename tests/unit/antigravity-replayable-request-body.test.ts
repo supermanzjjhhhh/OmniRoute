@@ -25,7 +25,7 @@ test("Antigravity streaming sends finite JSON as a replayable fixed request body
     });
     return new Response(
       'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}}\n\n',
-      { status: sends.length === 1 ? 403 : 200, headers: { "Content-Type": "text/event-stream" } }
+      { status: 200, headers: { "Content-Type": "text/event-stream" } }
     );
   }) as typeof fetch;
 
@@ -54,12 +54,16 @@ test("Antigravity streaming sends finite JSON as a replayable fixed request body
     );
 
     assert.equal(result.response.status, 200);
-    assert.equal(sends.length, 2, "403 retry must perform a second physical send");
+    // `x-goog-user-project` is stripped before the first send (f24e9dffcf, #2703: the
+    // header made Cloud Code answer 403 on every request, so the executor re-sent without
+    // it — 2703 refused sends in proxy_logs). executeAttempt.ts keeps the strip-and-retry
+    // branch as a safety net, which is now unreachable for the chat path; the multi-send
+    // coverage lives in the credits and 404 reactive-sync cases below.
+    assert.equal(sends.length, 1, "the 403 retry must not fire once the header is stripped");
     for (const send of sends) {
       assert.equal(typeof send.body, "string");
       assert.equal(send.duplex, undefined);
     }
-    assert.equal(String(sends[0]?.body), String(sends[1]?.body));
   } finally {
     globalThis.fetch = originalFetch;
   }
