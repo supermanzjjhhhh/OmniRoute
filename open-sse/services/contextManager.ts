@@ -10,7 +10,8 @@ import {
   getModelContextLimit,
   type ModelCapabilityResolutionSnapshot,
 } from "../../src/lib/modelCapabilities.ts";
-import { parseModel } from "./model.ts";
+import { getServiceModels, type ServiceModel } from "../../src/lib/db/serviceModels.ts";
+import { parseModel, resolveProviderAlias } from "./model.ts";
 import { encodedStringLength, jsonLength } from "../utils/jsonSize.ts";
 
 // Default token limits per provider (fallbacks when not in registry)
@@ -416,8 +417,58 @@ export function estimateTokens(text: unknown): number {
 }
 
 /**
+ * Context window declared by an embedded service's synced model list
+ * (`key_value` namespace `serviceModels`, keyed by the service tool).
+ *
+ * Synced entries may carry the tool prefix (`9router/<model>`) or a bare id, and
+ * callers may pass either form, so both sides are canonicalized before matching.
+ * Only a finite positive `context_length` / `capabilities.contextWindow` counts;
+ * malformed metadata is ignored rather than treated as a window.
+ */
+function getServiceModelContextWindow(provider: string, model: string): number | null {
+  const canonicalProvider = resolveProviderAlias(provider) ?? provider;
+  const prefixes = [...new Set([provider, canonicalProvider])].filter(Boolean);
+  const canonicalModel = stripServicePrefix(model, prefixes);
+  if (!canonicalModel) return null;
+
+  let entries: ServiceModel[];
+  try {
+    entries = getServiceModels(canonicalProvider);
+  } catch {
+    return null;
+  }
+
+  const entry = entries.find(
+    (candidate) =>
+      candidate != null &&
+      typeof candidate === "object" &&
+      candidate.available !== false &&
+      typeof candidate.id === "string" &&
+      stripServicePrefix(candidate.id, prefixes) === canonicalModel
+  );
+  if (!entry) return null;
+
+  const capabilities =
+    typeof entry.capabilities === "object" && entry.capabilities !== null
+      ? (entry.capabilities as Record<string, unknown>)
+      : null;
+  for (const value of [entry.context_length, capabilities?.contextWindow]) {
+    if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
+  }
+  return null;
+}
+
+function stripServicePrefix(modelId: string, prefixes: readonly string[]): string {
+  const trimmed = modelId.trim();
+  for (const prefix of prefixes) {
+    if (trimmed.startsWith(`${prefix}/`)) return trimmed.slice(prefix.length + 1).trim();
+  }
+  return trimmed;
+}
+
+/**
  * Get token limit for a provider/model combination
- * Priority: Env override > models.dev DB > Registry defaultContextLength > DEFAULT_LIMITS
+ * Priority: Env override > models.dev DB > service-synced DB > Registry defaultContextLength > DEFAULT_LIMITS
  */
 export function getTokenLimit(
   provider: string,
@@ -505,17 +556,26 @@ export function resolveTokenLimit(
 
   // 2. Check models.dev synced DB for per-model context limit
   if (model) {
-    const dbLimit = getModelContextLimit(provider, model, snapshot);
+    const canonicalProvider = resolveProviderAlias(provider) ?? provider;
+    const canonicalModel = stripServicePrefix(model, [provider, canonicalProvider]);
+    const dbLimit = getModelContextLimit(canonicalProvider, canonicalModel, snapshot);
     if (dbLimit && dbLimit > 0) return { limit: dbLimit, specific: true };
   }
 
-  // 3. Check registry for provider default
+  // 3. Check the embedded-service synced model list (e.g. 9router) for a
+  //    provider/model-specific window before any provider default or heuristic.
+  if (model) {
+    const serviceLimit = getServiceModelContextWindow(provider, model);
+    if (serviceLimit) return { limit: serviceLimit, specific: true };
+  }
+
+  // 4. Check registry for provider default
   const registryEntry = REGISTRY[provider];
   if (registryEntry?.defaultContextLength) {
     return { limit: registryEntry.defaultContextLength, specific: true };
   }
 
-  // 4. Check if model name hints at a known limit
+  // 5. Check if model name hints at a known limit
   if (model) {
     if (lowerModel.includes("claude")) return { limit: DEFAULT_LIMITS.claude, specific: true };
     if (lowerModel.includes("gemini")) return { limit: DEFAULT_LIMITS.gemini, specific: true };
@@ -529,7 +589,7 @@ export function resolveTokenLimit(
       return { limit: DEFAULT_LIMITS.codex, specific: true };
   }
 
-  // 5. Fallback to DEFAULT_LIMITS or default
+  // 6. Fallback to DEFAULT_LIMITS or default
   if (DEFAULT_LIMITS[provider]) return { limit: DEFAULT_LIMITS[provider], specific: true };
   return { limit: DEFAULT_LIMITS.default, specific: false };
 }
