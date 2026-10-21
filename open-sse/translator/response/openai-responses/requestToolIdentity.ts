@@ -8,6 +8,12 @@ function asRequestToolIdentity(value: unknown): RequestToolIdentity | null {
     : null;
 }
 
+function isExplicitFlatIdentity(value: unknown, toolName: string): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const identity = value as Record<string, unknown>;
+  return identity.namespace === "" && identity.name === toolName;
+}
+
 // #8295's `flattenNamespaceToolName` folds a declared `type:"namespace"` tool
 // group onto the Chat wire as `${nsName}__${leaf}`, always prefixed with the
 // MCP container convention documented in open-sse/executors/codex/tools.ts
@@ -24,25 +30,37 @@ const NAMESPACE_TOOL_PREFIX = "mcp__";
  * stateless-upstream-by-default proxy for the Responses API, so nothing
  * persists the prior turn's identity map across separate HTTP requests).
  *
- * Recovers `{namespace, name}` by splitting the wire name on its LAST `__`
- * separator, mirroring `flattenNamespaceToolName`'s own construction
- * (`${nsName}__${leaf}`, with leaf never containing its own `__`). Scoped to
- * wire names that start with the `mcp__` namespace-container convention so it
- * cannot attach a spurious `namespace` to a flat, non-namespaced tool that
- * happens to contain `__`.
- *
- * Known gap: a wire name hash-truncated by `flattenNamespaceToolName` (>64
- * chars) loses its `__` boundary and cannot be recovered here.
+ * Recovers `{namespace, name}` by:
+ * 1. Splitting dot-separated wire names ("mcp__<server>.<tool>" or "<server>.<tool>").
+ * 2. Splitting "__"-separated wire names ("mcp__<server>__<tool>") on the LAST "__" separator.
  */
 function splitFlattenedNamespaceWireName(toolName: string): RequestToolIdentity | null {
-  if (!toolName.startsWith(NAMESPACE_TOOL_PREFIX)) return null;
+  if (!toolName) return null;
 
-  const lastSeparator = toolName.lastIndexOf("__");
-  if (lastSeparator <= 0) return null;
+  // Dot-separated format: "mcp__<server>.<tool>" or "<server>.<tool>"
+  const dotIndex = toolName.indexOf(".");
+  if (dotIndex > 0) {
+    const rawNs = toolName.slice(0, dotIndex);
+    const leaf = toolName.slice(dotIndex + 1);
+    if (rawNs && leaf) {
+      const namespace = rawNs.startsWith(NAMESPACE_TOOL_PREFIX)
+        ? rawNs
+        : `${NAMESPACE_TOOL_PREFIX}${rawNs}`;
+      return { namespace, name: leaf };
+    }
+  }
 
-  const namespace = toolName.slice(0, lastSeparator);
-  const name = toolName.slice(lastSeparator + 2);
-  return namespace && name ? { namespace, name } : null;
+  // __-separated wire format: "mcp__<server>__<leaf>"
+  if (toolName.startsWith(NAMESPACE_TOOL_PREFIX)) {
+    const lastSeparator = toolName.lastIndexOf("__");
+    if (lastSeparator >= NAMESPACE_TOOL_PREFIX.length) {
+      const namespace = toolName.slice(0, lastSeparator);
+      const name = toolName.slice(lastSeparator + 2);
+      if (namespace && name) return { namespace, name };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -56,7 +74,11 @@ function splitFlattenedNamespaceWireName(toolName: string): RequestToolIdentity 
  * splitting an otherwise unknown tool name outside the narrow `mcp__`
  * fallback below.
  */
-export function resolveRequestToolIdentity(identityMap: unknown, toolName: string) {
+export function resolveRequestToolIdentity(
+  identityMap: unknown,
+  toolName: string,
+  options: { explicitNames?: Iterable<string> | null } = {}
+) {
   if (!toolName) return null;
 
   const direct =
@@ -65,18 +87,52 @@ export function resolveRequestToolIdentity(identityMap: unknown, toolName: strin
       : identityMap && typeof identityMap === "object" && !Array.isArray(identityMap)
         ? (identityMap as Record<string, unknown>)[toolName]
         : undefined;
+  // Current flat declarations and ambiguous history must stay flat, including
+  // names that otherwise match a historical dot alias or the MCP split fallback.
+  if (isExplicitFlatIdentity(direct, toolName)) return null;
   const directIdentity = asRequestToolIdentity(direct);
   if (directIdentity) return directIdentity;
 
-  const candidates =
+  // Materialized: the identity walk below runs twice (dotted alias, then the unique
+  // bare-leaf fallback), and a Map's `values()` iterator is single-use.
+  const candidates = Array.from(
     identityMap instanceof Map
       ? identityMap.values()
       : identityMap && typeof identityMap === "object" && !Array.isArray(identityMap)
         ? Object.values(identityMap as Record<string, unknown>)
-        : [];
+        : []
+  );
   for (const candidate of candidates) {
     const identity = asRequestToolIdentity(candidate);
-    if (identity && `${identity.namespace}.${identity.name}` === toolName) return identity;
+    if (!identity) continue;
+    if (`${identity.namespace}.${identity.name}` === toolName) return identity;
+    const bareNs = identity.namespace.startsWith(NAMESPACE_TOOL_PREFIX)
+      ? identity.namespace.slice(NAMESPACE_TOOL_PREFIX.length)
+      : identity.namespace;
+    if (`${bareNs}.${identity.name}` === toolName) return identity;
+    if (`${NAMESPACE_TOOL_PREFIX}${bareNs}.${identity.name}` === toolName) return identity;
+    if (`${bareNs}__${identity.name}` === toolName) return identity;
+  }
+
+  // Unique bare-leaf resolution: a provider that dropped the `ns__` prefix (or a
+  // name fragment captured mid-stream) still resolves when exactly ONE ledger
+  // identity carries that leaf — e.g. bare `exec` for the declared
+  // `functions__exec`. An ambiguous leaf stays unresolved, and a client that also
+  // declared a flat tool of the same name keeps that tool's own identity
+  // (`options.explicitNames`, supplied from the request's schema map).
+  if (toolName && !toolName.includes("__")) {
+    const explicit =
+      options.explicitNames === undefined || options.explicitNames === null
+        ? null
+        : new Set(options.explicitNames);
+    if (!explicit || !explicit.has(toolName)) {
+      const leafMatches: RequestToolIdentity[] = [];
+      for (const candidate of candidates) {
+        const identity = asRequestToolIdentity(candidate);
+        if (identity && identity.name === toolName) leafMatches.push(identity);
+      }
+      if (leafMatches.length === 1) return leafMatches[0];
+    }
   }
 
   // The wire-name split only stands in for a request that declared no
@@ -89,5 +145,29 @@ export function resolveRequestToolIdentity(identityMap: unknown, toolName: strin
       : identityMap && typeof identityMap === "object" && !Array.isArray(identityMap)
         ? Object.keys(identityMap).length
         : 0;
-  return ledgerSize === 0 ? splitFlattenedNamespaceWireName(toolName) : null;
+
+  const explicit =
+    options.explicitNames === undefined || options.explicitNames === null
+      ? null
+      : new Set(options.explicitNames);
+
+  // A request that declared its own tools is self-describing, so the wire-name split
+  // must not invent a namespace for a spelling it did not declare: a Chat upstream that
+  // echoes `functions.exec` for the declared flat `exec` is a provider prefix, not
+  // `mcp__functions`/`exec` (Codex rejects that as `unsupported call: functions.exec`).
+  // Pass-through / `previous_response_id` turns declare nothing and keep the fallback.
+  if (explicit && explicit.size > 0) return null;
+
+  if (ledgerSize === 0) {
+    return splitFlattenedNamespaceWireName(toolName);
+  }
+
+  // If the ledger was populated but the candidate loop had no match:
+  // An explicit "mcp__<server>.<tool>" wire call carries the MCP prefix
+  // and dot separator, so it is an unambiguous namespaced tool call.
+  if (toolName.startsWith(NAMESPACE_TOOL_PREFIX) && toolName.includes(".")) {
+    return splitFlattenedNamespaceWireName(toolName);
+  }
+
+  return null;
 }

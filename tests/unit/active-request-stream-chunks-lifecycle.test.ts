@@ -650,7 +650,8 @@ test("JON-562 cache budget wording does not claim a hard process memory ceiling"
 
 test("JON-562 completedDetails enforces a byte budget as well as the 256-entry cap", () => {
   usageHistory.clearPendingRequests();
-  const chunkBytes = Math.floor(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES * 0.6);
+  // Stream chunks are individually preview-clipped; error text still exercises the total byte budget.
+  const detailBytes = Math.floor(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES * 0.6);
 
   for (let index = 0; index < 2; index += 1) {
     assert.equal(
@@ -660,7 +661,7 @@ test("JON-562 completedDetails enforces a byte budget as well as the 256-entry c
         provider: "openai",
         connectionId: "conn-JON-562-budget",
         startedAt: Date.now() + index,
-        streamChunks: { client: ["x".repeat(chunkBytes)] },
+        error: "x".repeat(detailBytes),
       }),
       true
     );
@@ -697,7 +698,7 @@ test("JON-562 oversized completed detail is rejected and replacement clears its 
   assert.equal(
     completedRequestDetails.storeCompletedDetail({
       ...base,
-      streamChunks: { client: [oversized] },
+      error: oversized,
     }),
     false
   );
@@ -716,9 +717,10 @@ test("JON-562 finalize schedules no cleanup timer when an oversized detail is no
   const connectionId = "conn-JON-562-oversized-finalize";
   const id = usageHistory.trackPendingRequest(model, provider, connectionId, true);
   assert.ok(id);
-  usageHistory.updatePendingRequestStreamChunks(model, provider, connectionId, {
-    client: ["x".repeat(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES + 1)],
-  });
+  // Construct an oversized internal detail: the public metadata updater correctly clips errors.
+  const pending = usageHistory.getPendingById().get(id);
+  assert.ok(pending);
+  pending.error = "x".repeat(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES + 1);
 
   assert.equal(usageHistory.finalizePendingRequestById(id, { status: 200 }), true);
   assert.equal(usageHistory.getCompletedDetails().has(id), false);
@@ -812,4 +814,24 @@ test("streamChunks in completedDetails survives beyond the logs polling window",
     requestId,
     "DB entry ID should match the original request ID"
   );
+});
+
+test("completed details clip a huge stream frame before applying the total cache budget", () => {
+  usageHistory.clearPendingRequests();
+  const id = "completed-preview-byte-cap";
+  const input = "x".repeat(completedRequestDetails.MAX_COMPLETED_DETAILS_BYTES + 1);
+  assert.equal(
+    completedRequestDetails.storeCompletedDetail({
+      id,
+      model: "gpt-4.1",
+      provider: "openai",
+      connectionId: null,
+      startedAt: Date.now(),
+      streamChunks: { client: [input] },
+    }),
+    true
+  );
+  const chunk = usageHistory.getCompletedDetails().get(id)?.streamChunks?.client?.[0];
+  assert.equal(chunk, "x".repeat(4096) + "...[TRUNCATED_CHUNK]");
+  assert.ok(completedRequestDetails.getCompletedDetailsByteSize() < 16 * 1024);
 });

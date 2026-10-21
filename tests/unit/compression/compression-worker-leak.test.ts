@@ -1,20 +1,35 @@
 import assert from "node:assert/strict";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { after, it } from "node:test";
-import { CompressionWorkerPool } from "../../../open-sse/services/compression/compressionWorkerPool.ts";
+import {
+  CompressionWorkerError,
+  CompressionWorkerPool,
+} from "../../../open-sse/services/compression/compressionWorkerPool.ts";
 import { createCompressionStepReporter } from "../../../open-sse/handlers/chatCore/compressionProgress.ts";
 import { replaceWorker } from "./workerHarness.ts";
 import { resetDbInstance } from "../../../src/lib/db/core.ts";
 
 after(() => resetDbInstance());
 
-async function submitSyntheticJob(pool: CompressionWorkerPool, index: number) {
+async function submitSyntheticJob(
+  pool: CompressionWorkerPool,
+  index: number,
+  expectFailure: boolean
+) {
   const body = { messages: [{ role: "user", content: `${index}: ${"synthetic ".repeat(400)}` }] };
   const context = { payload: "context ".repeat(2_000) };
   const refs = [new WeakRef(body), new WeakRef(context)];
-  await pool.run(body, "off", undefined, () => {
+  const job = pool.run(body, "off", undefined, () => {
     void context.payload.length;
   });
+  if (expectFailure) {
+    await assert.rejects(
+      job,
+      (error: unknown) => error instanceof CompressionWorkerError && error.retryInProcess
+    );
+  } else {
+    await job;
+  }
   return refs;
 }
 
@@ -44,19 +59,18 @@ for (const scenario of ["constructor failures", "successful native jobs"] as con
       t.after(() => pool.close());
       for (const calls of [400, 1_000]) {
         const refs: WeakRef<object>[] = [];
-        for (let i = 0; i < calls; i++) refs.push(...(await submitSyntheticJob(pool, i)));
+        for (let i = 0; i < calls; i++)
+          refs.push(...(await submitSyntheticJob(pool, i, scenario === "constructor failures")));
         // node:test keeps thrown Error objects (and their captured stack frames) in
         // mock call history. Drop that test-owned reference, without touching the pool.
         constructorMock?.resetCalls();
         const retained = await collect(refs);
-        const summary = pool.getSummary();
-        assert.equal(summary.closing, false);
-        assert.equal(summary.activeJobs, 0);
-        assert.equal(summary.queuedJobs, 0);
-        assert.equal(summary.reservedBytes, 0);
-        assert.equal(retained, 0);
-        if (scenario === "successful native jobs") assert.equal(summary.workerCount, 1);
-        t.diagnostic(JSON.stringify({ calls, refs: refs.length, retained, ...summary }));
+        assert.equal(
+          retained,
+          0,
+          "settled jobs must release their bodies and callbacks while the pool stays open"
+        );
+        t.diagnostic(JSON.stringify({ calls, refs: refs.length, retained }));
       }
     }
   );

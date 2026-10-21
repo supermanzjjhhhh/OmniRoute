@@ -13,6 +13,20 @@ export type Capture = {
   capture: (request: ProviderRequestPrepared) => Promise<void> | void;
   body: (fallback: unknown) => unknown;
   latest?: () => ProviderRequestPrepared | null;
+  /**
+   * Drop the retained provider payload once the dispatch has settled.
+   *
+   * The Capture lives in an AsyncLocalStorage store, and an ALS store is only
+   * released once every async resource created inside `run()` has finished. An
+   * executor that leaves a background bookkeeping fetch (credits, token
+   * refresh) running — or a dispatch that ends on a timeout/abort — keeps that
+   * resource alive, so the store outlives the request and keeps `latest`
+   * (a full provider request body) reachable. Measured cost was ~34 MB of
+   * retained heap per large dispatch. Calling this from the dispatch's finally
+   * block drops the payload deterministically instead of waiting for a GC that
+   * cannot collect it.
+   */
+  release?: () => void;
 };
 
 type RequestLoggerLike = {
@@ -164,6 +178,10 @@ export function runWithCapture<T>(requestCapture: Capture, fn: () => Promise<T>)
     for (const listener of getDispatchStartListeners()) listener();
     return captureState.context.run(requestCapture, fn).finally(() => {
       dispatch.settled = true;
+      // Settling the dispatch is not enough: the ALS store itself may outlive
+      // this promise (background fetch / timeout), so drop the retained payload
+      // explicitly instead of waiting on a GC that cannot reclaim it.
+      requestCapture.release?.();
     });
   });
 }
@@ -269,8 +287,16 @@ export function createPreparedRequestLogger(
   scope: PendingRequestScope
 ): Capture {
   let latest: ProviderRequestPrepared | null = null;
+  let released = false;
   return {
     capture(request) {
+      // A background fetch that outlives the dispatch can still reach this
+      // hook. Keep the call log working, but never re-park a multi-MB body on
+      // an ALS store that is already settled — that is the leak this guards.
+      if (released) {
+        reqLogger.logTargetRequest(request.url, request.headers, undefined);
+        return;
+      }
       latest = request;
       reqLogger.logTargetRequest(request.url, request.headers, request.body);
       updatePendingScope(scope, {
@@ -313,6 +339,10 @@ export function createPreparedRequestLogger(
     },
     latest() {
       return latest;
+    },
+    release() {
+      released = true;
+      latest = null;
     },
   };
 }

@@ -17,8 +17,12 @@ connection closed immediately with no response, so probing gives no signal.
 """
 import os, socket, threading, sys
 
-SRC_HOST, SRC_PORT = "127.0.0.1", 9222
-PUB_HOST, PUB_PORT = "0.0.0.0", 9223
+# Ports are overridable so a host that already runs a CDP endpoint (or a parallel
+# test run) does not collide with the container defaults.
+SRC_HOST = os.environ.get("CDP_BRIDGE_SRC_HOST", "127.0.0.1")
+SRC_PORT = int(os.environ.get("CDP_BRIDGE_SRC_PORT", "9222"))
+PUB_HOST = os.environ.get("CDP_BRIDGE_PUB_HOST", "0.0.0.0")
+PUB_PORT = int(os.environ.get("CDP_BRIDGE_PUB_PORT", "9223"))
 TOKEN = os.environ.get("CDP_BRIDGE_TOKEN", "")
 TOKEN_HEADER = f"x-omni-cdp-token: {TOKEN}".lower()
 PEEK_TIMEOUT_S = 5

@@ -5,7 +5,7 @@
 // vulnerable npm package). It is a reachability/exposure proof: it asserts the two
 // premises the triage relies on to call this "accepted risk, doc-only fix" rather than
 // "code bug, needs a patch":
-//   1. extract-zip is reachable ONLY through the promptfoo (devDependency) ->
+//   1. extract-zip is absent, or reachable ONLY through the promptfoo (devDependency) ->
 //      @openai/codex-security chain — never through a production dependency.
 //   2. OmniRoute's own source (src/, open-sse/, bin/, electron/ *code*, not its
 //      package-lock.json) never imports the "extract-zip" npm package directly.
@@ -53,7 +53,7 @@ function declaredDependents(lock: Lockfile, depName: string): string[] {
   return dependents;
 }
 
-test("extract-zip (GHSA-7pqw-9j4j-h8q3 / GHSA-jmr9-qjv8-65gv) is reachable only via the promptfoo devDependency chain", () => {
+test("extract-zip (GHSA-7pqw-9j4j-h8q3 / GHSA-jmr9-qjv8-65gv) is absent or reachable only via the promptfoo devDependency chain", () => {
   const lock = readLockfile();
   const root = lock.packages?.[""] ?? {};
 
@@ -67,22 +67,36 @@ test("extract-zip (GHSA-7pqw-9j4j-h8q3 / GHSA-jmr9-qjv8-65gv) is reachable only 
     "root project must not depend on extract-zip directly (dev)"
   );
 
-  // 2. Exactly one package in the whole tree declares a dependency on extract-zip,
-  //    and it must be @openai/codex-security.
+  // 2. Any remaining extract-zip dependency must be @openai/codex-security.
   const extractZipDependents = declaredDependents(lock, "extract-zip");
   assert.deepEqual(
-    extractZipDependents,
-    ["node_modules/@openai/codex-security"],
+    extractZipDependents.filter((owner) => owner !== "node_modules/@openai/codex-security"),
+    [],
     `expected only @openai/codex-security to depend on extract-zip, got: ${extractZipDependents.join(", ")}`
   );
 
   // 3. The only thing that depends on @openai/codex-security must be promptfoo.
   const codexSecurityDependents = declaredDependents(lock, "@openai/codex-security");
   assert.deepEqual(
-    codexSecurityDependents,
-    ["node_modules/promptfoo"],
+    codexSecurityDependents.filter((owner) => owner !== "node_modules/promptfoo"),
+    [],
     `expected only promptfoo to depend on @openai/codex-security, got: ${codexSecurityDependents.join(", ")}`
   );
+
+  // An empty edge set is safe only when the package itself is also absent.
+  for (const [name, dependents] of [
+    ["extract-zip", extractZipDependents],
+    ["@openai/codex-security", codexSecurityDependents],
+  ] as const) {
+    if (dependents.length > 0) continue;
+    assert.deepEqual(
+      Object.keys(lock.packages ?? {}).filter(
+        (key) => key === `node_modules/${name}` || key.endsWith(`/node_modules/${name}`)
+      ),
+      [],
+      `${name} must be absent when no package declares it`
+    );
+  }
 
   // 4. promptfoo itself must be a devDependency, never a production dependency —
   //    this is what makes `npm audit --omit=dev` correctly report 0 for this chain.

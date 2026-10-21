@@ -227,3 +227,33 @@ test("preserves custom_tool_call_output input content parts", () => {
   assert.deepEqual(result[0], items[0]);
   assert.equal(JSON.stringify(result).includes('"type":"output_text"'), false);
 });
+
+test("normalizes empty or invalid function_call arguments to {}", () => {
+  const items = [
+    { type: "function_call", call_id: "c1", name: "tool1", arguments: "" },
+    { type: "function_call", call_id: "c2", name: "tool2", arguments: "   " },
+    { type: "function_call", call_id: "c3", name: "tool3", arguments: '{"broken":' },
+    { type: "function_call", call_id: "c4", name: "tool4", arguments: '{"valid":1}' },
+  ];
+  const result = sanitizeResponsesInputItems(items) as Array<Record<string, unknown>>;
+  assert.equal(result[0].arguments, "{}");
+  assert.equal(result[1].arguments, "{}");
+  assert.equal(result[2].arguments, "{}");
+  assert.equal(result[3].arguments, '{"valid":1}');
+});
+
+test("normalizes non-object JSON and toJSON-undefined arguments to {}", () => {
+  const items = [
+    { type: "function_call", call_id: "c1", name: "tool1", arguments: "123" },
+    { type: "function_call", call_id: "c2", name: "tool2", arguments: "null" },
+    { type: "function_call", call_id: "c3", name: "tool3", arguments: "true" },
+    { type: "function_call", call_id: "c4", name: "tool4", arguments: "[1, 2]" },
+    { type: "function_call", call_id: "c5", name: "tool5", arguments: { toJSON: () => undefined } },
+  ];
+  const result = sanitizeResponsesInputItems(items, false) as Array<Record<string, unknown>>;
+  assert.equal(result[0].arguments, "{}");
+  assert.equal(result[1].arguments, "{}");
+  assert.equal(result[2].arguments, "{}");
+  assert.equal(result[3].arguments, "{}");
+  assert.equal(result[4].arguments, "{}");
+});

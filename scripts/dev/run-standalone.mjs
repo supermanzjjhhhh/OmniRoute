@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
+import { totalmem } from "node:os";
 import {
   resolveRuntimePorts,
   withRuntimePortEnv,
   resolveMaxOldSpaceMb,
+  calibrateHeapFallbackMb,
   warnConflictingHeapLimits,
   buildStandaloneNodeOptions,
   spawnWithForwardedSignals,
@@ -19,7 +21,10 @@ const childEnv = withRuntimePortEnv(env, runtimePorts);
 // When it is set, we append --max-old-space-size last (V8 last-flag wins).
 // When it is unset and NODE_OPTIONS already pins the heap, keep NODE_OPTIONS
 // (#5238). Warn when both are set and the numbers disagree.
-const maxOldSpaceMb = resolveMaxOldSpaceMb(childEnv.OMNIROUTE_MEMORY_MB);
+const maxOldSpaceMb = resolveMaxOldSpaceMb(
+  childEnv.OMNIROUTE_MEMORY_MB,
+  calibrateHeapFallbackMb(totalmem())
+);
 warnConflictingHeapLimits(childEnv, maxOldSpaceMb);
 childEnv.NODE_OPTIONS = buildStandaloneNodeOptions(childEnv, maxOldSpaceMb);
 
@@ -30,7 +35,14 @@ childEnv.NODE_OPTIONS = buildStandaloneNodeOptions(childEnv, maxOldSpaceMb);
 // rather than trusting the spoofable Host header.
 const entry = existsSync("server-ws.mjs") ? "server-ws.mjs" : "server.js";
 
-spawnWithForwardedSignals(process.execPath, [entry], {
+// #inspect: forward inspector flags to the standalone entry process
+// so parent supervisor / container wrappers do not collide on port binding.
+const inspectFlag =
+  process.env.OMNIROUTE_INSPECT_FLAG ||
+  (process.env.OMNIROUTE_INSPECT ? "--inspect=0.0.0.0:9230" : null);
+const nodeArgs = inspectFlag ? [inspectFlag, entry] : [entry];
+
+spawnWithForwardedSignals(process.execPath, nodeArgs, {
   stdio: "inherit",
   env: childEnv,
 });

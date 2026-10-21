@@ -1,8 +1,36 @@
+import { isCodexCompactionWebReplay } from "../executors/codex/compactionReplay.ts";
+
+function toValidJsonString(value: unknown, fallback = "{}"): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return trimmed;
+      }
+      return fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    try {
+      const s = JSON.stringify(value);
+      return typeof s === "string" && s.startsWith("{") ? s : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 import { isValidResponsesItemId } from "./responsesItemId.ts";
 
 type JsonRecord = Record<string, unknown>;
 type SanitizeResponsesInputOptions = {
   dropInternalAssistantMessages?: boolean;
+  preserveWebSearchCalls?: boolean;
   // Codex's multi_agent_v2 uses a proprietary `agent_message` input-item type to pass
   // tasks/replies between a parent thread and a sub-agent. The real Codex/ChatGPT backend
   // understands this type; every other Responses-API upstream (e.g. Muse Spark 1.3 /
@@ -207,6 +235,7 @@ function sanitizeInputItem(item: unknown, options: SanitizeResponsesInputOptions
     next = convertAgentMessageItem(next);
   }
 
+  if (options.preserveWebSearchCalls && next.type === "web_search_call") return next;
   next = sanitizeInputItemId(next);
   if (isResponsesMessageItem(next)) {
     next = sanitizeMessageContent(next);
@@ -218,6 +247,27 @@ function sanitizeInputItem(item: unknown, options: SanitizeResponsesInputOptions
     !FUNCTION_NAME_VALID_RE.test(next.name)
   ) {
     next = { ...next, name: sanitizeFunctionName(next.name) };
+  }
+  if (next.type === "function_call") {
+    next = { ...next, arguments: toValidJsonString(next.arguments) };
+  }
+  if (Array.isArray(next.tool_calls)) {
+    next = {
+      ...next,
+      tool_calls: (next.tool_calls as unknown[]).map((tc) => {
+        const tcr = toRecord(tc);
+        if (!tcr) return tc;
+        const fn = toRecord(tcr.function);
+        if (!fn) return tc;
+        return {
+          ...tcr,
+          function: {
+            ...fn,
+            arguments: toValidJsonString(fn.arguments),
+          },
+        };
+      }),
+    };
   }
   return next;
 }
@@ -278,5 +328,6 @@ export function sanitizeCodexResponsesInput(
   body.input = sanitizeResponsesInputItems(input, false, {
     dropInternalAssistantMessages: !nativeCodexPassthrough,
     preserveAgentMessages: nativeCodexPassthrough,
+    preserveWebSearchCalls: isCodexCompactionWebReplay(body),
   });
 }

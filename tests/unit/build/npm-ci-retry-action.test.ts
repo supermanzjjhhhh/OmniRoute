@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parse } from "yaml";
+import { load as parse } from "js-yaml";
 
 const action = parse(
   readFileSync(new URL("../../../.github/actions/npm-ci-retry/action.yml", import.meta.url), "utf8")
