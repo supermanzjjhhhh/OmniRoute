@@ -18,6 +18,7 @@ import { buildRequestTranslationErrorResult } from "./chatCore/requestTranslatio
 import {
   estimateCalibratedFinalInputTokens,
   estimateFinalInputTokenBreakdown,
+  getCompactionMessageTarget,
 } from "./chatCore/contextEstimation.ts";
 import { buildClaudePassthroughBody } from "./chatCore/claudePassthroughBody.ts";
 export {
@@ -1817,9 +1818,11 @@ async function handleChatCoreInner({
     if (Array.isArray(body.tools)) {
       reservedTokens = estimateTokens(body.tools);
     }
-    const threshold = Math.max(
-      1,
-      Math.floor((Math.max(1, effectiveCompactionCeiling) - reservedTokens) * COMPRESSION_THRESHOLD)
+    const threshold = getCompactionMessageTarget(
+      body as Record<string, unknown>,
+      provider,
+      effectiveModel,
+      Math.floor(effectiveCompactionCeiling * COMPRESSION_THRESHOLD)
     );
 
     log?.debug?.(
@@ -1838,6 +1841,7 @@ async function handleChatCoreInner({
     if (
       reactiveContextCompactionEnabled &&
       !skipNativeCodexReactiveCompaction &&
+      threshold > 0 &&
       estimatedTokens > threshold
     ) {
       log?.info?.(
@@ -1921,19 +1925,36 @@ async function handleChatCoreInner({
   // getTokenLimit(provider, effectiveModel) re-fetch, which would silently
   // discard that combo-aware override and re-widen the last-resort budget.
   const finalContextLimit = contextLimit;
-  const toolsReserve = finalInputBreakdown.tools;
-
   const effectiveCompactionCeiling = getEffectiveCompactionCeiling(finalContextLimit);
+  // Reserve useful output room, not the provider's maximum output capacity.
+  const requestedOutputTokens = Math.max(
+    ...[body.max_tokens, body.max_completion_tokens, body.max_output_tokens].map(
+      (value) => toPositiveInteger(value) ?? 0
+    )
+  );
+  const outputReserve = Math.min(
+    Math.max(1, finalContextLimit - 1),
+    requestedOutputTokens || Math.min(4096, Math.max(1, Math.floor(finalContextLimit * 0.1)))
+  );
+  const finalInputBudget = Math.min(effectiveCompactionCeiling - 1, finalContextLimit - outputReserve);
 
   // Last-resort compaction against the concrete input budget (not the 70% threshold).
   // Covers cases where the proactive pass was skipped or still left the request oversized (#8560).
-  if (
+  for (
+    let pass = 0;
+    pass < 3 &&
+    !contextWindowChecksDisabled &&
     reactiveContextCompactionEnabled &&
     !skipNativeCodexReactiveCompaction &&
-    finalEstimatedInputTokens >= effectiveCompactionCeiling &&
-    body
+    finalEstimatedInputTokens > finalInputBudget &&
+    body;
+    pass++
   ) {
-    const lastResortTarget = Math.max(1, effectiveCompactionCeiling - toolsReserve - 1);
+    const lastResortTarget = getCompactionMessageTarget(
+      body as Record<string, unknown>, provider, effectiveModel, finalInputBudget
+    );
+    if (lastResortTarget < 1) break;
+    const previousInputTokens = finalEstimatedInputTokens;
     const lastResortAdapter = adaptBodyForCompression(body as Record<string, unknown>);
     const lastResortResult = compressContext(lastResortAdapter.body, {
       provider,
@@ -1964,6 +1985,7 @@ async function handleChatCoreInner({
           `instructions=${finalInputBreakdown.instructions}; limit ${finalContextLimit})`
       );
     }
+    if (finalEstimatedInputTokens >= previousInputTokens) break;
   }
 
   const calibrationEstimatedInputTokens = finalEstimatedInputTokens; // #14931 pairing

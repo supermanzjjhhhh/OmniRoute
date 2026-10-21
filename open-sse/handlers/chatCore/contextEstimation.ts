@@ -2,6 +2,7 @@ import { adaptBodyForCompression } from "../../services/compression/bodyAdapter.
 import { estimateTokens } from "../../services/contextManager.ts";
 import {
   applyEstimatorCalibration,
+  getEstimatorCalibrationFactor,
   recordEstimatorCalibrationFromUsage,
 } from "../../services/estimatorCalibration.ts";
 
@@ -44,6 +45,19 @@ export function estimateFinalInputTokenBreakdown(
 
 export function estimateFinalInputTokens(requestBody: JsonRecord | null | undefined): number {
   return estimateFinalInputTokenBreakdown(requestBody).total;
+}
+
+/** Convert a calibrated whole-request input budget into compressContext's raw message budget. */
+export function getCompactionMessageTarget(
+  requestBody: JsonRecord,
+  provider: string,
+  model: string,
+  inputBudget: number
+): number {
+  const breakdown = estimateFinalInputTokenBreakdown(requestBody);
+  const factor = getEstimatorCalibrationFactor(provider, model, toolsPresentIn(requestBody));
+  const auxiliaryTokens = breakdown.total - breakdown.messages;
+  return Math.max(0, Math.floor(inputBudget / factor) - auxiliaryTokens - 1);
 }
 
 function toolsPresentIn(requestBody: JsonRecord | null | undefined): boolean {

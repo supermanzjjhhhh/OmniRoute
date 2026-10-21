@@ -14,11 +14,90 @@ const providersDb = await import("../../src/lib/db/providers.ts");
 const compressionDb = await import("../../src/lib/db/compression.ts");
 const { handleChatCore } = await import("../../open-sse/handlers/chatCore.ts");
 const { estimateTokens, getTokenLimit } = await import("../../open-sse/services/contextManager.ts");
+const { estimateCalibratedFinalInputTokens } =
+  await import("../../open-sse/handlers/chatCore/contextEstimation.ts");
 
 const originalFetch = globalThis.fetch;
 
+test("chatCore compacts against auxiliary input and reserves output before dispatch", async () => {
+  const originalContext = process.env.CONTEXT_LENGTH_OPENAI;
+  process.env.CONTEXT_LENGTH_OPENAI = "18000";
+  await compressionDb.updateCompressionSettings({
+    enabled: true,
+    defaultMode: "off",
+    autoTriggerTokens: 0,
+  });
+  const connection = await providersDb.createProviderConnection({
+    provider: "openai",
+    apiKey: "test-key",
+    isActive: true,
+  });
+  const instructions = "instructions ".repeat(1000);
+  const body = {
+    model: "opaque-budget-model",
+    stream: false,
+    instructions,
+    max_tokens: 1024,
+    tools: [
+      {
+        type: "function",
+        function: {
+          name: "lookup",
+          description: "tool ".repeat(1500),
+          parameters: { type: "object" },
+        },
+      },
+    ],
+    messages: Array.from({ length: 40 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `Turn ${i}: ${"history ".repeat(500)}`,
+    })),
+  };
+  let dispatched = false;
+  globalThis.fetch = async (_url, init) => {
+    if (init?.body) {
+      const sent = JSON.parse(String(init.body));
+      if (Array.isArray(sent.messages)) {
+        dispatched = true;
+        assert.ok(estimateCalibratedFinalInputTokens(sent, "openai", body.model) + 1024 <= 18000);
+        assert.equal(sent.instructions, instructions);
+      }
+    }
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { role: "assistant", content: "ok" } }],
+        usage: { prompt_tokens: 100, completion_tokens: 1, total_tokens: 101 },
+      }),
+      { headers: { "content-type": "application/json" } }
+    );
+  };
+  try {
+    const result = await handleChatCore({
+      body,
+      modelInfo: { provider: "openai", model: body.model },
+      credentials: { apiKey: "test-key" },
+      log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+      clientRawRequest: { endpoint: "/v1/chat/completions", headers: new Map() },
+      connectionId: connection.id,
+      onCredentialsRefreshed: () => {},
+      onRequestSuccess: () => {},
+      onStreamFailure: () => {},
+      onDisconnect: () => {},
+      userAgent: "test-agent",
+      comboName: null,
+    });
+    assert.equal(result.success, true);
+    assert.equal(dispatched, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalContext === undefined) delete process.env.CONTEXT_LENGTH_OPENAI;
+    else process.env.CONTEXT_LENGTH_OPENAI = originalContext;
+  }
+});
+
 test.after(async () => {
   globalThis.fetch = originalFetch;
+  await new Promise((resolve) => setTimeout(resolve, 200));
   core.closeDbInstance();
   try {
     fs.rmSync(TEST_DATA_DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
