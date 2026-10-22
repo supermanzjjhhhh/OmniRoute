@@ -254,6 +254,57 @@ describe("resource pressure self-restart circuit", () => {
     }
   });
 
+  it("exits after sustained RSS above the fuse even when sampled signals stay normal", async () => {
+    // Regression: the RSS fuse used to be evaluated only inside getDecision(),
+    // so it returned 503 but never armed the sustained-critical circuit. The
+    // next tracker.observe() reset state to normal and criticalSinceMs stayed
+    // null forever. RSS here is high while every sampled signal is calm, which
+    // is exactly the native-memory case the fuse exists for.
+    let clock = 0;
+    let scheduledFn: (() => void) | null = null;
+    const exitCalls: number[] = [];
+    const runtime = createResourcePressureRuntime({
+      thresholds: fastThresholds,
+      rssThresholdMb: 1_000,
+      immediateHeapUsedMb: () => 0,
+      immediateRssUsedMb: () => 1_500,
+      nowMs: () => clock,
+      schedule: (fn) => {
+        scheduledFn = fn;
+      },
+      staleAfterMs: 0,
+      maxStaleMs: 60 * 60 * 1000,
+      retryAfterMs: 1_000,
+      sample: async () => normalSignals(clock),
+      selfRestart: {
+        enabled: true,
+        afterMs: 30_000,
+        exitFn: (code) => {
+          exitCalls.push(code);
+        },
+      },
+    });
+    const tick = async (advanceMs: number) => {
+      clock += advanceMs;
+      runtime.check();
+      assert.ok(scheduledFn, "check() must schedule a refresh");
+      const fn = scheduledFn;
+      scheduledFn = null;
+      fn();
+      await runtime.whenRefreshSettled();
+    };
+    try {
+      await tick(1_000);
+      assert.deepEqual(exitCalls, [], "must not exit before afterMs elapses");
+      await tick(29_000);
+      assert.deepEqual(exitCalls, [], "must not exit inside the sustained window");
+      await tick(1_000);
+      assert.deepEqual(exitCalls, [1], "sustained RSS above the fuse must self-restart");
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   it("advances the circuit without any incoming requests via the self-restart driver", async () => {
     // Real clock, real timers: no check() calls at all. The driver must re-arm
     // refresh on its own so a traffic-less outage still exits.
