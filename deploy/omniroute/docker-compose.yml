@@ -1,6 +1,6 @@
 services:
   omniroute:
-    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:b903fec53d1549f6c9c6e9f982fa96d7d91044f5458553e93e753331f11a8170
+    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:88b29c16662ebad73c3a79c2946953ade839a0100600b7d65f028513bac6aea4
     container_name: omniroute
     command: ["node", "--max-old-space-size=128", "/bridge/external-connector.mjs"]
     networks:
@@ -34,7 +34,7 @@ services:
       - NODE_ENV=production
 
   bridge:
-    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:b903fec53d1549f6c9c6e9f982fa96d7d91044f5458553e93e753331f11a8170
+    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:88b29c16662ebad73c3a79c2946953ade839a0100600b7d65f028513bac6aea4
     container_name: omni-9router-bridge
     entrypoint: ["node", "/bridge/adapter.mjs"]
     networks:
