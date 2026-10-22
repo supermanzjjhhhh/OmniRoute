@@ -21,6 +21,10 @@ services:
       - REQUIRE_API_KEY=true
       - OMNIROUTE_PRESSURE_SELF_RESTART=1
       - OMNIROUTE_PRESSURE_SELF_RESTART_AFTER_MS=30000
+      # Absolute process-RSS fuse. Must stay below mem_limit (2304m) or the
+      # kernel OOM-kills before the fuse is reachable. Measured RSS on this
+      # host: 942-1109MB fresh, 1874MB peak before the cap was lowered.
+      - OMNIROUTE_RSS_PRESSURE_MB=1800
       - OMNIROUTE_MEMORY_MB=2048
       - OMNIROUTE_ADOPT_EXISTING_SERVICE=1
       - OMNIROUTE_MIGRATIONS_DIR=/app/migrations
