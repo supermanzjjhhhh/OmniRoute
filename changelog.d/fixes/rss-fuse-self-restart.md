@@ -1,0 +1,1 @@
+- **fix(resilience):** the process-RSS fuse now arms the sustained-critical self-restart circuit. A runaway native/external RSS above `OMNIROUTE_RSS_PRESSURE_MB` exits for a clean restart instead of only shedding new requests with 503 forever
