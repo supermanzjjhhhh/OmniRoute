@@ -1,0 +1,66 @@
+services:
+  omniroute:
+    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:b903fec53d1549f6c9c6e9f982fa96d7d91044f5458553e93e753331f11a8170
+    container_name: omniroute
+    command: ["node", "--max-old-space-size=128", "/bridge/external-connector.mjs"]
+    networks:
+      - default
+      - router-link
+    mem_limit: 2304m
+    memswap_limit: 2304m
+    cpus: 2.0
+    pids_limit: 512
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:20228:20128"
+      - "127.0.0.1:9230:9230"
+    volumes:
+      - ./data:/app/data
+      - ./scripts:/bridge:ro
+    environment:
+      - REQUIRE_API_KEY=true
+      - OMNIROUTE_PRESSURE_SELF_RESTART=1
+      - OMNIROUTE_PRESSURE_SELF_RESTART_AFTER_MS=30000
+      - OMNIROUTE_MEMORY_MB=2048
+      - OMNIROUTE_ADOPT_EXISTING_SERVICE=1
+      - OMNIROUTE_MIGRATIONS_DIR=/app/migrations
+      - PORT=20128
+      - HOSTNAME=0.0.0.0
+      - DATA_DIR=/app/data
+      - NODE_ENV=production
+
+  bridge:
+    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:b903fec53d1549f6c9c6e9f982fa96d7d91044f5458553e93e753331f11a8170
+    container_name: omni-9router-bridge
+    entrypoint: ["node", "/bridge/adapter.mjs"]
+    networks:
+      - router-link
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    mem_limit: 192m
+    memswap_limit: 192m
+    cpus: 0.5
+    pids_limit: 64
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=128
+      - LISTEN_HOST=0.0.0.0
+      - ROUTER_UPSTREAM_URL=http://9router:20128
+      - ROUTER_API_KEY_FILE=/router-secret/api-key
+    volumes:
+      - ./scripts/adapter.mjs:/bridge/adapter.mjs:ro
+      - ./data:/omni-data:ro
+      - ./.secrets/9router:/router-secret:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20130/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  router-link:
+    external: true
+    name: omni-router-link
