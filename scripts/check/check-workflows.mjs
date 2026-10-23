@@ -289,6 +289,8 @@ export function runZizmor(workflowsDir) {
 
 const SCHEDULED_GUARD_EVENT = "github.event_name != 'schedule'";
 const SCHEDULED_GUARD_REPO = "github.repository";
+const SCHEDULED_GUARD_NON_FORK =
+  /(?:^|[\s(|])!\s*github\.event\.repository\.fork(?=\s*(?:$|\)|}}|&&|\|\|))/;
 
 /**
  * Reads the trigger section of a parsed workflow document. The `on` key is
@@ -327,7 +329,7 @@ function hasScheduledGuard(condition) {
   return (
     typeof condition === "string" &&
     condition.includes(SCHEDULED_GUARD_EVENT) &&
-    condition.includes(SCHEDULED_GUARD_REPO)
+    (condition.includes(SCHEDULED_GUARD_REPO) || SCHEDULED_GUARD_NON_FORK.test(condition))
   );
 }
 
@@ -515,7 +517,7 @@ function main() {
     console.error(
       `\n[check-workflows] FAIL — ${scheduledGuardFindings.length} scheduled job(s) without the upstream-only guard.\n` +
         "  Scheduled runs must stay in diegosouzapw/OmniRoute: keep the job-level `if:` naming both\n" +
-        "  `github.event_name != 'schedule'` and `github.repository`."
+        "  `github.event_name != 'schedule'` and a repository or non-fork restriction."
     );
     process.exit(1);
   }

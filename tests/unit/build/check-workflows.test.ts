@@ -107,14 +107,34 @@ test("invalid yaml and workflows without jobs are reported, never silently accep
   }
 });
 
-test("the guard lets manual and push runs through anywhere, schedule only upstream", () => {
-  const evaluate = (eventName: string, repository: string) =>
-    eventName !== "schedule" || repository === "diegosouzapw/OmniRoute";
-  assert.equal(evaluate("workflow_dispatch", "someone/else"), true);
-  assert.equal(evaluate("push", "someone/else"), true);
-  assert.equal(evaluate("schedule", "diegosouzapw/OmniRoute"), true);
-  assert.equal(evaluate("schedule", "someone/else"), false);
+test("the metadata guard allows manual/push runs but never schedules work on a fork", () => {
+  const evaluate = (eventName: string, isFork: boolean) => eventName !== "schedule" || !isFork;
+  assert.equal(evaluate("workflow_dispatch", true), true);
+  assert.equal(evaluate("push", true), true);
+  assert.equal(evaluate("schedule", false), true);
+  assert.equal(evaluate("schedule", true), false);
 });
+
+for (const [condition, findings] of [
+  ["github.event_name != 'schedule' || !github.event.repository.fork", 0],
+  ["github.event_name != 'schedule' || github.event.repository.fork", 1],
+  ["github.event_name != 'schedule' || !!github.event.repository.fork", 1],
+  ["!github.event.repository.fork", 1],
+] as const) {
+  test(`schedule metadata guard remains fail-closed: ${condition}`, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "check-workflows-fork-"));
+    try {
+      const file = path.join(dir, "nightly.yml");
+      fs.writeFileSync(
+        file,
+        `on:\n  schedule:\n    - cron: '0 0 * * *'\njobs:\n  demo:\n    if: ${JSON.stringify(condition)}\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n`
+      );
+      assert.equal(scheduledGuard([file]).length, findings);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
 
 test("a workflow without a schedule trigger reports nothing", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "check-workflows-guard-"));

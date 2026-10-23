@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as prettier from "prettier";
 import { formatMarkdown } from "../../scripts/i18n/run-translation.mjs";
@@ -30,4 +31,13 @@ test("lint-staged's Prettier pass leaves a formatted mirror byte-identical", asy
   assert.equal(config?.printWidth, 100);
   const out = await formatMarkdown(MARKDOWN, MIRROR);
   assert.equal(await prettier.format(out, { ...config, filepath: MIRROR }), out);
+});
+
+test("document translation opts out of personality/compression and memory rewriting", () => {
+  const source = fs.readFileSync(
+    new URL("../../scripts/i18n/run-translation.mjs", import.meta.url),
+    "utf8"
+  );
+  assert.match(source, /headers:\s*\{[^}]*"x-omniroute-compression": "off"/);
+  assert.match(source, /headers:\s*\{[^}]*"x-omniroute-no-memory": "true"/);
 });

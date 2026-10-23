@@ -235,7 +235,7 @@ import { createManagedLeaseFence } from "./chatCore/managedLeaseFence.ts";
 
 import { getCacheControlSettings } from "@/lib/cacheControlSettings";
 import { guardrailRegistry } from "@/lib/guardrails";
-import type { VideoBridgeLogRedactionEntry } from "@/lib/guardrails/videoBridge";
+import type { VideoBridgeLogRedactionEntry } from "../utils/videoBridgeLogRedaction.ts";
 import {
   logClientRawRequestRedacted,
   redactPendingBody,

@@ -49,18 +49,18 @@ permissions:
 jobs:
   prepare:
     name: Resolve Docker release metadata
-    # Keep the explicit upstream scheduled-run guard on every job, including
+    # Keep the explicit non-fork scheduled-run guard on every job, including
     # publish jobs that currently exclude schedule entirely.
     if: >-
       github.event_name != 'schedule' &&
-      (github.event_name != 'schedule' || github.repository == 'diegosouzapw/OmniRoute')
+      (github.event_name != 'schedule' || !github.event.repository.fork)
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
       promote_latest: ${{ steps.version.outputs.promote_latest }}
       skip: ${{ steps.version.outputs.skip }}
-    env:
-      IMAGE_NAME: diegosouzapw/omniroute
+      docker_image: ${{ steps.registry.outputs.docker_image }}
+      ghcr_image: ${{ steps.registry.outputs.ghcr_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -70,9 +70,18 @@ jobs:
           # Need full tag history for semver comparison when deciding :latest.
           fetch-depth: 0
 
+      - name: Resolve own registry namespace
+        id: registry
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "docker_image=${owner}/omniroute" >> "$GITHUB_OUTPUT"
+          echo "ghcr_image=ghcr.io/${owner}/omniroute" >> "$GITHUB_OUTPUT"
+
       - name: Resolve version, latest-promotion, and skip flag
         id: version
         env:
+          IMAGE_NAME: ${{ steps.registry.outputs.docker_image }}
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
@@ -125,14 +134,14 @@ jobs:
           # and `next` channels are intentionally rebuilt on every matching push.
           SKIP="false"
           if [ "$VERSION" != "main" ] && [ "$VERSION" != "next" ]; then
-            if docker manifest inspect "diegosouzapw/omniroute:${VERSION}" >/dev/null 2>&1; then
-              echo "Image diegosouzapw/omniroute:${VERSION} already exists on Docker Hub — skipping rebuild."
+            if docker manifest inspect "${IMAGE_NAME}:${VERSION}" >/dev/null 2>&1; then
+              echo "Image ${IMAGE_NAME}:${VERSION} already exists on Docker Hub — skipping rebuild."
               SKIP="true"
             fi
           fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
 
-          echo "Publishing diegosouzapw/omniroute:$VERSION (promote_latest=$PROMOTE, skip=$SKIP)"
+          echo "Publishing ${IMAGE_NAME}:$VERSION (promote_latest=$PROMOTE, skip=$SKIP)"
 
   # #14560: when USE_VPS_RUNNER is on, the amd64 leg can ONLY run on the single
   # `omni-build` self-hosted listener. If that box is offline, GitHub queues the
@@ -145,7 +154,7 @@ jobs:
     needs: prepare
     if: >-
       github.event_name != 'schedule' && needs.prepare.outputs.skip != 'true' && vars.USE_VPS_RUNNER == 'true' && vars.USE_VPS_BUILD_RUNNER == 'true' &&
-      (github.event_name != 'schedule' || github.repository == 'diegosouzapw/OmniRoute')
+      (github.event_name != 'schedule' || !github.event.repository.fork)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -183,7 +192,7 @@ jobs:
       !cancelled() && github.event_name != 'schedule' &&
       needs.prepare.result == 'success' && needs.prepare.outputs.skip != 'true' &&
       (needs.runner-preflight.result == 'success' || needs.runner-preflight.result == 'skipped') &&
-      (github.event_name != 'schedule' || github.repository == 'diegosouzapw/OmniRoute')
+      (github.event_name != 'schedule' || !github.event.repository.fork)
     # amd64: the .113 omni-build pool (31 GB / 32 cores, ONE listener since
     # #12048). Hosted ubuntu-24.04 is ~7 GB and dies ResourceExhausted (#11976).
     # Falls back to hosted when USE_VPS_RUNNER is off. arm64: no ARM box — stay
@@ -219,8 +228,8 @@ jobs:
           - platform: linux/arm64
             arch: arm64
     env:
-      IMAGE_NAME: diegosouzapw/omniroute
-      GHCR_IMAGE_NAME: ghcr.io/diegosouzapw/omniroute
+      IMAGE_NAME: ${{ needs.prepare.outputs.docker_image }}
+      GHCR_IMAGE_NAME: ${{ needs.prepare.outputs.ghcr_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -420,15 +429,15 @@ jobs:
       - build
     if: >-
       github.event_name != 'schedule' && needs.prepare.outputs.skip != 'true' &&
-      (github.event_name != 'schedule' || github.repository == 'diegosouzapw/OmniRoute')
+      (github.event_name != 'schedule' || !github.event.repository.fork)
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       security-events: write
     env:
-      IMAGE_NAME: diegosouzapw/omniroute
-      GHCR_IMAGE_NAME: ghcr.io/diegosouzapw/omniroute
+      IMAGE_NAME: ${{ needs.prepare.outputs.docker_image }}
+      GHCR_IMAGE_NAME: ${{ needs.prepare.outputs.ghcr_image }}
       VERSION: ${{ needs.prepare.outputs.version }}
       PROMOTE_LATEST: ${{ needs.prepare.outputs.promote_latest }}
     steps:
@@ -683,7 +692,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: diegosouzapw/omniroute
+          repository: ${{ env.IMAGE_NAME }}
           short-description: "OmniRoute — Unified AI proxy. Route any LLM through one endpoint."
           readme-filepath: ./README.md
 
@@ -697,7 +706,7 @@ jobs:
     if: >-
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
       vars.USE_VPS_RUNNER == 'true' && vars.USE_VPS_BUILD_RUNNER == 'true' &&
-      (github.event_name != 'schedule' || github.repository == 'diegosouzapw/OmniRoute')
+      (github.event_name != 'schedule' || !github.event.repository.fork)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

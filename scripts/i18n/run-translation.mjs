@@ -349,6 +349,8 @@ async function callChat(messages, { apiUrl, apiKey, model, timeoutMs }, retry = 
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-omniroute-compression": "off",
+        "x-omniroute-no-memory": "true",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({

@@ -14,18 +14,30 @@ export interface ServiceModel {
   [key: string]: unknown;
 }
 
+function parseServiceModels(value: string | undefined): ServiceModel[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function getServiceModels(tool: string): ServiceModel[] {
   const db = getDbInstance();
   const row = db
     .prepare("SELECT value FROM key_value WHERE namespace = ? AND key = ?")
     .get(NAMESPACE, tool) as { value: string } | undefined;
-  if (!row?.value) return [];
-  try {
-    const parsed = JSON.parse(row.value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return parseServiceModels(row?.value);
+}
+
+/** Bulk read for a build-local capability snapshot, without a process-wide cache. */
+export function getAllServiceModels(): ReadonlyMap<string, readonly ServiceModel[]> {
+  const rows = getDbInstance()
+    .prepare("SELECT key, value FROM key_value WHERE namespace = ?")
+    .all(NAMESPACE) as Array<{ key: string; value: string }>;
+  return new Map(rows.map((row) => [row.key, parseServiceModels(row.value)]));
 }
 
 /**

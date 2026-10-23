@@ -16,7 +16,7 @@ import { emit } from "@/lib/events/eventBus";
 import { maybeLogToolCallSpecViolation } from "./toolCallSpecViolationAudit.ts";
 import type { RequestCompletedPayload, RequestFailedPayload } from "@/lib/events/types";
 import { saveCallLog } from "@/lib/usageDb";
-import type { VideoBridgeLogRedactionEntry } from "@/lib/guardrails/videoBridge";
+import type { VideoBridgeLogRedactionEntry } from "../../utils/videoBridgeLogRedaction.ts";
 import { redactVideoTranscriptFieldsForLog } from "@/lib/guardrails/videoBridgeSnapshotRedaction";
 import { FORMATS } from "../../translator/formats.ts";
 import { takeEarlyKeepaliveBytes } from "../../utils/earlyKeepaliveByteBuffer.ts";

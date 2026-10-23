@@ -425,15 +425,22 @@ export function estimateTokens(text: unknown): number {
  * Only a finite positive `context_length` / `capabilities.contextWindow` counts;
  * malformed metadata is ignored rather than treated as a window.
  */
-function getServiceModelContextWindow(provider: string, model: string): number | null {
+function getServiceModelContextWindow(
+  provider: string,
+  model: string,
+  snapshot?: ModelCapabilityResolutionSnapshot | null
+): number | null {
   const canonicalProvider = resolveProviderAlias(provider) ?? provider;
   const prefixes = [...new Set([provider, canonicalProvider])].filter(Boolean);
   const canonicalModel = stripServicePrefix(model, prefixes);
   if (!canonicalModel) return null;
 
-  let entries: ServiceModel[];
+  let entries: readonly ServiceModel[];
   try {
-    entries = getServiceModels(canonicalProvider);
+    entries =
+      snapshot?.serviceModelsByTool !== undefined
+        ? (snapshot.serviceModelsByTool.get(canonicalProvider) ?? [])
+        : getServiceModels(canonicalProvider);
   } catch {
     return null;
   }
@@ -565,7 +572,7 @@ export function resolveTokenLimit(
   // 3. Check the embedded-service synced model list (e.g. 9router) for a
   //    provider/model-specific window before any provider default or heuristic.
   if (model) {
-    const serviceLimit = getServiceModelContextWindow(provider, model);
+    const serviceLimit = getServiceModelContextWindow(provider, model, snapshot);
     if (serviceLimit) return { limit: serviceLimit, specific: true };
   }
 

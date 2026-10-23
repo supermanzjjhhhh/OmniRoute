@@ -11,6 +11,7 @@
 import { listModelCapabilityOverrides } from "@/lib/db/modelCapabilityOverrides";
 import type { ReasoningEffortOverrideValue } from "@/shared/reasoning/reasoningEffortsOverride";
 import { listModelContextOverrides } from "@/lib/db/modelContextOverrides";
+import { getAllServiceModels, type ServiceModel } from "@/lib/db/serviceModels";
 import {
   listModelCompatVisionOverrides,
   type ModelCompatVisionOverrideMap,
@@ -38,6 +39,8 @@ export type NestedReasoningEffortsOverrideMap = ReadonlyMap<
 
 export interface ModelCapabilityResolutionSnapshot {
   readonly synced: CapabilitiesByProvider;
+  /** Embedded service catalogs captured once; missing providers are authoritative misses. */
+  readonly serviceModelsByTool?: ReadonlyMap<string, readonly ServiceModel[]>;
   readonly maxTokenOverrides: NestedOverrideMap;
   readonly maxInputTokenOverrides: NestedOverrideMap;
   readonly reasoningEffortsOverrides: NestedReasoningEffortsOverrideMap;
@@ -113,6 +116,7 @@ export function createModelCapabilityResolutionSnapshot(
 
   return {
     synced,
+    serviceModelsByTool: getAllServiceModels(),
     maxTokenOverrides,
     maxInputTokenOverrides,
     reasoningEffortsOverrides,
