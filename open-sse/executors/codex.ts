@@ -77,7 +77,7 @@ import {
 import { CODEX_ULTRA_ALIAS_MODELS, splitCodexReasoningSuffix } from "./codex/reasoningSuffix.ts";
 import { applyCodexReasoningSelection } from "./codex/reasoningPolicy.ts";
 import { repairMissingCodexToolCallOutputs } from "./codex/toolCallRepair.ts";
-import { recoverCodexReasoningReplayRejection } from "./codex/reasoningReplayRejection.ts";
+import { normalizeCodexReasoningReplayRejection } from "./codex/reasoningReplayRejection.ts";
 import { resolveAppServerConfig } from "./codex/appServerConfig.ts";
 import { getResponsesSubpath } from "./codex/responsesSubpath.ts";
 import { CodexAppServerExecutor } from "./codex-app-server.ts";
@@ -885,10 +885,8 @@ export class CodexExecutor extends BaseExecutor {
     }
 
     if (!isCodexResponsesWebSocketRequired(nextInput.model, nextInput.credentials)) {
-      const replay = await recoverCodexReasoningReplayRejection(
+      const replay = await normalizeCodexReasoningReplayRejection(
         await super.execute(nextInput),
-        nextInput.body,
-        (body) => super.execute({ ...nextInput, body }),
         input.log
       );
       const httpResult = replay.result;
@@ -1397,7 +1395,7 @@ export class CodexExecutor extends BaseExecutor {
 
     normalizeCodexResponsesInput(body);
 
-    sanitizeCodexResponsesInput(body, nativeCodexPassthrough);
+    sanitizeCodexResponsesInput(body, nativeCodexPassthrough, credentials);
     stripOrphanedCodexFunctionCallOutputs(body);
     repairMissingCodexToolCallOutputs(body);
 

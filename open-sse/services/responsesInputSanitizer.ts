@@ -1,4 +1,5 @@
 import { isCodexCompactionWebReplay } from "../executors/codex/compactionReplay.ts";
+import { getResponsesSubpath } from "../executors/codex/responsesSubpath.ts";
 
 function toValidJsonString(value: unknown, fallback = "{}"): string {
   if (typeof value === "string") {
@@ -321,10 +322,39 @@ function isGrokBuildReasoningItem(item: unknown): boolean {
 // are still there.
 export function sanitizeCodexResponsesInput(
   body: Record<string, unknown>,
-  nativeCodexPassthrough: boolean
+  nativeCodexPassthrough: boolean,
+  credentials?: unknown
 ): void {
   if (!Array.isArray(body.input)) return;
-  const input = body.input.filter((item) => !isGrokBuildReasoningItem(item));
+  const context = toRecord(credentials);
+  const settings = toRecord(context?.providerSpecificData);
+  // Omitting an id is verified only for ordinary stateless Codex opaque replay.
+  // Do not apply this recovery policy to shared/provider-specific ids or references.
+  const repairOpaqueIds =
+    body.store !== true &&
+    settings?.openaiStoreEnabled !== true &&
+    !body.previous_response_id &&
+    !body.conversation &&
+    getResponsesSubpath(context?.requestEndpointPath ?? "/responses") === "" &&
+    !body.input.some((item) => toRecord(item)?.type === "item_reference");
+  let input = body.input.filter((item) => !isGrokBuildReasoningItem(item));
+  if (repairOpaqueIds) {
+    input = input.map((item) => {
+      const record = toRecord(item);
+      if (
+        record?.type !== "reasoning" ||
+        typeof record.encrypted_content !== "string" ||
+        record.encrypted_content.length === 0 ||
+        typeof record.id !== "string" ||
+        !record.id.startsWith("rs_") ||
+        !/[^a-zA-Z0-9_-]/.test(record.id)
+      )
+        return item;
+      const next = { ...record };
+      delete next.id;
+      return next;
+    });
+  }
   body.input = sanitizeResponsesInputItems(input, false, {
     dropInternalAssistantMessages: !nativeCodexPassthrough,
     preserveAgentMessages: nativeCodexPassthrough,

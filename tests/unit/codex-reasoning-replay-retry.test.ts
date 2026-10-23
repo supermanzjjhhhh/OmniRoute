@@ -1,10 +1,6 @@
 /**
- * Codex rejects replayed reasoning whose encrypted_content this account cannot decrypt
- * (cross-account / cross-model history, or a combo/account fallback) with HTTP 400. Instead of
- * surfacing that 400 to clients that cannot "resend without the reasoning item", the HTTP
- * executor retries ONCE on the same account with the ciphertext stripped. A repeated rejection
- * still reaches the client as the stable `invalid_encrypted_content` 400, and it never rotates
- * accounts (a different account cannot decrypt the foreign ciphertext either).
+ * A Codex encrypted-state rejection must surface explicitly. A successful retry
+ * without that state is not a successful continuation of the caller's history.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -18,8 +14,6 @@ process.env.DATA_DIR = TEST_DATA_DIR;
 
 const { CodexExecutor, __setCodexWebSocketTransportForTesting } =
   await import("../../open-sse/executors/codex.ts");
-const { stripUndecryptableReasoning } =
-  await import("../../open-sse/executors/codex/reasoningReplayRejection.ts");
 const { checkFallbackError } = await import("../../open-sse/services/accountFallback.ts");
 
 const VERIFY_FAILED =
@@ -83,6 +77,7 @@ async function executeAgainst(
       credentials: { accessToken: "codex-token" },
       log,
     });
+    assert.ok(!(result instanceof Response), "HTTP executor must return a response envelope");
     return { result, calls };
   } finally {
     globalThis.fetch = originalFetch;
@@ -100,52 +95,59 @@ test.after(async () => {
   await cleanupTempDataDir(TEST_DATA_DIR);
 });
 
-test("stripUndecryptableReasoning removes ciphertext, drops empty items, never mutates", () => {
-  const body = requestBody();
-  const { body: stripped, removed } = stripUndecryptableReasoning(body);
-  assert.equal(removed, 2);
-  assert.deepEqual((stripped as { input: unknown[] }).input, [
-    { type: "reasoning", summary: [{ type: "summary_text", text: "keep this summary" }] },
-    { type: "message", role: "user", content: [{ type: "input_text", text: "continue" }] },
-  ]);
-  assert.equal(encryptedItems(body).length, 2, "the caller's body is untouched");
+for (const rejected of [false, true]) {
+  test(`outbound reasoning and tool state survive id repair without a lossy retry (rejected=${rejected})`, async () => {
+    const warnings: unknown[][] = [];
+    const body = { ...requestBody(), store: false };
+    const badId = "rs_6ac9a8dfa5015060ebd94d6e:rs_01a123bbaa1777398671e1931ddbf41f";
+    const items = body.input as Record<string, unknown>[];
+    items[0].id = badId;
+    items.splice(
+      2,
+      0,
+      { type: "function_call", call_id: "call_existing", name: "read_file", arguments: "{}" },
+      { type: "function_call_output", call_id: "call_existing", output: "504" }
+    );
+    const before = structuredClone(body);
+    const { result, calls } = await executeAgainst(
+      rejected ? [replayRejection(), sseOk()] : [sseOk()],
+      body,
+      { warn: (...args: unknown[]) => warnings.push(args) }
+    );
 
-  const plain = { input: [{ type: "message", role: "user", content: "hi" }] };
-  assert.deepEqual(stripUndecryptableReasoning(plain), { body: plain, removed: 0 });
-  assert.deepEqual(stripUndecryptableReasoning(null), { body: null, removed: 0 });
-});
-
-test("retries once on the same account without the ciphertext and returns the success", async () => {
-  const warnings: unknown[][] = [];
-  const body = requestBody();
-  const { result, calls } = await executeAgainst([replayRejection(), sseOk()], body, {
-    warn: (...args: unknown[]) => warnings.push(args),
+    assert.equal(calls.length, 1, "must never resend history with encrypted state removed");
+    assert.equal(result.response.status, rejected ? 400 : 200);
+    const sent = calls[0].body.input as Record<string, unknown>[];
+    const expected = structuredClone(before.input) as Record<string, unknown>[];
+    delete expected[0].id;
+    assert.deepEqual(
+      sent,
+      expected,
+      "assert the final serialized upstream request, not only a helper"
+    );
+    assert.equal(encryptedItems(calls[0].body).length, 2);
+    assert.deepEqual(body, before, "the caller retains the original history and ids");
+    if (rejected) {
+      assert.equal((await result.response.json()).error.code, "invalid_encrypted_content");
+    } else {
+      await result.response.body?.cancel();
+    }
+    const logged = JSON.stringify(warnings);
+    assert.equal(logged.includes("foreign-secret"), false);
+    assert.equal(logged.includes("ciphertext-only"), false);
+    assert.equal(logged.includes("retrying same account without"), false);
   });
+}
 
-  assert.equal(result.response.status, 200);
-  assert.equal(calls.length, 2);
-  assert.equal(encryptedItems(calls[0].body).length, 2, "first attempt keeps the ciphertext");
-  assert.equal(encryptedItems(calls[1].body).length, 0, "retry carries no ciphertext");
-  assert.equal(JSON.stringify(calls[1].body).includes("rs_dropme"), false);
-  assert.ok(
-    (calls[1].body.input as Record<string, unknown>[]).some(
-      (item) => item.type === "message" && item.role === "user"
-    )
-  );
-  assert.equal(encryptedItems(body).length, 2, "the caller's body is untouched");
-  const logged = JSON.stringify(warnings);
-  assert.match(logged, /2 encrypted reasoning item/);
-  assert.equal(logged.includes("foreign-secret"), false, "ciphertext never reaches logs");
-  assert.equal(logged.includes("ciphertext-only"), false, "ciphertext never reaches logs");
-});
-
-test("stops after one retry and relabels a repeated rejection", async () => {
-  const { result, calls } = await executeAgainst([replayRejection(), replayRejection()]);
-  assert.equal(calls.length, 2);
+test("a valid-id encrypted rejection also surfaces instead of silently dropping state", async () => {
+  const body = requestBody();
+  const before = structuredClone(body);
+  const { result, calls } = await executeAgainst([replayRejection(), sseOk()], body);
+  assert.equal(calls.length, 1);
+  assert.equal(encryptedItems(calls[0].body).length, 2);
   assert.equal(result.response.status, 400);
-  const body = await result.response.json();
-  assert.equal(body.error.code, "invalid_encrypted_content");
-  assert.equal(body.error.message.includes("at /"), false);
+  assert.equal((await result.response.json()).error.code, "invalid_encrypted_content");
+  assert.deepEqual(body, before);
 });
 
 test("does not retry when the rejected history carries no encrypted reasoning", async () => {
