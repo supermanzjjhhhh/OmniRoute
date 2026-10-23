@@ -477,12 +477,18 @@ export function analyzeDormantWorkflow(file, yamlText) {
       stillGated.push(`job ${jobId}: needs repository variable vars.${m[1]} (owner flips it)`);
     }
     const repoGuard = /github\.repository\s*==\s*'([^']+)'/.exec(cond);
-    if (repoGuard && /github\.event_name\s*!=\s*'schedule'\s*\|\|/.test(cond)) {
+    const nonForkGuard =
+      /(?:^|&&|\|\||\(|\$\{\{)\s*!\s*github\.event\.repository\.fork(?=\s*(?:$|\)|}}|&&|\|\|))/.test(
+        cond
+      );
+    if ((repoGuard || nonForkGuard) && /github\.event_name\s*!=\s*'schedule'\s*\|\|/.test(cond)) {
       forkCaveats.push(
-        `job ${jobId}: scheduled runs only on ${repoGuard[1]} — dispatch it by hand in a fork rehearsal`
+        `job ${jobId}: scheduled runs only on ${repoGuard?.[1] ?? "non-fork repositories"} — dispatch it by hand in a fork rehearsal`
       );
     } else if (repoGuard) {
       forkCaveats.push(`job ${jobId}: pinned to ${repoGuard[1]} — false in a fork rehearsal`);
+    } else if (nonForkGuard) {
+      forkCaveats.push(`job ${jobId}: disabled in a fork rehearsal`);
     }
     for (const step of job?.steps ?? []) {
       if (typeof step?.run === "string" && /ls-remote[^\n]*--heads[^\n]*develop/.test(step.run)) {

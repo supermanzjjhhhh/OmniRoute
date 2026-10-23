@@ -352,6 +352,41 @@ test("analyzeDormantWorkflow reports what turns on, what stays gated, and fork c
   assert.equal(missing.present, false);
 });
 
+test("analyzeDormantWorkflow reports non-fork metadata guards without a foreign owner", () => {
+  const forwardPort = analyzeDormantWorkflow(
+    "forward-port.yml",
+    FORWARD_PORT.replace(
+      "github.repository == 'diegosouzapw/OmniRoute'",
+      "!github.event.repository.fork"
+    )
+  );
+  assert.ok(forwardPort.forkCaveats.some((line) => /disabled in a fork rehearsal/.test(line)));
+  for (const condition of [
+    "github.event.repository.fork",
+    "!!github.event.repository.fork",
+    "! !github.event.repository.fork",
+    "!github.event.repository.fork == false",
+  ]) {
+    const report = analyzeDormantWorkflow(
+      "forward-port.yml",
+      FORWARD_PORT.replace("github.repository == 'diegosouzapw/OmniRoute'", condition)
+    );
+    assert.deepEqual(report.forkCaveats, [], condition);
+  }
+  const nightly = analyzeDormantWorkflow(
+    "nightly.yml",
+    NIGHTLY.replace(
+      "github.repository == 'diegosouzapw/OmniRoute'",
+      "!github.event.repository.fork"
+    )
+  );
+  assert.ok(
+    nightly.forkCaveats.some((line) =>
+      /scheduled runs only on non-fork repositories.*dispatch it by hand/.test(line)
+    )
+  );
+});
+
 // ── dist-tags ─────────────────────────────────────────────────────────────
 
 test("the real dist-tag resolver keeps nightly/rc off latest and 3.9.x on lts after 4.0 GA", () => {
@@ -493,7 +528,7 @@ test("the real dormant workflows on this base activate as RELEASE_STRATEGY.md pr
     fs.readFileSync(path.join(repoRoot, ".github/workflows", file), "utf8");
   const fp = analyzeDormantWorkflow("forward-port.yml", read("forward-port.yml"));
   assert.ok(fp.triggers.includes("push → stable/v3"));
-  assert.ok(fp.forkCaveats.length > 0, "forward-port is pinned to the canonical repository");
+  assert.ok(fp.forkCaveats.length > 0, "forward-port must remain disabled in a fork rehearsal");
   const stable = analyzeDormantWorkflow("validate-stable-pr.yml", read("validate-stable-pr.yml"));
   assert.ok(stable.triggers.includes("pull_request → stable/v3"));
   const nightly = analyzeDormantWorkflow("nightly-v4-build.yml", read("nightly-v4-build.yml"));

@@ -119,6 +119,8 @@ for (const [condition, findings] of [
   ["github.event_name != 'schedule' || !github.event.repository.fork", 0],
   ["github.event_name != 'schedule' || github.event.repository.fork", 1],
   ["github.event_name != 'schedule' || !!github.event.repository.fork", 1],
+  ["github.event_name != 'schedule' || ! !github.event.repository.fork", 1],
+  ["github.event_name != 'schedule' || !github.event.repository.fork == false", 1],
   ["!github.event.repository.fork", 1],
 ] as const) {
   test(`schedule metadata guard remains fail-closed: ${condition}`, () => {
