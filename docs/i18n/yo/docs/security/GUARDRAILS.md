@@ -5,24 +5,28 @@
 ---
 
 > **Orísun òtítọ́:** `src/lib/guardrails/`
-> **Ìmúdójúìwọ̀n tó ṣẹ̀ṣẹ̀:** 2026-08-29 — v3.8.51 (olùpè ló ń kéde orísun transcript Video Bridge,
-> olupin kò tíì jẹ́rìí rẹ̀ — a ti mú un ṣe kedere gẹ́gẹ́ bí #11661)
+> **Ìgbà tí a ṣe àtúnṣe kẹ́yìn:** 2026-10-17 — v3.8.52 (àfikún [Coverage and limits](#coverage-and-limits):
+> àwọn ọ̀nà àti àwọn ọ̀nà ìdáhùn tí àwọn ìdákọ́ró náà dé ọ̀dọ̀ wọn, àwọn àkọlé ìdènà tí a dapọ̀ (#16412), ipò ìdènà
+> ìgbékalẹ̀ gẹ́gẹ́ bí ààlà dandan (#16413), àti ohun tí ó rí ìdáhùn kan ṣáájú post-call)
 
-Àwọn guardrail ń fipá mú ààbò, ìlànà, àti àwọn ìyípadà àkóónú ṣiṣẹ́ ní ààlà
-láàárín OmniRoute àti àwọn olupèsè upstream. Guardrail kọ̀ọ̀kan lè ṣàyẹ̀wò (àti
-ní àṣàyàn, kọ̀, yí padà, tàbí fi àlàyé kún) àwọn payload ìbéèrè (`preCall`) àti
-àwọn ìdáhùn upstream (`postCall`).
+Àwọn olùṣọ́ ààbò (guardrails) ń fi ipá mú ààbò, ètò ìṣakoso, àti àwọn àtúnṣe àkóónú múṣẹ ní ààlà
+láàárín OmniRoute àti àwọn olùpèsè tó wà lókè (upstream providers). Ọ̀kọ̀ọ̀kan olùṣọ́ ààbò lè yẹ̀wò (àti
+fún ìgbà díẹ̀ kọ̀, ṣe àtúnṣe, tàbí sọ̀rọ̀ lé lórí) àwọn ẹrù iṣẹ́ ìbéèrè (`preCall`) àti àwọn ìdáhùn olùpèsè tó wà lókè (`postCall`).
 
-Ètò náà jẹ́ **fail-open**: bí guardrail kan bá dá àṣìṣe sílẹ̀ nígbà tó ń ṣiṣẹ́, registry
-yóò ṣe àkọsílẹ̀ àṣìṣe náà, yóò sì tẹ̀síwájú sí guardrail tó kàn dípò kí
-ìbéèrè náà kùnà. Dídènà jẹ́ ìpinnu tí a ṣe ní kedere (`block: true`), kì í ṣe ìṣẹ̀lẹ̀ àìròtẹ́lẹ̀.
+Ètò náà jẹ́ **fail-open**: tí olùṣọ́ ààbò bá ju àṣìṣe sí taara nígbà tí ó ń ṣiṣẹ́, ilé ìkópamọ́ (registry)
+náà yóò gba àṣìṣe náà sílẹ̀ yóò sì tẹ̀ síwájú pẹ̀lú olùṣọ́ ààbò tó kàn dípò tí yóò jẹ́ kí ìbéèrè náà kùnà. Dídènà jẹ́ ìpinnu kedere (`block: true`), kì í ṣe àìmọ̀kan rárá.
+Àìtọ́ kan ṣoṣo ni ìbéèrè tí a fagilé: nígbà tí `signal` ẹni tí ó ń pè náà bá jẹ́ títẹ̀jẹ́,
+olùṣọ́ ààbò tó ń ju àṣìṣe sí taara kọ̀ ọ̀ sí ṣiṣẹ́ ìdákọ́ró náà dípò kí a fò ó kọjá.
 
-## Àwọn Ìdábòbò Tí A Kọ Sínú Ètò
+Àwọn ìdákọ́ró náà **kì í** ṣe lórí gbogbo ọ̀nà tàbí gbogbo ìdáhùn. Ka
+[Coverage and limits](#coverage-and-limits) kí o tó gbẹ́kẹ̀ lé olùṣọ́ ààbò gẹ́gẹ́ bí ohun ìṣàkóso ààbò.
 
-Registry náà máa ń kojú ìdábòbò mẹ́fà láìfọwọ́ṣe ní ìtòlẹ́sẹẹsẹ ààyò nígbà import
+## Àwọn Olùṣọ́ Ààbò Tó Wà Nínú Ẹ̀rọ (Built-in Guardrails)
+
+Ilé ìkópamọ́ náà (registry) ń kó àwọn olùṣọ́ ààbò mẹ́fà wọlé fúnra rẹ̀ ní ìtòlésẹẹsẹ pàtàkì nígbà tí a bá ń gbé wọlé
 (wo `registry.ts` → `registerDefaultGuardrails()`):
 
-| Ààyò | Orúkọ               | Ìpele          | Fáìlì                 |
+| Ìpò  | Orúkọ               | Ìpele          | Fáìlì                 |
 | ---- | ------------------- | -------------- | --------------------- |
 | `5`  | `vision-bridge`     | `preCall`      | `visionBridge.ts`     |
 | `6`  | `audio-bridge`      | `preCall`      | `audioBridge.ts`      |
@@ -31,617 +35,263 @@ Registry náà máa ń kojú ìdábòbò mẹ́fà láìfọwọ́ṣe ní ìtò
 | `20` | `prompt-injection`  | `preCall`      | `promptInjection.ts`  |
 | `95` | `credential-masker` | `pre` + `post` | `credentialMasker.ts` |
 
-Àwọn nọ́ńbà ààyò tí ó kéré máa ń ṣiṣẹ́ **kọ́kọ́**.
+Àwọn nọ́mbà ìpò pàtàkì tó kéré jù lọ ni yóò máa ṣiṣẹ́ **kọ́kọ́**.
 
-### Afárá Ìran (`visionBridge.ts`) — Afárá Modality PR-1
+### Afárá Ìríànwọ̀ (Vision Bridge) (`visionBridge.ts`) — Afárá Ìpò Òfin PR-1
 
-Ó máa ń dá àwọn ìbéèrè tí ó ní àwòrán tí a darí sí **àwọn model tí kò ní agbára ìran** dúró, ó sì máa ń yí gbogbo ìbéèrè náà padà sí model tí ó ní agbára ìran tàbí kí ó fi àwọn àpèjúwe ọ̀rọ̀ tí model ìran tí a lè ṣètò ṣe rọ́pò àwọn apá àwòrán náà kí a tó ṣe ìpè upstream. Èyí ń jẹ́ kí àwọn provider tí ó ṣiṣẹ́ pẹ̀lú ọ̀rọ̀ nìkan lè bójú tó payload multimodal láìsí ìṣòro.
+Àwọn àpẹẹrẹ ìpìlẹ̀ GLM 5.3 àti `glm-5.3-{low,high,max}` ní àfikún ìsọfúnni `supportsVision:false`
+nínú ìkópamọ́/àpẹẹrẹ. Àwọn àpẹẹrẹ GLM 5.3 Flash wà gẹ́gẹ́ bí àwọn àpẹẹrẹ ìríànwọ̀ àbínibí. Ọ̀nà `/v1/messages` ti Claude Code wọ inú
+ẹ̀wọ̀n ìṣọ́ ààbò pre-call `handleChat` tí a pín **ṣáájú** ìtumọ̀ Claude-sí-OpenAI;
+àwọn àwòrán èsè irinṣẹ́ `Read` tí ó wà nínú gbọ́dọ̀ ní àpèjúwe tàbí kí a tọ́ju wọn
+ṣáájú kí ìtumọ̀ náà tó gbé wọn sínú àkóónú `image_url` ti OpenAI (#17069).
 
-Ìṣàn iṣẹ́:
+Ó ń dènà àwọn ìbéèrè tó ní àwòrán tí a kọ sí **àwọn àpẹẹrẹ tí kò ní ìríànwọ̀ (non-vision models)** ó sì ń tún ọ̀nà gbogbo ìbéèrè náà ko sí àpẹẹrẹ tó lè ríran tàbí kí ó rọ́pò àwọn apá àwòrán pẹ̀lú àpèjúwe ọ̀rọ̀ tí àpẹẹrẹ ìríànwọ̀ tí a lè túnṣe gbé jáde ṣáájú ìpe olùpèsè tó wà lókè. Èyí jẹ́ kí àwọn olùpèsè ọ̀rọ̀ nìkan lè mú àwọn ẹrù iṣẹ́ oní-onírú-orísun (multimodal payloads) lò láìsí ìṣòro.
 
-1. Foju kọ ọ́ bí model àfojúsùn bá ti ń ṣe àtìlẹ́yìn fún ìran (àyàfi tí ó bá wà nínú àkójọ afárá-àfipámúni `isVisionBridgeForcedModel`).
+Ọ̀nà ìṣàn (Flow):
+
+1. Fò ó kọjá tí àpẹẹrẹ àfojúsùn bá ti ní agbára ìríànwọ̀ tẹ́lẹ̀ (àfi tí ó bá hàn nínú àkójọ afárá ìfipámuṣẹ `isVisionBridgeForcedModel`).
 2. Yọ àwọn apá àwòrán jáde nípasẹ̀ `extractImageParts(messages)`
-   (`visionBridgeHelpers.ts`), èyí tí ó fi iṣẹ́ lé **olùṣàwárí media àpapọ̀**
-   `detectMediaParts()` nínú `open-sse/utils/mediaParts.ts` lọ́wọ́ — orísun òtítọ́ kan ṣoṣo tí a pín pẹ̀lú combo compatibility filter.
-   Yíyọ jáde náà jẹ́ àkójọ-ìfàyègbà fún àwọn apá ipele-òkè tí ìrísí wọn jẹ́ èyí tí
-   `replaceImageParts` lè so padà (àdéhùn extract↔replace): OpenAI
-   `image_url`, Anthropic base64 `source.type:"base64"`, Anthropic URL
-   `source.type:"url"`, àti Responses API `input_image`. Àwọn ohun tí a rí nínú ohun mìíràn àti àwọn ìrísí atọ́ka-nìkan jẹ́ ohun èlò combo-filter, a kì í sì í yọ wọ́n jáde.
-   Foju kọ ọ́ bí a kò bá rí èyíkéyìí.
-3. Yanjú àtúnṣe runtime nípasẹ̀ `resolveVisionBridgeRuntimeSettings()`
-   (`src/shared/constants/modalityBridgeDefaults.ts`): àwọn key àtúnṣe `modalityBridge*`
-   tuntun ló ní ipò àkọ́kọ́; àwọn key `visionBridge*` àtijọ́ ṣì jẹ́ **fallback fún cycle kan**
-   (àkókò rollback). Foju kọ ọ́ kí ìrìnàjò media kankan tó bẹ̀rẹ̀ nígbà tí a bá ti pa afárá náà.
-4. Olùyan mode (`modalityBridgeVisionMode`, wo tábìlì ìsàlẹ̀) pinnu
-   reroute tàbí describe. Reroute máa dá `modifiedPayload` padà pẹ̀lú `model`
-   nìkan tí a pààrọ̀, àti meta `{ rerouted, fromModel, toModel, imagesKept }`.
-5. Ọ̀nà describe: dín àwọn àwòrán sí `maxImages`, ṣàkójọpọ̀ prompt tó mọ iṣẹ́ náà,
-   wo cache describe, pe model ìran **lẹ́ẹ̀kan náà**
-   (`Promise.allSettled`), kí o sì fi àwọn apá ọ̀rọ̀ `[Image N]: <description>` sí
-   ipò wọn. Describe tí ó kùnà máa fúnni ní `null`, a ó sì **tọ́jú** apá àwòrán ìpilẹ̀ṣẹ̀
-   (#4012) — àyàfi lórí ọ̀nà combo describe nígbà tí gbogbo describe bá kùnà,
-   níbi tí upstream tí a ti fìdí rẹ̀ múlẹ̀ pé kò ní agbára ìran yóò ti gba stub
-   `(kò sí — kò sí provider tó ní agbára ìran tí a sopọ̀)` dípò rẹ̀ (#8430).
+   (`visionBridgeHelpers.ts`), èyí tí ó fi ìgbẹ́kẹ̀lé lé **olùwárí media ìṣọ̀kan** `detectMediaParts()` nínú `open-sse/utils/mediaParts.ts` — orísun òtítọ́ kan ṣoṣo tí a pín pẹ̀lú àlẹ̀mọ́ ìbáramu ìdàpọ̀.
+   Ìyọkuro ni a fún ní àṣẹ sí àwọn àpẹẹrẹ tí `replaceImageParts` le tun so pọ̀
+   (àdéhùn ìyọkuro↔rọ́pò): OpenAI `image_url`, Anthropic base64
+   `source.type:"base64"`, Anthropic URL `source.type:"url"`, àti Responses
+   API `input_image`. Àwọn àwòrán tí ó bá ara wọn mu tí ó wà nínú `tool_result.content` ti Claude Code àti àwọn èsè irinṣẹ́ Responses ni a tún yọ jáde
+   àti rọ́pò ní àwọn ọ̀nà ìpilẹ̀ṣẹ̀ wọn; àwọn àpẹẹrẹ atọ́ka nìkan jẹ́ ohun elo àlẹ̀mọ́ ìdàpọ̀
+   a kì í sì í yọ wọn jáde.
+   Fò ó kọjá tí kò bá sí èyíkéyìí tí a rí.
+3. Yanjú ẹ̀rọ ìṣiṣẹ́ àti ìṣètò nípasẹ̀ `resolveVisionBridgeRuntimeSettings()`
+   (`src/shared/constants/modalityBridgeDefaults.ts`): àwọn bọ́tìnnì ìṣètò `modalityBridge*` tuntun ni yóò borí; àwọn bọ́tìnnì atijọ́ `visionBridge*` wà gẹ́gẹ́ bí **ẹ̀yìn-ọ̀kọ̀ ìyipada ẹ̀ka-ìgbà kan** (rollback window). Fò ó kọjá ṣáájú ìrìn àjò media èyíkéyìí nígbà tí a bá pa afárá náà tì.
+4. Olùṣàkóso ipò (`modalityBridgeVisionMode`, wo tábìlì tó wà ní ìsàlẹ̀) pinnu
+   títún ọ̀nà ko tàbí àpèjúwe. Títún ọ̀nà ko pada da `modifiedPayload` pẹ̀lú `model`
+   nìkan tí a yípadà, pẹ̀lú meta `{ rerouted, fromModel, toModel, imagesKept }`.
+5. Ọ̀nà àpèjúwe: fi sínú àlà àwọn àwòrán ní `maxImages`, kọ àkópọ̀ ìbéèrè tí ó mọ̀ nípa iṣẹ́ náà,
+   ṣàyẹ̀wò ibi ìkópamọ́ àpèjúwe, pe àpẹẹrẹ ìríànwọ̀ **ní ìjọ̀kan**
+   (`Promise.allSettled`), kí o sì fi àwọn apá ọ̀rọ̀ `[Image N]: <description>` sínú
+   ipò wọn. Àpèjúwe tí ó kùnà yóò mú `null` jáde: àwòrán tútù ni a ń tọ́ju fún
+   àwọn àfojúsùn tí a kò mọ̀/tí ó lè ríran (#4012), ṣùgbọ́n **àfojúsùn tààrà tí ó jẹ́ ọ̀rọ̀ nìkan tí a fìdí rẹ̀ múlẹ̀** tàbí ìdàpọ̀ tí kò ní ìríànwọ̀ rárá gba ìrànwọ̀ ọ̀rọ̀
+   `(unavailable — no vision-capable provider connected)` kedere fún
+   àwòrán kọ̀ọ̀kan tí kò ní àpèjúwe, pẹ̀lú àwọn ìkùnà apá kan àti àwọn àwòrán tí ó kọjá àlà ìpe àpèjúwe (#17069). Àpẹẹrẹ ìpadàbọ̀ àpèjúwe ìdàpọ̀ tí gbogbo rẹ̀ kùnà tí ó wà tẹ́lẹ̀ wà ní ipò rẹ̀ (#8430).
 6. Dá `modifiedPayload` + meta (`imagesProcessed`, `descriptions`,
-   `processingTimeMs`, `visionModel`) padà.
+   `processingTimeMs`, `visionModel`) pada.
 
-#### Olùyan mode (`modalityBridgeVisionMode`)
+#### Olùṣàkóso ipò (`modalityBridgeVisionMode`)
 
-| Mode       | Àìyípadà | Ìhùwàsí                                                                                                                                                                                                                                                                       |
-| ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auto`     | ✔        | Heuristic àtijọ́, láìyípadà (#6640/#7204): àwọn model tí kì í ṣe combo/`auto/` máa ń reroute sí model ìran tó dára jù lọ, àyàfi tí model ìpilẹ̀ṣẹ̀ bá ti ní credential tó ṣeé lò (nígbà náà, ó máa ń describe); àwọn àfojúsùn combo máa ń describe ní gbogbo ìgbà.               |
-| `describe` |          | Ṣe describe ní gbogbo ìgbà — a fo gbogbo block reroute; model tí olùlò yàn ló máa ń dáhùn ní gbogbo ìgbà.                                                                                                                                                                     |
-| `reroute`  |          | Fi reroute lélẹ̀: a kọjá guard tó ń pa model tó ní credential mọ́. Guard credential fún **àfojúsùn** reroute ṣì ń ṣiṣẹ́ — nígbà tí kò bá sí àfojúsùn ìran tó ṣeé lò, ìbéèrè náà yóò tẹ̀ síwájú sí describe kí àwọn àwòrán raw má bàa dé backend tó ń ṣiṣẹ́ pẹ̀lú ọ̀rọ̀ nìkan (#8430). |
+| Mode       | Default | Behavior                                                                                                                                                                                                                                                                                        |
+| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`     | ✔       | Ìlànà ìṣirò àtijọ́, tí kò yípadà (#6640/#7204): àwọn àwoṣẹ́ tí kì í ṣe combo / `auto/` máa ń tún kópa sí àwoṣẹ́ ríṣìn tó dára jù lọ àfi tí àwoṣẹ́ àkọ́kọ́ bá ti ní ẹ̀rí tó wúlò (nígbà náà a ó ṣàpèjúwe); àwọn àfojúsùn combo máa ń ṣe àpèjúwe nígbà gbogbo.                                           |
+| `describe` |         | Ṣe àpèjúwe nígbà gbogbo — a ó fò ká àpótí ìtúnkópa pátápátá; àwoṣẹ́ tí olùlò yan ni yóò sì dáhùn nígbà gbogbo.                                                                                                                                                                                   |
+| `reroute`  |         | Fi agbára mú ìtúnkópa: a ó kọjá ẹ̀ṣọ́ àwoṣẹ́ tó ní ẹ̀rí (keep-credentialed-model guard). Ẹ̀ṣọ́ ẹ̀rí ti **àfojúsùn** ìtúnkópa ṣì wulo — nígbà tí kò sí àfojúsùn ríṣìn tó wúlò, afárá náà máa ń dí ọ̀nà pẹ̀lú àṣìṣe tó ṣe kedere dípò kí ó ṣe àpèjúwe tàbí rán àwọn àwòrán àìṣètò sí àfojúsùn ìkọ̀wé nìkan. |
 
-Àwọn mode tí a fi ipá mú máa ń dá iṣẹ́ dúró **ṣáájú** kí heuristic auto tó ṣiṣẹ́; ìhùwàsí `auto`
-jẹ́ ọ̀kan náà pátápátá ní ipele byte pẹ̀lú ìdábòbò tó wà ṣáájú PR-1.
+Àwọn ọ̀nà tí a fi agbára mú máa ń gba ọ̀nà kúkúrú **ṣáájú** kí ìlànà ìṣirò auto tó bẹ̀rẹ̀; ìhùwàsí `auto` jẹ́ ìbejì pátápátá sí àṣà ẹ̀ṣọ́ ṣáájú PR-1.
 
-#### Ààlà API-key (`visionBridgeKeyScope.ts`)
+#### Kọ́kọ́rọ́ API (`visionBridgeKeyScope.ts`)
 
-Nígbà tí API key olùpè bá dín `allowedConnections`, àwọn pool quota
-(`allowedQuotas`) tàbí àwọn model (`allowedModels` / `blockedModels` /
-`modelAccessMode: "restricted"` / `disableNonPublicModels`) kù, afárá náà yóò
-yan àwọn model reroute àti describe tí key náà lè lò nìkan, lórí àwọn connection tí key náà lè lò.
-Ìpè describe náà yóò sì máa gba OmniRoute self-loop kọjá ní gbogbo ìgbà pẹ̀lú
-header `x-omniroute-self-loop-key-id`, kí ìbéèrè chat tó ń gbà á lè tún fi
-policy connection àti model key náà lélẹ̀. `enforceApiKeyPolicy()`
-máa ń bọ̀wọ̀ fún header yẹn pẹ̀lú self-loop bearer nìkan, nítorí náà ó lè
-dín ààyè wọlé kù nìkan, a ó sì kọ id tí kò bá yanjú sí ohunkóhun.
+Nígbà tí kọ́kọ́rọ́ API olùpè náà bá ní àwọn ìhamọ̀ lórí `allowedConnections`, àwọn adágún ìpín (`allowedQuotas`) tàbí àwọn àwoṣẹ́ (`allowedModels` / `blockedModels` / `modelAccessMode: "restricted"` / `disableNonPublicModels`), afárá náà máa ń yan àwọn àwoṣẹ́ ìtúnkópa àti àpèjúwe nìkan tí kọ́kọ́rọ́ náà le lò, lórí àwọn ìsopọ̀ tí kọ́kọ́rọ́ náà le lò. Ìpè àpèjúwe náà á wá kọjá nípasẹ̀ OmniRoute self-loop pẹ̀lú àkọlé `x-omniroute-self-loop-key-id`, nítorí náà ìbéèrè ìfọ̀rọ̀wérọ̀ tí ó gba ọjà náà tún máa ń mú ìlànà ìsopọ̀ àti àwoṣẹ́ ti kọ́kọ́rọ́ náà ṣẹ lẹ́ẹ̀kan sí i. `enforceApiKeyPolicy()` máa ń bọ̀wọ̀ fún àkọlé yẹn pẹ̀lú self-loop bearer nìkan, nítorí náà ó lè dín àǹfààní wọlé kù nìkan ni, kọ́kọ́rọ́ ìdánimọ̀ tí kò yanjú ni a ó kọ̀ sílẹ̀.
 
-Bí kò bá sí model ìran tí a fàyè gba fún key náà, ọ̀nà describe yóò yà sí ẹ̀gbẹ́ kan,
-ìbéèrè náà yóò sì kọjá láìyípadà, èyí tí ó jẹ́ ìhùwàsí fail-open kan náà bí ìdábòbò
-tí a pa (meta `{ skipped: true, reason: "no_permitted_vision_model" }`).
-Àwọn ìbéèrè tí kò ní key, àti àwọn key tí kò ní àwọn ìhámọ́ wọ̀nyí, máa ń hùwà gẹ́gẹ́ bí
-tẹ́lẹ̀ gan-an.
+Tí kò bá sí àwoṣẹ́ ríṣìn tí a yọǹda fún kọ́kọ́rọ́ náà, **àfojúsùn ìkọ̀wé nìkan tí a fìdí rẹ̀ múlẹ̀** máa ń kọ̀ ìbéèrè àwòrán náà ní agbègbè pẹ̀lú HTTP 400 tó ṣe kedere dípò kí ó gbé àwọn bátì àwòrán lọ sí òkè tí kò ní agbára (#17069). Fún àwọn àfojúsùn tí agbára ríṣìn wọn kò mọ̀ tàbí tí ó jẹ́ àpilẹ̀ṣẹ̀, ọ̀nà àpèjúwe náà máa ń mú ìhùwàsí rẹ̀ tí ó kọjá tí kò ní ilẹ̀kùn tí ó mọ̀ mọ́ra (meta `{ skipped: true, reason: "no_permitted_vision_model" }`). Àwọn ìbéèrè tí kò ní kọ́kọ́rọ́, àti àwọn kọ́kọ́rọ́ tí kò ní àwọn ìhamọ̀ wọ̀nyí, máa ń hùwà gẹ́gẹ́ bí tẹ́lẹ̀ rí.
 
-#### Prompt describe tó mọ iṣẹ́ náà (`modalityBridgeVisionTaskAware`)
+#### Ìgbésẹ̀ àpèjúwe tí ó mọṣẹ́ nípa iṣẹ́ (`modalityBridgeVisionTaskAware`)
 
-Àìyípadà jẹ́ **true**. `composeVisionPrompt()` (`visionBridgeHelpers.ts`) máa ń fi
-ọ̀rọ̀ inú **ìfiránṣẹ́ olumulo tó kẹ́yìn** (tí a gé kúrú sí àmì-ọ̀rọ̀ 500) kún
-ìbéèrè àpèjúwe ìpìlẹ̀, láti darí àpèjúwe náà sí ohun tí olumulo béèrè ní
-pàtó (àpẹẹrẹ codex-vision-proxy), ó sì ń sọ fún vision model náà láti ṣàkọsílẹ̀
-ọ̀rọ̀ tí a lè rí. Nígbà tí àsìá náà bá wà ní pípà — tàbí tí kò bá sí ọ̀rọ̀
-olumulo — a máa lo ìbéèrè ìpìlẹ̀ náà láìyípadà.
+Àpilẹ̀ṣẹ̀ **true**. `composeVisionPrompt()` (`visionBridgeHelpers.ts`) máa ń fi ọ̀rọ̀ **ìránṣẹ́ olùlò tó kẹ́yìn** (tí a gé sí àwọn lẹ́tà 500) kún ìgbésẹ̀ àpèjúwe ìpìlẹ̀, ó máa ń tọ́ àpèjúwe náà sí ohun tí olùlò béèrè gangan (àpẹẹrẹ codex-vision-proxy) ó sì ń béèrè lọ́wọ́ àwoṣẹ́ ríṣìn láti kọ ọ̀rọ̀ tí ó hàn. Pẹ̀lú àmì ìdánimọ̀ tí ó pa — tàbí tí kò sí ọ̀rọ̀ olùlò — a ó lò ìgbésẹ̀ ìpìlẹ̀ náà láìyípadà.
 
-Ìbéèrè tó bá OpenAI mu ti describe self-loop fúnra rẹ̀ (`callVisionModelSingle()`
-nínú `visionBridgeHelpers.ts`) máa ń béèrè `image_url.detail: "high"` ní gbogbo
-ìgbà — láìsí àdéhùn kankan, fún gbogbo olùpè/olùpèpè, kò sì dá lórí àmì kankan
-láti ọ̀dọ̀ client. Yíyan ìpele àlàyé kékeré máa ń dín ìpéye OCR kù fún iṣẹ́
-ìkọ̀wé-ọ̀rọ̀ tí ìbéèrè yìí ń béèrè gan-an, nítorí náà describe call fúnra rẹ̀
-máa ń béèrè àlàyé gíga ní gbogbo ìgbà láìka ìpele àlàyé tí ìbéèrè àkọ́kọ́ tó
-wọlé lò sí. Èyí kan body ìbéèrè describe inú ètò nìkan; kò yí bí OmniRoute ṣe
-ń fi `image_url.detail` ti olùpèpè ránṣẹ́ síwájú lórí ìbéèrè àkọ́kọ́ padà —
-a máa ń lo àìyípadà yẹn lọ́tọ̀, àti fún àwọn OpenCode client tí a ṣàwárí nìkan,
-nínú `defaultImageDetail()` (`open-sse/handlers/chatCore/upstreamBody.ts`).
-Ẹ̀ka Anthropic wire-format ti describe self-loop kò ní field `detail`, bẹ́ẹ̀ ni
-àwọn àìyípadà méjèèjì kò kan án.
+Ìbéèrè tí ó ní ìbámu pẹ̀lú OpenAI ti self-loop àpèjúwe náà (`callVisionModelSingle()` nínú `visionBridgeHelpers.ts`) máa ń béèrè `image_url.detail: "high"` nígbà gbogbo — láìní àdéhùn kankan, fún olùpè/olùpèsè kọ̀ọ̀kan, tí kò sì dúró lórí àmì oníbàárà kankan. Ìwọ̀n àlàyé rakò máa dín péépéeṣẹ́ OCR kù fún iṣẹ́ ìkọ̀wé-sílẹ̀ ọ̀rọ̀ gangan tí ìgbésẹ̀ yìí béèrè fún, nítorí náà ìpè àpèjúwe fúnra rẹ̀ máa ń béèrè àlàyé gíga nígbà gbogbo láìka ìwọ̀n àlàyé tí ìbéèrè àkọ́kọ́ wọlé lò sí. Èyí kan ara ìbéèrè ìpèsè àpèjúwe inú nìkan; kò yí ọ̀nà tí OmniRoute fi ń gbé `image_url.detail` olùpè fúnra rẹ̀ jáde lórí àkọ́kọ́ ìbéèrè — àpilẹ̀ṣẹ̀ yẹn ni a ń lò sọ́tọ̀, fún àwọn oníbàárà OpenCode tí a mọ̀ pẹ̀lú nìkan, nínú `defaultImageDetail()` (`open-sse/handlers/chatCore/upstreamBody.ts`). Ẹka ọ̀nà Anthropic wire-format ti describe self-loop kò ní ààyè `detail` kankan kò sì ní ipa kankan láti ọ̀dọ̀ àpilẹ̀ṣẹ̀ méjèèjì wá.
 
-#### Ààlà àbájáde describe (`modalityBridgeVisionMaxChars`)
+#### Ìwọ̀n òpin àpèjúwe (`modalityBridgeVisionMaxChars`)
 
-| Kọ́kọ́rọ́                         | Àìyípadà | Àárín              |
-| ------------------------------ | -------- | ------------------ |
-| `modalityBridgeVisionMaxChars` | `0`      | `0` tàbí 100–50000 |
+| Kọ́kọ́rọ́                         | Àpilẹ̀ṣẹ̀ | Ìwọ̀n               |
+| ------------------------------ | ------- | ------------------ |
+| `modalityBridgeVisionMaxChars` | `0`     | `0` tàbí 100–50000 |
 
-`0` (àìyípadà) túmọ̀ sí **kò sí ààlà** — àpèjúwe tí `callVisionModel()` dá
-padà ni a máa ń fi kọjá láìyípadà, láti pa ìhùwàsí tó ti wà mọ́. Iye èyíkéyìí
-láàárín 100–50000 máa ń gé àpèjúwe náà kúrú pẹ̀lú àmì ìparí `…` kí a tó fi í
-ṣọ̀kan padà gẹ́gẹ́ bí `[Image N]: <description>`
-(`VisionBridgeGuardrail.preCall()` nínú `src/lib/guardrails/visionBridge.ts`).
-Gbé e ga fún àwọn iṣẹ́ OCR tó nílò àlàyé púpọ̀, níbi tí downstream model ti
-nílò gbogbo àkọsílẹ̀ náà; sọ ọ́ kalẹ̀ láti fi ààlà sí lílo token lórí àwọn
-vision model tó máa ń sọ̀rọ̀ púpọ̀. Field dashboard náà wà nínú panel Advanced
-lórí tab Vision (`modality-bridge-max-chars` nínú
-`ModalityBridgeVisionTab.tsx`), ó sì máa ń gbé iye èyíkéyìí láàárín 1 àti 99
-sókè sí ìpele ìsàlẹ̀ 100, nígbà tó ń fi `0` tí a sọ ní gbangba sílẹ̀ láìfọwọ́kàn
-án — `0` jẹ́ iye Zod tó bófin mu fúnra rẹ̀
-(`z.union([z.literal(0), z.number().int().min(100).max(50000)])`), kì í ṣe
-àìyípadà "a kò ṣètò" lásán.
+`0` (àpilẹ̀ṣẹ̀) túmọ̀ sí **kò sí òpin** — àpèjúwe tí `callVisionModel()` dá padà ni a gbé kọjá láìṣe àtúnṣe, nípa títójú ìhùwàsí tó wà tẹ́lẹ̀. Ìwọ̀n èyíkéyìí tó wà láàárín 100 sí 50000 máa ń gé àpèjúwe náà kúrò pẹ̀lú àfikún `…` ní ìparí ṣáájú kí a tó tún fi kún padà gẹ́gẹ́ bí `[Image N]: <description>` (`VisionBridgeGuardrail.preCall()` nínú `src/lib/guardrails/visionBridge.ts`). Gbé èyí ga fún àwọn iṣẹ́ OCR tó ní àlàyé púpọ̀ níbi tí àwoṣẹ́ ìsàlẹ̀ nílò ìkọ̀wé-sílẹ̀ kíkún; dín ún kù láti fi dí ìwọ̀n àmì lórí àwọn àwoṣẹ́ ríṣìn tí ó ń sọ̀rọ̀ púpọ̀. Bọ́tìnnì ojú-ìwé ìṣàkóso wà lórí àpótí Àwọn Ìlọsíwájú ti tàbìlì Ríṣìn (`modality-bridge-max-chars` nínú `ModalityBridgeVisionTab.tsx`) ó sì máa ń mú èyíkéyìí iye tí ó wà láàárín 1 sí 99 sókè sí ìpele 100 nígbà tí ó fi `0` tí ó hàn gbangba sílẹ̀ láìṣeéṣe — `0` jẹ́ iye Zod tó wúlò fúnra rẹ̀ (`z.union([z.literal(0), z.number().int().min(100).max(50000)])`), kì í ṣe pé ó kàn jẹ́ àpilẹ̀ṣẹ̀ "àìṣètò" pakà.
 
-#### Cache describe (`modalityBridge/bridgeCache.ts`)
+#### Àpamọ́ àpèjúwe (`modalityBridge/bridgeCache.ts`)
 
-Cache LRU + TTL inú-memory fún àwọn àbájáde describe, tí gbogbo process ń lò
-papọ̀. Kọ́kọ́rọ́ = `sha256(imageRef + composedPrompt + configuredBridgeModel)`
-pẹ̀lú length-prefix framing (kò sí ìkọlù láàárín ààlà field). Apá model náà ni
-bridge model tí a **ṣètò**, kì í ṣe model tó dáhùn gan-an —
-`callVisionModel` lè lo fallback nínú, àti pé lílo kọ́kọ́rọ́ ọ̀tọ̀ fún
-ìgbìyànjú kọ̀ọ̀kan yóò pín cache náà sí wẹ́wẹ́. A kì í fi describe tó kùnà sínú
-cache láé. Àwọn ètò:
+Àpamọ́ inú ìrántí LRU + TTL fún àwọn àbájáde àpèjúwe, tí a pín kárí gbogbo ilana náà. Kọ́kọ́rọ́ = `sha256(imageRef + composedPrompt + configuredBridgeModel)` pẹ̀lú ìlànà ìpínlẹ̀ gígùn (kò sí ìkọlù àlà ààyè pátápátá). Ẹka àwoṣẹ́ náà ni àwoṣẹ́ afárá tí a **ṣètò**, kì í ṣe àwoṣẹ́ tí ó dáhùn gan-an — `callVisionModel` le ṣe ìpadà sẹ́yìn ní inú, dídásílẹ̀ kọ́kọ́rọ́ fún ìgbìyànjú kọ̀ọ̀kan yóò pín àpamọ́ náà sí wẹ́wẹ́. Àwọn àpèjúwe tí ó kùnà kò ní jẹ́ kí a tọ́jú wọn sí àpamọ́ láé. Àwọn ètò:
 
-| Kọ́kọ́rọ́                          | Àìyípadà | Àárín   |
-| ------------------------------- | -------- | ------- |
-| `modalityBridgeCacheEnabled`    | `true`   | —       |
-| `modalityBridgeCacheTtlMinutes` | `60`     | 1–1440  |
-| `modalityBridgeCacheMaxEntries` | `200`    | 10–5000 |
+| Kọ́kọ́rọ́                          | Àpilẹ̀ṣẹ̀ | Ìwọ̀n    |
+| ------------------------------- | ------- | ------- |
+| `modalityBridgeCacheEnabled`    | `true`  | —       |
+| `modalityBridgeCacheTtlMinutes` | `60`    | 1–1440  |
+| `modalityBridgeCacheMaxEntries` | `200`   | 10–5000 |
 
-#### Ṣíṣe remote image ní ìwọ̀ntúnwọ̀nsì (self-loop describe/base64 fetch)
+#### Ìṣètò àwòrán jíjìn déédéé (self-loop describe/base64 fetch)
 
-Nígbà tí bridge bá fetch **remote** image fúnra rẹ̀ — Anthropic describe
-self-call àti ìyípadà base64 claude-wire-format
-(`ensureBase64ImagesForClaudeWire`), tí àwọn méjèèjì ń lo
-`fetchRemoteImageAsDataUri()` nínú `visionBridgeHelpers.ts` — a máa ń fi data
-URI tó jáde kọjá sínú `normalizeDataUri()`
-(`open-sse/utils/imageNormalize.ts`) kí a tó fi í sínú ìbéèrè vision-model.
-A máa ń dín àwọn image tó tóbi jù lọ sí **2048px ní ẹ̀gbẹ́ tó gùn jù**
-(èyí tó bá ààlà resize tí OpenAI/Anthropic ti ń lò ní server-side mu), èyí tó
-ń dín bytes/latency ìgbérù sókè kù láìyí ohun tí vision model ń rí padà. Resize
-ń lo `sharp`, tí a ń load nípasẹ̀ dynamic import: lórí platform kan níbi tí
-native binary rẹ̀ kò bá lè load, `normalizeDataUri()` **kì í throw láé** — ó
-máa ń fallback sí fífi àwọn byte àkọ́kọ́ kọjá bí wọ́n ṣe wà, kí ipa-ọ̀nà
-describe/base64-conversion lè máa ṣiṣẹ́ ní gbogbo ìgbà. Àwọn byte tí kì í ṣe
-image (fetch tí kò dá image tí a lè decode padà) náà ni a máa ń fi kọjá
-láìfọwọ́kàn. Normalization yìí kan àwọn image tí bridge fetch fún self-call
-tirẹ̀ nìkan — a kì í lò ó láé lórí raw passthrough payload ti olùpèpè, ní
-ìbámu pẹ̀lú ìlànà pé ìyípadà gbọ́dọ̀ jẹ́ opt-in nìkan (Òfin Líle #20).
+Nígbà tí afárá náà bá gba àwòrán **remote** kan fúnra rẹ̀ — ìpè ara-ẹni ìṣàpèjúwe Anthropic àti ìyípadà base64 tí ó jọ mọ́ claude-wire-format (`ensureBase64ImagesForClaudeWire`), àwọn méjèèjì nípasẹ̀ `fetchRemoteImageAsDataUri()` nínú `visionBridgeHelpers.ts` — data URI tí ó jáde wá ni a kọjá nípasẹ̀ `normalizeDataUri()` (`open-sse/utils/imageNormalize.ts`) ṣáájú kí a tó fi tẹ̀ sí abẹ́ ìbéèrè àwòrán ìrí (vision-model request). Àwọn àwòrán tí ó tóbi jù ni a ń dín kù sí **ẹgbẹ́ gígùn 2048px** (tí ó bá ìwọ̀n ìdínkù tí OpenAI/Anthropic ti lò tẹ́lẹ̀ lórí sẹ̀fà), èyí tí ó dín àwọn byte ìgbékalẹ̀/ìfòyà kù láì yí ohun tí àwòrán ìrí rí padà. Ìdínkù ìwọ̀n náà ń lò `sharp`, èyí tí a gbé wọlé nípasẹ̀ dynamic import: lórí ppéètífọ̀mù kan tí kò lè gbé binary abínibí rẹ̀ kalẹ̀, `normalizeDataUri()` **kò ní sọ àṣìṣe rí** — ó padà sí ìkọjá tààrà ti àwọn byte ìpilẹ̀ṣẹ̀, nítorí náà ọ̀nà ìṣàpèjúwe/ìyípadà-base64 máa ń bá a nìṣ láti máa ṣiṣẹ́. Àwọn byte tí kìí ṣe àwòrán (ìgbékalẹ̀ kan tí kò dá àwòrán tí a lè túmọ̀ padà wá) ni a tún kọjá tààrà láì fọwọ́ kan wọn. Ìṣètò yìí wà fún àwọn àwòrán tí afárá náà gba wọlé fún ìpè ara-ẹni rẹ̀ nìkan — a kò lò ó rí lórí èròjà passthrough àìṣètò ti ẹni tí ó pè é, èyí bá ìlànà ìyípadà opt-in-nìkan mu (Hard Rule #20).
 
-#### Schema ètò + migration
+#### Ìlànà àwọn ètò + ìṣípò
 
-Àwọn kọ́kọ́rọ́ `modalityBridge*` tuntun ni a fi Zod validate nínú
-`updateSettingsSchema` (`src/shared/validation/settingsSchemas.ts`):
-`modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`,
-`modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`,
-`modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`,
-`modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`, ẹgbẹ́ mẹ́ta
-`modalityBridgeCache*`, àti ẹgbẹ́ `modalityBridgeAudio*` tí Audio Bridge ń lò.
-Migration `141_modality_bridge_settings.sql` máa ń da àwọn iye `visionBridge*`
-legacy tó wà tẹ́lẹ̀ sí àwọn kọ́kọ́rọ́ tuntun tó bá wọn mu (idempotent, kì í sì í
-kọ iye `modalityBridge*` tí operator ti ṣètò lé lórí láé); a ṣì máa gba àwọn
-kọ́kọ́rọ́ legacy gẹ́gẹ́ bí read fallback fún ìyíká release kan.
+Àwọn kọ́kọ́rọ́ `modalityBridge*` tuntun ni a fọwọ́sí pẹ̀lú Zod nínú `updateSettingsSchema` (`src/shared/validation/settingsSchemas.ts`): `modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`, `modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`, `modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`, `modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`, ẹ̀ka `modalityBridgeCache*` mẹ́ta náà, àti ẹ̀ka `modalityBridgeAudio*` tí Afárá Ohùn ń lò. Ìṣípò `141_modality_bridge_settings.sql` da àwọn iye `visionBridge*` àtijọ́ kọ ka àwọn kọ́kọ́rọ́ tuntun tí ó bá mu (idempotent, kìí kọ lórí iye `modalityBridge*` tí oniṣẹ́-ẹ̀rọ ṣètò); àwọn kọ́kọ́rọ́ àtijọ́ náà á máa wà gẹ́gẹ́ bí àṣàyàn kika fún yíyọ ìtújáde kan.
 
-#### Header ìṣípayá + stats
+#### Àkọlé ìfihàn + àwọn ìpín
 
-Àwọn response tí describe ti yí padà ní
-`x-omniroute-modality-bridge: image->text;model=<visionModel>;parts=<n>`
-(tí `buildModalityBridgeHeader()` kọ nínú `modalityBridge/bridgeStats.ts`,
-tí `withModalityBridgeHeader()` sì fi sí i nínú
-`src/sse/handlers/chatHelpers.ts`). Àwọn ìbéèrè tí a reroute kò ní header
-**kankan** — a kò fọwọ́ kan payload náà, àti pé ìyípadà model ti hàn tẹ́lẹ̀
-nínú field `model` ti body response.
+Àwọn ìdáhùn tí a sọ di títúmọ̀ nípasẹ̀ ìṣàpèjúwe gbé `x-omniroute-modality-bridge: image->text;model=<visionModel>;parts=<n>` (èyí tí `buildModalityBridgeHeader()` nínú `modalityBridge/bridgeStats.ts` kọ, tí a fi `withModalityBridgeHeader()` lé lórí nínú `src/sse/handlers/chatHelpers.ts`). Àwọn ìbéèrè tí a tún darapọ̀ mọ́ kò ní **àkọlé** kankan — a kò fọwọ́ kan payload náà àti pé àyípadà àwòrán náà ti hàn gbangba tẹ́lẹ̀ nínú aaye `model` ti ara ìdáhùn náà.
 
-`GET /api/modality-bridge/stats` (ìfàṣẹsí ìṣàkóso, ìpele kan náà pẹ̀lú
-`GET /api/settings`) ń dá àwọn òǹkà inú-iranti fún ọ̀kọ̀ọ̀kan modality padà
-`{ attempts, successes, bridged, cacheHits, failures, totalLatencyMs,
-latencySamples, averageLatencyMs, lastUsedAt }` fún `vision`, `audio`, àti
-`video`. `averageLatencyMs` ń lo `latencySamples`, kì í ṣe gbogbo ìgbìyànjú, gẹ́gẹ́ bí
-olùpín rẹ̀; iṣẹ́ tí kò ní àkókò tí a wọn kò ní dá àpẹẹrẹ òdo-millisecond
-ẹlẹ́tàn sílẹ̀. `bridged` ṣì jẹ́ orúkọ-àfidípò tó bá àwọn ẹ̀yà àtijọ́ mu fún àwọn
-ìyípadà tó ṣàṣeyọrí; àwọn ìgbìyànjú tó kùnà kì í mú un pọ̀ sí i.
-Àwọn òǹkà yóò tún padà sí ìbẹ̀rẹ̀ nígbà tí process bá tún bẹ̀rẹ̀ gẹ́gẹ́ bí a ṣe ṣe àpẹrẹ rẹ̀
-(telemetry ni, kì í ṣe accounting).
+`GET /api/modality-bridge/stats` (ìfọwọ́sísí ìṣàkóso, ẹ̀ka kan náà pẹ̀lú `GET /api/settings`) dá àwọn àfihàn ìwọ̀n kọọ̀kan nínú ìrántí `{ attempts, successes, bridged, cacheHits, failures, totalLatencyMs, latencySamples, averageLatencyMs, lastUsedAt }` padà fún `vision`, `audio`, àti `video`. `averageLatencyMs` ń lo `latencySamples`, kìí ṣe gbogbo ìgbìyànjú, gẹ́gẹ́ bí olùpín rẹ̀; iṣẹ́ kan tí kò ní àkókò kò ní dá àpẹẹrẹ milisẹ́kọ́ndìí òfìfo sílẹ̀. `bridged` máa ń wà gẹ́gẹ́ bí àfikún ìbámu-àtijọ́ fún àwọn ìyípadà tí ó yọrí sí rere; àwọn ìgbìyànjú tí kò yọrí sí rere kò ní fi kún un. Àwọn àfihàn náà ń pa rẹ́ nígbà tí ìlànà bá bẹ̀rẹ̀ títí fún ìdí tí a fi ṣe é (telemetry, kìí ṣe ìṣirò owó).
 
-#### Ìṣètò dashboard
+#### Ìṣètò ojú-ìwé ìṣàkóso
 
-Ojú-ìwé dashboard tí a yà sọ́tọ̀ ni
-`/dashboard/settings/modality-bridge`. Àwọn taabu `Vision`, `Audio`,
-àti `Video` rẹ̀ tí URL lè tọ́ka sí máa ń pa àwọn query parameters mọ́ nígbà tí wọ́n bá ń yí iye `tab` padà.
-Taabu Vision ń fi ìmúṣiṣẹ́, mode, yíyan model (pẹ̀lú default aládàáṣiṣẹ́),
-prompting tó mọ iṣẹ́, àwọn ààlà timeout/image/description-length/cache tó ti ní ìlọsíwájú,
-àwọn òǹkà runtime, àti sample request tí a dáàbò bo hàn. Taabu Audio náà ń ṣiṣẹ́:
-ó ń fi ìmúṣiṣẹ́, olùyan model STT-nìkan pẹ̀lú Auto, àwọn ààlà timeout/max-clip, àwọn
-òǹkà audio, àti ìdánwò sample `input_audio` hàn. Taabu Video ń ṣiṣẹ́: ó ń jábọ̀
-ipò runtime FFmpeg/ffprobe — ọ̀kan lára àwọn ipò UI mẹ́rin tó ṣe kedere (`unknown` nígbà tí
-probe ṣì ń lọ tàbí tí kò lè parí, `restricted` lórí host dashboard tí kì í ṣe loopback
-níbi tí a ti fo probe kọjá ní client-side, `unavailable` lẹ́yìn tí a bá ṣe probe tí a sì
-jẹ́rìí pé kò sí, tàbí `available` pẹ̀lú àwọn version FFmpeg/ffprobe) — ó ń fi
-àwọn ààlà enable/model/frame/video/timeout pamọ́, ó ń ṣe àlẹ̀ model picker sí àwọn
-model tó lè ṣiṣẹ́ pẹ̀lú vision, ó sì ń fi àwọn òǹkà video hàn.
+Ojú-ìwé ìṣàkóso pàtàkì náà ni `/dashboard/settings/modality-bridge`. Àwọn tàbù `Vision`, `Audio`, àti `Video` rẹ̀ tí a lè dé nípasẹ̀ URL ń tọ́jú àwọn àwárí ìbéèrè nígbà tí wọ́n ń yí iye `tab` padà. Tàbù Vision fi ìṣiṣẹ́, ipò, àṣàyàn àwòrán (pẹ̀lú àṣàyàn àìnífẹ̀ẹ́ ààyè ara-ẹni), ìtọ́nisọ́nà mímọ̀-iṣẹ́, àwọn ààlà àkókò/àwòrán/gígùn àpèjúwe/ìpamọ́, àwọn àfihàn àkókò ìṣiṣẹ́, àti ìbéèrè àpẹẹrẹ tí a dáàbò bo hàn. Tàbù Audio náà ti wà lórí afẹ́fẹ́: ó fi ìṣiṣẹ́, àṣàyàn àwòrán STT-nìkan pẹ̀lú Auto, àwọn ààlà àkókò/kìpì kékèké, àwọn àfihàn ohùn, àti ìdánwò àpẹẹrẹ `input_audio` hàn. Tàbù Video náà ń ṣiṣẹ́: ó jíròrò ipò àkókò ìṣiṣẹ́ FFmpeg/ffprobe — ọ̀kan nínú àwọn ipò ojú-ìwé mẹ́rin tí ó han gbangba (`unknown` nígbà tí ìṣàyẹ̀wò wà lójú ọ̀nà tàbí kò le parí, `restricted` lórí òsùnmwọ̀n ojú-ìwé tí kìí ṣe loopback níbi tí a ti fò ìṣàyẹ̀wò náà lójú ìwé onibara, `unavailable` nígbà tí a ti ṣe ìṣàyẹ̀wò rẹ̀ tí a sì rí pé kò sí, tàbí `available` pẹ̀lú àwọn ẹ̀dà FFmpeg/ffprobe) — ó tọ́jú àwọn ààlà ìṣiṣẹ́/àwòrán/fremu/fideo/àkókò, ó ṣe àlẹ̀mọ́ àṣàyàn àwòrán fún àwọn àwòrán tí ó lè wo àwòrán, ó sì fi àwọn àfihàn fideo hàn.
 
-Káàdì Vision Bridge àtijọ́ lábẹ́ àwọn ètò AI jẹ́ compatibility link sí
-ojú-ìwé tuntun; kò tún ní ẹ̀dà kejì form náà mọ́. Media Providers tún
-ń so àwọn workflow Image-to-Text àti Speech-to-Text pọ̀ mọ́ àwọn taabu Modality
-Bridge tó bá wọn mu láì yọ playground Speech-to-Text tó ti wà tẹ́lẹ̀ kúrò.
+Kaadi Vision Bridge tẹ́lẹ̀ lábẹ́ ètò AI jẹ́ ọ̀nà ìsopọ̀ ìbámu sí ojú-ìwé tuntun náà; kò ní ẹ̀ka kejì fọ́ọ̀mù náà mọ́. Media Providers tún sọ àwọn iṣẹ́ Image-to-Text àti Speech-to-Text pọ̀ mọ́ àwọn tàbù Modality Bridge tí ó bá mu láì mú ibi ìṣeré Speech-to-Text tí ó wà tẹ́lẹ̀ kúrò.
 
-**Ìforúkọsílẹ̀ self-loop tí ń forí admission kọjá:** nígbà tí describe call bá gba
-OmniRoute `/v1` self-loop tirẹ̀ kọjá (provider model tí kì í ṣe standard), sub-request náà
-ń fi `x-omniroute-admission-bypass: internal` ránṣẹ́, a sì ń fi credential self-loop
-tí a ti resolve ṣe ìfàṣẹsí rẹ̀ — sentinel `sk_omniroute` agbègbè ní local mode, tàbí
-env key `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` tí operator ṣètò (#1350), kí àwọn
-deployment `REQUIRE_API_KEY=true` lè ṣì ṣiṣẹ́ describe call náà. Fún àwọn credential
-gẹ́gẹ́ bí wọ́n ṣe rí gan-an nìkan ni a ń bọ̀wọ̀ fún bypass náà, nítorí náà àwọn external client
-kò lè lo header náà láti fo admission kọjá.
+**Ìfọwọ́sísí ìkọjá fún ìpè ara-ẹni:** nígbà tí ìpè ìṣàpèjúwe bá kọjá nípasẹ̀ `/v1` self-loop ti OmniRoute fúnra rẹ̀ (àwòṣe ìpèsè tí kìí ṣe ìlànà deede), ìbéèrè-kekere náà rán `x-omniroute-admission-bypass: internal` ó sì jẹ́ ìfọwọ́sísí pẹ̀lú ẹ̀rí self-loop tí a yanjú — olùṣọ́ `sk_omniroute` agbegbe ní ipò agbegbe, tàbí kọ́kọ́rọ́ ayika `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` tí oniṣẹ́-ẹ̀rọ ṣètò (#1350) kí àwọn ìgbékalẹ̀ `REQUIRE_API_KEY=true` lè tẹ̀síwájú láti ṣe ìpè ìṣàpèjúwe náà. Ìkọjá yìí ni a ń bọ̀wọ̀ fún fún àwọn ẹ̀rí gangan wọ̀nyẹn nìkan, nítorí náà àwọn oníbàárùn ìta kò lè lo àkọlé náà láti fò ìfọwọ́sísí.
 
-Àwọn default àtijọ́ wà ní `src/shared/constants/visionBridgeDefaults.ts`;
-àwọn default mode/task-aware/cache tuntun àti settings resolver wà ní
-`src/shared/constants/modalityBridgeDefaults.ts`. Guardrail náà ń fi
-constructor option `deps` hàn kí àwọn ìdánwò lè inject àwọn implementation
-`getSettings` àti `callVisionModel` èké.
+Àwọn àìnífẹ̀ẹ́ ààyè àtijọ́ wà nínú `src/shared/constants/visionBridgeDefaults.ts`; àwọn àìnífẹ̀ẹ́ ààyè ipò/mímọ̀-iṣẹ́/ìpamọ́ tuntun àti olùtumọ̀ ètò wà nínú `src/shared/constants/modalityBridgeDefaults.ts`. Odi ààbò fi àṣàyàn olùkọ́ `deps` hàn kí àwọn ìdánwò lè fi àwọn ìṣiṣẹ́ `getSettings` àti `callVisionModel` irọ́ sínú.
 
-### Audio Bridge (`audioBridge.ts`) — Modality Bridge PR-3
+### Afárá Ohùn (`audioBridge.ts`) — Modality Bridge PR-3
 
-Ó ń dá àwọn chat request tó ní audio dúró kí wọ́n tó dé target tí a kò mọ̀ pé ó
-gba audio input. Kì í reroute chat request náà láéláé: a ń ṣe transcription àwọn
-apá audio nípasẹ̀ endpoint multipart tó bá OpenAI mu tó ti wà tẹ́lẹ̀, model chat
-tí a yàn sì ń tẹ̀síwájú pẹ̀lú transcript text.
+Ó ń dènà àwọn ìbéèrè ìtumọ̀ tí ó ní ohùn nínú kí wọ́n tó dé ibi ìfojúsùn kan tí a mọ̀ pé kò gba ìgbékalẹ̀ ohùn. Kò ní tún ipò ìbéèrè ìtumọ̀ náà ṣe rí: àwọn apá ohùn ni a ń yí padà sí ìkọ̀wé nípasẹ̀ ìpẹ̀kun multipart tí ó ní ìbámu pẹ̀lú OpenAI tí ó wà tẹ́lẹ̀ àti pé àwòṣe ìtumọ̀ tí a yàn tẹ̀síwájú pẹ̀lú àwọn ìkọ̀wé ọ̀rọ̀.
 
-Ìṣàn iṣẹ́:
+Ìṣàn:
 
-1. Resolve `supportsAudio` nípasẹ̀ `getResolvedModelCapabilities()`. Metadata
-   provider-registry tó ṣe kedere ni ó ní ààyò, lẹ́yìn náà metadata model static, lẹ́yìn náà
-   `modalities_input` tí a sync. Àtòjọ input tí a kéde láìsí `audio` jẹ́ `false`; bí kò bá sí
-   ẹ̀rí capability rárá, ó jẹ́ `null`. `false` àti `null` méjèèjì ń mú bridge
-   oníṣọ́ra ṣiṣẹ́, nígbà tí `true` ń forí rẹ̀ kọjá.
-2. Resolve àwọn ètò `modalityBridgeAudio*`, kí o sì yọ àwọn apá audio top-level
-   tí a lè splice jáde láti gbogbo message nípasẹ̀ detector `detectMediaParts()`
-   tí a pín. Àwọn wire shape tí a ṣe àtìlẹ́yìn fún ni OpenAI `input_audio`, `audio_url`, àti
-   `source.media_type: "audio/*"`. A máa ń rí audio nested fún routing ṣùgbọ́n
-   splice path kì í yọ ọ́ kúrò. `modalityBridgeAudioMaxClips` ló fi ààlà sí iye iṣẹ́;
-   àwọn apá tó tẹ̀lé e máa dúró láìyípadà.
-3. Bọ̀wọ̀ fún `provider/model` tí a ṣètò, tàbí jẹ́ kí `selectAudioBridgeModel()` rìn
-   la `AUDIO_TRANSCRIPTION_PROVIDERS` kọjá ní stable catalog order kí ó sì yan
-   model àkọ́kọ́ tó ní provider credential active tí a lè lò.
-4. `callAudioTranscription()` ń yí audio base64/data-URI padà sí `file` multipart,
-   tàbí ó ń download `audio_url` remote nípasẹ̀ outbound guard public-only
-   pẹ̀lú DNS pinning àti ààlà 25 MB. Lẹ́yìn náà, ó máa ń POST file àti model tí a yàn
-   sí self-loop local `/v1/audio/transcriptions`, pẹ̀lú ìfàṣẹsí láti
-   `resolveSelfLoopBearer()`. Route transcription tó ti wà tẹ́lẹ̀ ń ṣe credential lookup
-   deede, cooldown/rate-limit handling, àti provider dispatch.
-5. Àwọn call tó ṣàṣeyọrí ń rọ́pò àwọn apá wọn pẹ̀lú `[Audio N]: <transcript>`. Àwọn call
-   ń ṣiṣẹ́ pẹ̀lú `Promise.allSettled`: ìkùnà ẹyọ kan máa ń pa apá audio atilẹba náà mọ́
-   (#4012 contract). Bí gbogbo call bá kùnà tí a sì ti fi ẹ̀rí múlẹ̀ pé target náà jẹ́
-   `supportsAudio === false`, àwọn apá náà yóò di
-   `[Audio N]: (unavailable — no STT provider connected)` (#8430 contract). Fún
-   target tí a kò mọ̀ (`null`), àbájáde tí gbogbo rẹ̀ kùnà máa dúró láìyípadà. Target
-   text-only tí a ti fìdí rẹ̀ múlẹ̀ tí kò ní STT credential tó ṣeé lò yóò gba stub
-   tó ṣe kedere kan náà láì ṣe network call.
+1. Yanjú `supportsAudio` nípasẹ̀ `getResolvedModelCapabilities()`. Metadata ti ìforúkọsilẹ olùpèsè tí ó ṣe tààràtà ló ń borí, lẹ́yìn náà ni static model metadata, àti `modalities_input` tí ó ní ìsopọ̀ (synced). Àkójọ ìgbépọ̀ tí a kéde láìní `audio` jẹ́ `false`; kò sí ẹ̀rí agbára kankan tí ó ṣẹ́ ku tí ó jẹ́ `null`. Àwọn méjèèjì `false` àti `null` ni wọ́n ń mú afárá ìpamọ́ ṣiṣẹ́, nígbà tí `true` ń yí i ka.
+2. Yanjú àwọn ètò `modalityBridgeAudio*` kí o sì fa àwọn apá ohùn ìpele òkè tí a lè gé jáde láti inú ìránṣẹ́ kọ̀ọ̀kan nípasẹ̀ aṣàwárí `detectMediaParts()` tí a pín. Àwọn ìrísí waya tí a ṣe àtìlẹ́yìí ni OpenAI `input_audio`, `audio_url`, àti `source.media_type: "audio/*"`. A ń wá ohùn inú fún ìdarí sùgbọ́n a kì í yọ ọ́ kúrò nípasẹ̀ ọ̀nà ìgé. Iṣẹ́ náà ní àlà kíkún tí `modalityBridgeAudioMaxClips` fi lé e; àwọn apá tó kẹ́yìn yóò wà gẹ́gẹ́ bí wọ́n ṣe wà.
+3. Bọ̀wọ̀ fún `provider/model` tí a ti tò sílẹ̀, tàbí jẹ́ kí `selectAudioBridgeModel()` la `AUDIO_TRANSCRIPTION_PROVIDERS` kọjá ní tòsí àkójọ idúróṣinṣin kí o sì yan àwṣọ̀ àkọ́kọ́ tí ó ní ẹ̀rí olùpèsè tó ń ṣiṣẹ́ tí a lè lò.
+4. `callAudioTranscription()` ń yí ohùn base64/data-URI padà sí apá púpọ̀ `file`, tàbí ṣe ìgbàsílẹ̀ `audio_url` tó jìnnà nípasẹ̀ olùṣọ́ ẹ̀yìn ìjajade tí ó jẹ́ ti gbogbo ènìyàn nìkan pẹ̀lú ìfẹnukò DNS àti àlà 25 MB. Lẹ́yìn náà, ó ń fi fáìlì náà àti àwṣọ̀ tí a yàn ránṣẹ́ sí ìyipo ara ẹni `/v1/audio/transcriptions`, tí agbára ìjẹ́rìí rẹ̀ jẹ́ `resolveSelfLoopBearer()`. Ọ̀nà ìtúmọ̀ ohùn tó wà tẹ́lẹ̀ ń ṣe ìwárí ẹ̀rí déédéé, ìṣàkóso ìtura/òpin-ìwọ̀n, àti ìpín to olùpèsè.
+5. Àwọn ìpè tí ó yọrí sí rere ń rọ́pò àwọn apá wọn pẹ̀lú `[Audio N]: <transcript>`. Àwọn ìpè ń ṣiṣẹ́ pẹ̀lú `Promise.allSettled`: ìkùnà kọ̀ọ̀kan ń pa apá ohùn àkọ́kọ́ yẹn mọ́ (ùhùn àdéhùn #4012). Bí gbogbo ìpè bá kùnà tí a sì fìdí rẹ̀ múlẹ̀ pé ibi àfojúsùn náà jẹ́ `supportsAudio === false`, àwọn apá náà di `[Audio N]: (unavailable — no STT provider connected)` (ùhùn àdéhùn #8430). Fún ibi àfojúsùn tí a kò mọ̀ (`null`), èsì ìkùnà lápapọ̀ kò níyí tí a kò ní fọwọ́ kàn án. Ibi àfojúsùn tí ó jẹ́ ti ìkọ̀wé nìkan tí kò ní ẹ̀rí STT tó wúlò ń gba ìtọ́kasí tó hàn gbangba kan náà láìṣe ìpè ìwọ̀n nẹ́twọ̀kì kankan.
 
-Àwọn transcript tó ṣàṣeyọrí ń lo cache LRU/TTL Modality Bridge jálẹ̀ process.
-Key náà ṣopọ̀ audio reference, label iṣẹ́ `audio-transcription` tó dúró ṣinṣin,
-àti model STT tí a yàn; a kì í cache àwọn ìkùnà. Àwọn ìgbìyànjú audio ń ṣe update
-àwọn òǹkà pínpín `bridged`, `cacheHits`, `failures`, àti `lastUsedAt`.
-Àwọn response tí a transform ní
-`x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>`; àwọn
-request tí a kò yípadà kì í gba segment Audio Bridge.
+Àwọn ìtúmọ̀ tí ó yọrí sí rere ń lo kaṣì Modality Bridge LRU/TTL tí ó wà káakiri ilana. Kọ́kọ́rọ́ náà ń dapọ̀ ìtọ́kasí ohùn, àmì iṣẹ́ `audio-transcription` tí ó dúró ṣinṣin, àti àwṣọ̀ STT tí a yàn; àwọn ìkùnà kò ní jẹ́ kí a tọ́jú wọn sínú kaṣì rárá. Àwọn ìgbìyànjú ohùn ń ṣe àfikún àwọn ẹ̀rọ ìka `bridged`, `cacheHits`, `failures`, àti `lastUsedAt`. Àwọn ìáhùn tí a yí padà ń gbé `x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>`; àwọn ìbéèrè tí a kò fọwọ́ kàn kò ní gba apá Audio Bridge kankan.
 
-Àwọn ètò runtime jẹ́ èyí tí DB ń ṣe àtìlẹ́yìn fún, tí Zod sì validate:
+Àwọn ètò àsìkò ìṣiṣẹ́ ní ìtìlẹ́yìn ibi ìpamọ́ dátà tí wọ́n sì ti gba ìfọwọ́sọ́pọ̀ Zod:
 
-| Kọ́kọ́                          | Àìyípadà | Ààlà                 |
-| ----------------------------- | -------- | -------------------- |
-| `modalityBridgeAudioEnabled`  | `true`   | —                    |
-| `modalityBridgeAudioModel`    | `""`     | Aifọwọ́yí tàbí ID STT |
-| `modalityBridgeAudioTimeout`  | `60000`  | 1000–300000          |
-| `modalityBridgeAudioMaxClips` | `3`      | 1–10                 |
+| Kọ́kọ́rọ́                        | Àìyípadà | Àlà            |
+| ----------------------------- | -------- | -------------- |
+| `modalityBridgeAudioEnabled`  | `true`   | —              |
+| `modalityBridgeAudioModel`    | `""`     | Auto or STT ID |
+| `modalityBridgeAudioTimeout`  | `60000`  | 1000–300000    |
+| `modalityBridgeAudioMaxClips` | `3`      | 1–10           |
 
-Àpamọ́ tí a pín ṣì wà lábẹ́ ìṣàkóso `modalityBridgeCacheEnabled`,
-`modalityBridgeCacheTtlMinutes`, àti `modalityBridgeCacheMaxEntries`.
+Kaṣì tí a pín wà ní abẹ́ ìṣàkóso `modalityBridgeCacheEnabled`, `modalityBridgeCacheTtlMinutes`, àti `modalityBridgeCacheMaxEntries`.
 
 ### Afárá Fídíò (`videoBridge.ts`, `videoBridgePipeline.ts`)
 
-Ó máa ń dá àwọn apá fídíò ìpele-òkè dúró nínú `messages` ti Chat Completions àti
-`input` ti Responses API kí a tó pe ohun àfojúsùn kan tí a kò mọ̀ pé ó ní àtìlẹ́yìn
-fídíò abínibí. Àwọn ìrísí tí a ṣètìlẹ́yìn fún ni `input_video`, `video_url`,
-`video_source`, àwọn URL HTTPS, àti àwọn URI dátà
-`data:video/*;base64,...`. A kò ka àwọn orúkọ fáìlì lásán nínú ọ̀rọ̀ sí fídíò.
+Ó ń mú àwọn apá fídíò ìpele òkè lọ́wọ́ nínú `messages` ti Chat Completions àti `input` ti Responses API kí á tó pé àfojúsùn tí kò ní àtìlẹ́yìí fídíò abínibí tí a mọ̀. Àwọn ìrísí tí a ṣe àtìlẹ́yìí ni `input_video`, `video_url`, `video_source`, àwọn URL HTTPS, àti àwọn data URI `data:video/*;base64,...`. Àwọn orúkọ fáìlì lásán nínú ìkọ̀wé ni a kò kà sí fídíò.
 
-`VideoBridgeGuardrail.preCall` (`videoBridge.ts`) ló ń ṣàkóso yíyẹ̀wò gbogbo
-ìbéèrè, àyẹ̀wò agbára/ìlànà, àkójọpọ̀ fún ìbéèrè kọ̀ọ̀kan, àti payload ìdáhùn.
-Iṣẹ́ lórí fídíò kọ̀ọ̀kan — gbígba rẹ̀, àpamọ́ gbogbo àbájáde, ṣíṣe àpèjúwe
-ọ̀wọ́ àwọn fireemu (èyí tí ó ń so transcript ohun tí olùpè bá sọ mọ́ ọ), àti
-àwọn mẹ́tíríìkì/ífagilé/ìmọ́tótó fún ìgbìyànjú kọ̀ọ̀kan — ni a fi pamọ́ sẹ́yìn
-`processVideoPart` nínú `videoBridgePipeline.ts`, tí a ń pè lẹ́ẹ̀kan fún apá
-fídíò kọ̀ọ̀kan nínú loop `preCall`. Module yẹn tún ṣàlàyé àwọn ààlà port
-tó ṣe kedere `VideoMediaBrokerPort` (gbígba àwọn byte àti yíyọ àwọn fireemu
-tí a ṣe àpẹẹrẹ), `VideoAudioTranscriptionPort` (ṣíṣọ transcript ohun tí olùpè
-sọ mọ́ àwọn àkọlé fireemu tí a ṣe àpẹẹrẹ), àti `VideoDrilldownPort` (ààlà
-ìtọ́jú drill-down fireemu; a kò tíì so mọ́ `processVideoPart` — ọ̀nà
-`/api/modality-bridge/video/drilldown` ọ̀tọ̀ nìkan ló ń kọ àwọn àkọsílẹ̀
-drill-down lónìí).
+`VideoBridgeGuardrail.preCall` (`videoBridge.ts`) ní ẹ̀tọ́ lórí ìṣẹ̀ndà ìbéèrè, àyẹ̀wò agbára/ìlànà, àpapọ̀ fún ìbéèrè kọ̀ọ̀kan, àti ẹ̀rù iṣẹ́ ìáhùn. Iṣẹ́ fídíò kọ̀ọ̀kan — ríra, kaṣì èsì lápapọ̀, ṣíṣe àpèjúwe ìtẹ̀lé àwọn fúìlàmù (èyí tí ó dapọ̀ èyíkéyìí ìtúmọ̀ ohùn tí olùpè kéde), àti àwọn ìwọ̀n/ìdúró/ìmọ́tótó fún ìgbìyànjú kọ̀ọ̀kan — ni a fi pamọ́ lẹ́yìn `processVideoPart` nínú `videoBridgePipeline.ts`, tí a ń pè lẹ́ẹ̀kan ṣoṣo fún apá fídíò kọ̀ọ̀kan ní inú ìyipo ti `preCall`. Ìpínlẹ̀ yẹn tún náwó àwọn ààlà ibùdó tààràtà `VideoMediaBrokerPort` (gbígbà àwọn báìtì àti yíyọ àwọn fúìlàmù tí a wọ̀n jáde), `VideoAudioTranscriptionPort` (dapọ̀ ìtúmọ̀ ohùn tí olùpè kéde pẹ̀lú àwọn àkọlé tí a wọ̀n), àti `VideoDrilldownPort` (ààlà ìpamọ́ wíwá ìjinlẹ̀ fúìlàmù; tí a kò tíì so mọ́ `processVideoPart` — ọ̀nà `/api/modality-bridge/video/drilldown` tọtọ nìkan ni ó ń kọ àwọn ìwọlé wíwá ìjinlẹ̀ lónìí).
 
-Ọ̀nà ìbéèrè `/v1` gbogbogbò kì í import tàbí pe subprocess rárá.
-A máa ń gba àwọn fídíò jíjìn lábẹ́ ààlà 50 MiB; àwọn fídíò base64 inline ní
-ààlà ìṣọ́ra 36 MiB tí a ti decode fún fídíò kọ̀ọ̀kan, kí àpò
-model/messages/framing lè dúró láàárín ààlà gbigba ìbéèrè JSON gbogbogbò ti
-50 MiB. A máa ń yẹ gígùn inline àti àwọn ìṣírò ìwọ̀n lẹ́yìn decode wò kí a tó
-pín àyè ìrántí. HTTPS jẹ́ dandan fún URL jíjìn àkọ́kọ́ àti gbogbo redirect,
-nípa lílo olùṣọ́ outbound tí ó gba ti gbogbogbò nìkan, pẹ̀lú DNS pinning.
-Lẹ́yìn náà, àwọn byte náà máa ń kọjá ààlà broker inú gangan
-`POST /api/modality-bridge/video/extract`. Ọ̀nà yẹn jẹ́ `LOCAL_ONLY` àti
-`SPAWN_CAPABLE`, ó gba ìbéèrè trusted-loopback tí a ti fi ìdánimọ̀ múlẹ̀ fún
-process kọ̀ọ̀kan nìkan, kò sì gba URL, ipa-ọ̀nà ètò fáìlì, executable, tàbí
-àkójọ argument rárá. Pipeline ìwọ̀n ara API àti olùkà ara ìbéèrè díẹ̀díẹ̀ ti
-handler máa ń fi ààlà ìwọlé broker 50 MiB múlẹ̀ lọ́tọ̀ọ̀tọ̀. Queue rẹ̀ tí a fi
-ààlà sí máa ń ṣe extraction kan lẹ́ẹ̀kan, ó gba iṣẹ́ mẹ́rin tí ń dúró, ó sì
-fi ààlà 100 MiB sí input tí ń dúró.
+Ọ̀nà ìbéèrè gbogbo ènìyàn `/v1` kì í gbé wọlé tàbí pè ìlànà abẹ́-ilana kọ̀ọ̀kan rárá. A ń ṣe ìgbàsílẹ̀ àwọn fídíò tó jìnnà lábẹ́ àlà 50 MiB; àwọn fídíò base64 inú-kọ̀ǹpútà ní àlà 36 MiB tí a tú kọ́kọ́rọ́ rẹ̀ fún fídíò kọ̀ọ̀kan kí àpò àwṣọ̀/àwọn ìránṣẹ́/ìṣètò lè dúró sí inú àlà ìgbékalẹ̀ ìbéèrè JSON ti gbogbo ènìyàn tí ó jẹ́ 50 MiB. A ń ṣàyẹ̀wò ìwọ̀n gígùn inú-kọ̀ǹpútà àti àwọn àìníwọ̀n ìwọ̀n tí a tú kí a tó pín ààyè. A nílò HTTPS lórí URL àkọ́kọ́ tó jìnnà àti ìtọ́sọ́nà kọ̀ọ̀kan, ní lílo olùṣọ́ ẹ̀yìn ìjajade tí ó jẹ́ ti gbogbo ènìyàn nìkan tí ó ní ìfẹnukò DNS. Lẹ́yìn náà, àwọn báìtì náà ń sọdá ààlà olùfọ̀wọ́sọ́pọ̀ `POST /api/modality-bridge/video/extract` abẹ́nú gangan. Ọ̀nà yẹn jẹ́ `LOCAL_ONLY` àti `SPAWN_CAPABLE`, ó ń gba ìbéèrè ìlòpọ̀ tí a fọwọ́sọ́pọ̀ fún ilana kọ̀ọ̀kan, loopback tí ó gbẹ́kẹ̀ lé nìkan, kò sì ní gba URL kankan, ojú-ọ̀nà ẹ̀rọ-fàìlì, olùṣiṣẹ́, tàbí àkójọ àrísọ. Ìlànà ìwọ̀n-ára API àti kọ̀sọ̀rọ̀ ìwọ̀n-ára ìfaramọ́ ti olùṣàkóso ń fi agbára mú àlà ìgbépọ̀ olùfọ̀wọ́sọ́pọ̀ ti 50 MiB lọtọ̀ọ̀tọ̀. Ìṣètò ìwè rẹ̀ ń ṣe ìyọ́kúrò kan ní ẹ̀kan náà, ó ń gba iṣẹ́ mẹ́rin tí ó wà lójú-ọ̀nà, ó sì ní àlà ìgbépọ̀ tí ó wà lójú-ọ̀nà ní 100 MiB.
 
-Nínú broker náà, `ffprobe` máa ń ka fáìlì local aládàáni; àkójọ àwọn format
-tí a yọ̀ǹda tí kò lè yípadà kò fi àwọn format playlist àti manifest sílẹ̀.
-Fún àwọn container ẹbí MOV tí a yọ̀ǹda, àwọn ìtọ́kasí dátà MOV ti ita ṣì jẹ́
-aláìṣiṣẹ́ nípa àìyípadà, command tí kò lè yípadà náà kò sì tan wọ́n. Mejeeji
-`ffprobe` àti `ffmpeg` máa ń lo àkójọ protocol `file`-nìkan tí a yọ̀ǹda, thread
-kan, àwọn àkójọ argument tí kò lè yípadà, láìsí shell, pẹ̀lú àwọn executable
-tí a yanjú láti inú `PATH`. Àwọn stream àwòrán ìborí tí a so mọ́ kò jẹ́ olùdíje
-tí a lè ṣeré. Gbogbo stream tí a lè ṣeré gbọ́dọ̀ tẹ̀lé àwọn ààlà náà, a ó sì
-kọ́kọ́ yan stream àìyípadà tó ṣe kedere kí a tó lo àṣàyàn ìpadàsẹ́yìn
-deterministic tó ní index tó kéré jù. A fi ààlà 600 ìṣẹ́jú-àáyá, 8,192 pixel
-fún dimension kọ̀ọ̀kan, àti 33,554,432 pixel orísun sí àwọn fídíò. FFmpeg máa
-ń ṣe àpẹẹrẹ fireemu JPEG àárín 1–16, ó máa ń dín etí gígùn kù sí 1,024 pixel
-ó pọ̀ jù láì mú àwọn input kéékèèké tóbi, kò sì gba URL rárá. `uniform` ni
-sampling àìyípadà. Àwọn ìlànà `scene_aware` àṣàyàn àti `segment_aware`
-àdánwò máa ń ṣe ìkọjá FFmpeg kan sí i tí kò lè yípadà lórí stream local tí a
-ti fọwọ́sí, wọ́n máa ń yan àwọn timestamp scene `showinfo` tí a fi ààlà sí,
-wọ́n sì máa ń padà lọ sí àwọn midpoint uniform kan náà lọ́nà deterministic
-bí detector bá kùnà, bí àkókò bá tán, bí output bá ní àbùkù, tàbí bí àkójọ
-olùdíje bá ṣófo. Ipo segment-aware máa ń pín àwọn àpẹẹrẹ midpoint ní ìbámu
-pẹ̀lú àwọn interval scene tí a ti fọwọ́sí; ẹ̀rí segment-aware àti ìhùwàsí
-ìpadàsẹ́yìn ni a ṣàlàyé ní ìsàlẹ̀. A máa ń lo ààlà líle ti fireemu 16 lẹ́yìn
-àṣàyàn nínú gbogbo ìlànà. Nígbà tí ìbéèrè scene-aware bá ní isuna fireemu kan
-ṣoṣo, ó máa ń lo midpoint uniform ti gbogbo fídíò tó ń ṣiṣẹ́ tàbí window focus,
-ó sì máa ń jabo `policyEffective: uniform`: fireemu scene kan ṣoṣo tí a yan
-kò lè pa ẹ̀rí àwọn òpin àkókò méjèèjì mọ́. Olùpè lè pèsè window focus tí ó
-lopin (`start`/`end` ìṣẹ́jú-àáyá) gẹ́gẹ́ bí àṣàyàn; a máa ń gé àwọn ààlà rẹ̀
-mọ́ iye àkókò media, a máa ń kọ àwọn window tí a yí padà tàbí tí kì í ṣe finite,
-gbogbo ìlànà sampling sì máa ń ṣẹlẹ̀ nínú interval tí a ti normalize nìkan.
-Window àbájáde náà wà nínú metadata sampling àti nínú prefix àpèjúwe tí a kò
-gbọ́kàn lé, kí àwọn model downstream lè fi àyọkà tó ní focus yàtọ̀ sí gbogbo
-timeline.
+Nínú olùgbọ̀ràn náà, `ffprobe` ń ka fáìlì àgbègbè tí ó ní ìkọ̀kọ̀; àkójọ àwọn ọ̀nà ìfọwọ́sọ́pọ̀ tí a ti ṣètò kò gba àwọn ọ̀nà ìfihàn orin tàbí àkójọ. Fún àwọn àpótí ẹbí MOV tí a gbà láyè, àwọn ìtọ́kasí dátà MOV ti ìta wà ní dídènà ní ìbẹ̀rẹ̀, àti aṣẹ tí a ti ṣètò kò fi ara mọ́ wọn. Àwọn méjèèjì `ffprobe` àti `ffmpeg` ń lò `file`-only protocol whitelist, okùn kan, àwọn àkójọ àrísọ tí a ti ṣètò, kò sí shell, àti àwọn ohun èlò tí a lèṣe láti `PATH`. Àwọn ìṣàn dété ideri àwòrán tí a fi mọ́ kìí ṣe olùdíje tí a lè ṣeré. Gbogbo àwọn ìṣàn tí a lè ṣeré gbọ́dọ̀ tẹ́lẹ̀ àwọn àlà, àti pé a fẹ́ràn ìṣàn àìṣètò tí ó hàn gbangba kí a tó lo ìyípadà index tí ó kéré jùlọ tí a mọ̀ dájú. Àwọn fídíò ní àlà sí ìṣẹ́jú ààyè 600, píksẹ́lì 8,192 fún iwọn kọọ̀kan, àti píksẹ́lì orísun 33,554,432. FFmpeg ń mú àwọn àwòrán JPEG àárín 1–16, ó ń dín iwọn gígùn kù sí ó pọ̀ jù píksẹ́lì 1,024 láìṣe àgbéga àwọn ìgbbewọlé tí ó kéré, kò sì gbà URL rí. Ìmúṣẹ jẹ `uniform` ní ìbẹ̀rẹ̀. Àwọn ètò àṣàyàn `scene_aware` àti ìdánwò `segment_aware` ń ṣe àfikún ìkọjá FFmpeg kan soso lórí ìṣàn àgbègbè tí a ti fọwọ́sọ́pọ̀ tẹ́lẹ̀, wọ́n ń yan àwọn àkókò ìṣẹ̀lẹ̀ `showinfo` tí a díwọn, wọ́n sì ń padà sẹ́yìn sí àwọn àárín `uniform` kan náà nígbà tí ìṣòro àwárí bá dé, tí àkókò bá pé, tí àbájáde bá bàjẹ́, tàbí tí àkójọ olùdíje bá ṣofo. Ìpò `segment_aware` pín àwọn àpẹẹrẹ àárín gẹ́gẹ́ bí ìwọn àwọn ààyè ìṣẹ̀lẹ̀ tí a fọwọ́sọ́pọ̀; ẹ̀rí `segment_aware` àti ìwùrà ìpadàsẹ́yìn ni a ṣe àlàyé rẹ̀ ní ìsàlẹ̀ yìí. Ìpínlẹ̀ 16-frame ti le koko ni a lo lẹ́yìn àṣàyàn ní gbogbo ètò. Nígbà tí ìbéèrè `scene_aware` bá ní ìnáwó fún àwòrán kan péré, ó ń lò àárín `uniform` ti fídíò kíkún tó wà lọ́wọ́ tàbí window ìfojúsùn ó sì ń jábọ̀ `policyEffective: uniform`: aṣayan àwòrán ìṣẹ̀lẹ̀ kan kò lè pa àwọn òpin àkókò méjèèjì mọ́. Olùpè lè pèsè window ìfojúsùn tí ó ní opin (`start`/`end` àwọn ìṣẹ́jú); a fi àwọn àlà di mọ́ ìwọ̀ fídíò, a kọ àwọn window tí a yípadà tàbí tí kò ní opin, a sì ń ṣe gbogbo àwọn ètò ìmúṣẹ nínú ààyè tí a ti ṣètò nìkan. Window tí ó jáde wá ni a fi kún metadata ìmúṣẹ àti nínú àfikún àpèjúwe tí kò ní ìgbẹ́kẹ̀lé kí àwọn àwòṣe ìsàlẹ̀ lè mọ ìyàtọ̀ láàárín ìpín tí a fojúsùn sí àti àkókò kíkún.
 
-Focus àkọlé semantic jẹ́ ètò ọ̀tọ̀ tó sì ṣe kedere. Ipo ìtúpalẹ̀ `full`
-àìyípadà máa ń pa prompt fireemu tó wà tẹ́lẹ̀ mọ́, kò sì fi ọ̀rọ̀ ìbéèrè ránṣẹ́
-sí model àkọlé rárá. Nínú ipo `focused`, afárá náà máa ń ka
-`text`/`input_text` tuntun jù lọ tí kò ṣófo, tí olumulo kọ láti inú container
-Chat tàbí Responses kan náà; ó máa ń normalize rẹ̀ sí NFC, ó ń so àwọn àmì
-ìṣàkóso àti àyè funfun pọ̀, ó sì ń fi ààlà Unicode code point 500 sí i.
-Àbájáde tó ṣófo máa ń padà sí prompt `full` gangan. A máa ń serialize ìtọ́ka
-tó ṣeé lò gẹ́gẹ́ bí JSON nínú block àkóónú olumulo tí a kò gbọ́kàn lé, ó sì
-lè fi àwọn kúlẹ̀kúlẹ̀ tí a lè ṣàkíyèsí ṣáájú nìkan; kò lè bori ìkìlọ̀ ọ̀tọ̀
-lòdì sí títẹ̀lé àwọn ìtọ́ni tí a lè rí tàbí gbọ́ nínú media. Focus ọ̀rọ̀ kò
-ní ìgbà kankan infer `start`/`end`, bẹ́ẹ̀ ni kò yí temporal sampler padà.
+Ìfojúsùn àpèjúwe oní-ìtumọ̀ jẹ́ ètò ọ̀tọ̀, tó hàn gbangba. Ìpò ìtẹ̀wọ̀n `full` tí ó wà ní ìbẹ̀rẹ̀ ń tọ́jú ìbéèrè àwòrán tó wà tẹ́lẹ̀ kò sì ní fi ọ̀rọ̀ ìbéèrè ránṣẹ́ sí àwòṣe àpèjúwe rí. Nínú ìpò `focused`, afárá náà ń ka `text`/`input_text` tí olùṣe kọ tí kò ṣofo tí ó kẹ́yìn nìkan láti inú Àpótí Ìjíròrò (Chat) tàbí Ìdáhùn (Responses) kan náà, ó ń sọ ọ́ di NFC, ó ń dín àwọn àmì ìṣàkóso àti ààyè kù, ó sì ń fi sí àlà àwọn koodu Unicode 500. Àbájáde tí ó ṣofo ń padà sí ìbéèrè `full` gangan. Ìtọ́kasí tó wúlò ni a ń fi JSON ṣe àkójọ rẹ̀ nínú àpótí tí kò ní ìgbẹ́kẹ̀lé láti ọ̀dọ̀ olùṣe (`untrusted-user-context`) àti pé ó lè ṣe pàtàkì sí àwọn kúlẹ̀kúlẹ̀ tó hàn nìkan; kò lè sọ ìkìlọ̀ ọ̀tọ̀ di àìnílari lòdì sí títẹ̀lé àwọn ìlànà tí ó hàn tàbí tí a ṅ gbọ́ nínú media náà. Ìfojúsùn ọ̀rọ̀ kìí ṣe àfihàn `start`/`end` tàbí kí ó yí olùṣàyàn àkókò padà.
 
-#### Ẹ̀rí segment ìgbékalẹ̀ FU-07
+#### FU-07 ẹ̀rí apá ìgbékalẹ̀
 
-`segment_aware` ń lo ìgbésẹ̀ ìtúpalẹ̀-àkọ́kọ́ kan tí a fi ààlà sí lórí ṣiṣàn fídíò agbègbè tí a ti fìdí rẹ̀ múlẹ̀ tẹ́lẹ̀. Ẹ̀wọ̀n àsẹ àìyípadà náà kọ́kọ́ dín ìwọ̀n sí ìbú píksẹli 320 ó pọ̀jù, ó ṣàwárí àwọn ìyípadà sínì àti àwọn àkókò dídì, lẹ́yìn náà ó ń mú àpẹẹrẹ ní férémù 1 fún ìṣẹ́jú-àáyá kọ̀ọ̀kan láti díwọ̀n àìmọ́jú, ìpíndọ́gba ìmọ́lẹ̀ luma, àti ìwífún ààyè/àkókò. Ìgbésẹ̀ náà ní ààlà àwọn àpẹẹrẹ ìṣètò 600, fíránṣẹ́ FFmpeg/àsẹ kan ṣoṣo, ìlànà `file`-nìkan àti àwọn àkójọ ààyè fún kọ́ńténà kan náà, ààlà àbájáde ìlànà 1 MiB, àti ó pọ̀jù ìṣẹ́jú-àáyá 30 láàárín ìfagilé/àkókò-ìparí tí alárinà ń pín. Kò gba àṣẹ, àsẹ, ọ̀nà fáìlì, tàbí URL láti inú ìbéèrè láéláé.
+`segment_aware` ń lò ìkọjá ìtẹ̀wọ̀n tẹ́lẹ̀ kan tí a díwọn lórí ìṣàn fídíò àgbègbè tí a ti fọwọ́sọ́pọ̀ tẹ́lẹ̀. Ẹ̀wọ̀n àlẹ̀mọ́ tí a ṣètò kọ́kọ́ ń gbé iwọn lọ sí ó pọ̀ jù píksẹ́lì 320 ní ìbú, ó ń wá àwọn àyípadà ìṣẹ̀lẹ̀ àti àwọn ààyè tí ó di dídì, lẹ́yìn náà ó ń ṣe àpẹẹrẹ ní àwòrán 1 fún ìṣẹ̀jú ààyè fún òkùnkùn/ìṣìnà, luma àpapọ̀, àti ìsọfúnni ààyè/àkókò. Ìkọjá náà ní àlà sí àwọn àpẹẹrẹ ìgbékalẹ̀ 600, okùn FFmpeg/filter kan, `file`-only protocol àti container allowlists kan náà, àlà ìṣejáde ìlànà 1 MiB, àti ó pọ̀ jù ìṣẹ́jú ààyè 30 ní inú ààyè ìfagile/àkókò tí a pín ti olùgbọ̀ràn. Kò gbà àṣẹ, àlẹ̀mọ́, ọ̀nà, tàbí URL láti ọ̀dọ̀ ìbéèrè rí.
 
-Àwọn iye ìṣètò náà jẹ́ ẹ̀rí gbígba-àpẹẹrẹ tí ó ṣeé tún ṣe pẹ̀lú àbájáde kan náà, kì í ṣe òye ìtumọ̀ fídíò. Wọn kò ń yọrí sí ìmọ̀ nípa àwọn kókó, ìṣe, àkọlé, ọ̀rọ̀ sísọ, tàbí ète olùlò. Àwọn ààlà sínì àti dídì ń ṣe àwọn apá; ìwọ̀n tí dídì bò, àìmọ́jú, ìṣíhàn ìmọ́lẹ̀, kíkún kúlẹ̀kúlẹ̀ ààyè, àti ìyípadà àkókò nìkan ni ó ń nípa lórí bí a ṣe pín ìnáwó férémù 1–16 tó ti wà. A fi férémù kan ṣoṣo ṣe òpin fún apá tí ó dì pátápátá, nígbà tí àwọn apá tí kò dì ń díje fún ìnáwó tó kù. Nígbà tí àwọn ààlà bá pọ̀ ju àwọn férémù lọ, a ń pa ìbòrí àkókò tó dọ́gba mọ́ kí àwọn gígé yíyára ní ìbẹ̀rẹ̀ má bàa fi apá gígùn ní ìparí pamọ́. A ń dapọ̀ àwọn ààlà sínì tó wà láàárín ìpinnu ìtúpalẹ̀ ìṣẹ́jú-àáyá 1 ti ààlà dídì kan.
+Àwọn iye ìgbékalẹ̀ jẹ́ ẹ̀rí àpẹẹrẹ tí a mọ̀ dájú, kìí ṣe òye fídíò oní-ìtumọ̀. Wọn kò ṣe àfihàn àwọn olùkópa, àwọn ìṣe, àpèjúwe, ọ̀rọ̀ sísọ, tàbí ète olùṣe. Àwọn àlà ìṣẹ̀lẹ̀ àti dídì ń dá àwọn apá sílẹ̀; ìbòju dídì, òkùnkùn/ìṣìnà, ìfihàn, kúlẹ̀kúlẹ̀ ààyè, àti àyípadà àkókò nìkan ni ó nípa lórí bí a ṣe pín ìnáwó àwòrán 1–16 tí ó wà. Apá kan tí ó di dídì ní kíkún ni a ní àlà sí àwòrán kan, nígbà tí àwọn apá tí kò di dídì ń díje fún ìnáwó tó kù. Nígbà tí àwọn àlà bá pọ̀ ju àwọn àwòrán lọ, a máa ń tọ́jú ìbòju àkókò `uniform` kí àwọn ìkékùú kíákíá ní ìbẹ̀rẹ̀ má bàa fi apá gígùn tó kù pamọ́. Àwọn àlà ìṣẹ̀lẹ̀ láàárín ìwọn ìtẹ̀wọ̀n ìṣẹ́jú ààyè 1 ti àlà dídì ni a ń dapọ̀ mọ́ra wọn.
 
-Àwọn àsẹ tó sọnù, ẹ̀rí tí ìrísí rẹ̀ kò tọ́/tó ṣófo, àṣìṣe olùṣàwárí, tàbí ìparí-àkókò ìtúpalẹ̀-àkọ́kọ́ tí a fi ààlà sí yóò ṣí sí ìlànà ojú-àárín tó dọ́gba gan-an. Ìfagilé láti ọ̀dọ̀ olùpè tàbí àkókò-ìparí alárinà kì í ṣí sí ìlànà yẹn: ó máa dá ìlànà abẹ́ tó ń ṣiṣẹ́ dúró, kò jẹ́ kí yíyọ férémù jáde lẹ́yìn náà ṣẹlẹ̀, a sì máa yọ gbogbo igi ìgbà-díẹ̀ àdáni náà kúrò nínú `finally`.
+Àwọn àlẹ̀mọ́ tí ó sonu, ẹ̀rí tí ó bàjẹ́/tí ó ṣofo, àṣìṣe olùwárí, tàbí àkókò ìtẹ̀wọ̀n tẹ́lẹ̀ tí ó ní àlà ń ṣí sílẹ̀ sí ètò àárín `uniform` gangan. Ìfagile olùpè tàbí àkókò ipari olùgbọ̀ràn kò ṣí sílẹ̀: ó ń fòpin sí ìlànà abẹ́-ìṣẹ̀ṣe tí ó ń lọ, ó ń dènà ìṣẹ̀dá àwòrán nígbà tí ó bá yá, a sì ń yọ igi ìgbà díẹ̀ kúrò nínú `finally`.
 
-`scripts/perf/video-bridge-fu07-eval.ts` ń ṣẹ̀dá àwọn ohun ìdánwò FFmpeg gidi tí ó ṣeé tún ṣe pẹ̀lú àbájáde kan náà fún ìdínkù àwọn ìpè àkọlé lẹ́yìn yíyọ àdàkọ kúrò, pípín ìnáwó fún ìṣípòpọ̀ tó pọ̀, ẹ̀rí àìmọ́jú/ìṣíhàn ìmọ́lẹ̀/SI-TI, àwọn gígé yíyára pẹ̀lú ìparí gígùn, àti àwọn ìdánimọ̀ èké nígbà ìrẹ̀wẹ̀sì díẹ̀díẹ̀. Ó ń ṣàkọsílẹ̀ àkókò ògiri ìtúpalẹ̀-àkọ́kọ́ àti, níbi tí `/usr/bin/time` bá ti wà, CPU ìlànà abẹ́ àti RSS tó ga jù. Àwọn àyẹ̀wò dídára rẹ̀ jẹ́ àwọn àmì ìtọ́kasí ìṣètò nìkan. Dídára àwòṣe àkọlé gidi ṣì jẹ́ `HOLD` nítorí pé ètò ìdánwò yìí kò ní endpoint tí a fún láṣẹ tàbí adájọ́ tí a ti sọ di àìyípadà. Àwọn ìfipamọ́ owó náà tún jẹ́ `HOLD` àyàfi tí `--caption-cost-per-call-usd` bá pèsè ìṣírò rere tó ṣe kedere fún iye owó ìpè kọ̀ọ̀kan; skripti náà kì í hùmọ̀ èyíkéyìí nínú àwọn àbájáde méjèèjì láéláé.
+`scripts/perf/video-bridge-fu07-eval.ts` ń dá àwọn ohun èlò FFmpeg gidi tí a mọ̀ dájú sílẹ̀ fún ìpamọ́ ìpe àpèjúwe lẹ́yìn ìgbà tí a ti yọ ẹ̀dà kúrò, ìpín ìnáwó ìṣẹ́ òjijì, ẹ̀rí òkùnkùn/ìfihàn/SI-TI, àwọn ìkékùú kíákíá pẹ̀lú ìrù gígùn, àti àwọn èké ìpòyì tí ó lọ́ra. Ó ń gba àkókò ògiri ìtẹ̀wọ̀n tẹ́lẹ̀ àti, níbi tí `/usr/bin/time` ti wà, CPU ọmọ àti RSS tó ga jùlọ. Àwọn àyẹ̀wò dídára rẹ̀ jẹ́ ìpìlẹ̀ ìgbékalẹ̀ nìkan. Dídára àwòṣe àpèjúwe gidi wà ní `HOLD` nítorí pé ẹ̀rọ yìí kò ní ìparí ìforúkọsílẹ̀ tí a fọwọ́sọ́pọ̀ tàbí oǹgbẹ́jọ́ tí ó ti di dídì. Àwọn ìpamọ́ owó náà tún wà ní `HOLD` àfi tí `--caption-cost-per-call-usd` bá pèsè ìṣirò rere fún ìpe kọọ̀kan tí ó hàn gbangba; ẹ̀rọ ìṣe kò ní ṣe ìṣẹ̀dá èyíkéyìí nínú àwọn àbájáde méjèèjì.
 
-A fi ààlà 4 MiB sí férémù kọ̀ọ̀kan, 23 MiB sí gbogbo àwọn férémù aláìṣẹ̀dá lápapọ̀, àti 32 MiB sí ìdáhùn alárinà tí a ti sọ di ọ̀wọ́ọ̀wọ́. A máa yọ àkójọ fáìlì ìgbà-díẹ̀ àdáni kan kúrò nínú `finally`. OmniRoute kò kó FFmpeg sínú àkójọpọ̀ rẹ̀, kò sì gba ọ̀nà fáìlì ìmúṣẹ àdáni. Ṣáájú ṣíṣe àkọlé, afárá náà ń lo ìgbésẹ̀ yíyọ àdàkọ ìríran kúrò pẹ̀lú ìṣọ́ra: a ń dín JPEG kọ̀ọ̀kan sí búfà grayscale 16×16, a sì ń fi í wé férémù tó kẹ́yìn tí a dá dúró nìkan. Fún ìnáwó àkọlé tí a béèrè tó ju férémù kan lọ, ìyọjáde ń pèsè àkójọpọ̀ àwọn olùdíje tí a fi ààlà sí, tó lè dé ìlọ́po méjì ìnáwó náà, tí kò sì lè kọjá férémù 16 láéláé. A ń lo òpin tí a béèrè lẹ́yìn yíyọ àwọn àdàkọ kúrò nìkan, pẹ̀lú pípa olùdíje àkọ́kọ́ àti ti ìkẹyìn tí a yàn mọ́ nígbà tínníní ìkẹyìn, bí ìnáwó bá jẹ́ ó kéré tán méjì. Ìlànà tí a fi ẹ̀yà sí
-`grayscale-16x16-mean-cells-v2` ń lo èyí tó tóbi jù láàárín ìyàtọ̀ ìpíndọ́gba luma àti ìwọ̀n àwọn sẹ́ẹ̀lì àwòrán kékeré tí ìyàtọ̀ tí a mú sí ìwọ̀n wọn jẹ́ ó kéré tán 0.05. Ààlà àdàkọ ni iye àìyípadà 0.04, tí a yàn fún àsọtẹ́lẹ̀ dípò fífi hàn gẹ́gẹ́ bí ètò àsìkò-ṣiṣe. Àmì kejì yìí tí ìyàtọ̀ ìmọ́lẹ̀ rẹ̀ ga ń pa ìṣípòpọ̀ kékeré àti àwọn ìyípadà ọ̀rọ̀ tó hàn mọ́, èyí tí ìfiwéra ìpíndọ́gba-nìkan lè fi pamọ́. Àwọn àṣìṣe afiwéra tàbí olùyànjú kóòdù máa ń ṣí sí pípa ìbòrí mọ́. Metadata àbájáde ń ya àwọn olùdíje tí a yọ jáde, àwọn férémù tí a lò ní àṣeyọrí, àti àwọn àdàkọ ìríran tí a yọ kúrò sọ́tọ̀.
+Gbogbo fireemu kọọkan ni opin si 4 MiB, gbogbo awọn fireemu aise papọ si 23 MiB, ati idahun oluranlọwọ ti a sọ di tẹlentẹle si 32 MiB. Ilana igba diẹ aladani kan ni a n yọ kuro ninu `finally`. OmniRoute ko ni FFmpeg ninu ko si si gba ọna aṣẹ aṣa. Ṣaaju ki o to fun ni akọle, afara naa nlo ọna yiyọ awọn awọ ti o tun ara wọn ṣe: JPEG kọọkan ni a dinku si bofa grẹsi 16×16 a si n fi i we fireemu ti o kẹhin ti a dani nikan. Fun isuna akọle ti o kọja fireemu kan, iṣelọpọ n pese adagun oludije ti o ni opin to ilọpo meji isuna yẹn kii si ju awọn fireemu 16 lọ. Iwọn ti a beere ni a n lo nikan lẹhin yiyọ awọn awọ ti o tun ara wọn ṣe, pẹlu awọn oludije akọkọ ati ikẹhin ti a yan ti a tọju lakoko didinku ikẹhin nigbati isuna ba jẹ o kere ju meji. Ilana ti a ṣe lẹya `grayscale-16x16-mean-cells-v2` nlo eyiti o tobi ninu iyapa apapọ luma ati ipin awọn sẹẹli apẹẹrẹ kekere ti iyapa wọn ti a ṣe deede jẹ o kere ju 0.05. Ẹnu-ọna fun awọ ti o tun ara wọn ṣe jẹ iye aimọ 0.04, ti a yan fun asọtẹlẹ dipo ki o fi han gẹgẹ bi eto akoko ṣiṣe. Ifihan giga-giga keji yii n ṣetọju iṣipopada kekere ati awọn ayipada ọrọ ti o han gbangba eyiti afiwe apapọ nikan le farapamọ. Awọn aṣiṣe olufiwewe tabi oluyipada kuna ni ṣiṣi ati pe wọn n tọju agbegbe naa. Awọn metadata ti o jade ya awọn oludije ti a fa jade, awọn fireemu ti a lo ni aṣeyọri, ati awọn awọ ti o tun ara wọn ṣe ti a sọ silẹ.
 
-Apá fídíò tí a sàmì sí ní kedere lè béèrè bébà ìkànsí tó ní àmì-àkókò. Afárá náà ń kọ gíríìdì JPEG tó ní ọ̀wọ̀n 4 àti férémù 16 ó pọ̀jù. Sẹ́ẹ̀lì píksẹli 512 kọ̀ọ̀kan ń tẹ àmì-àkókò orísun rẹ̀ sínú bándì ìsàlẹ̀ tí ìyàtọ̀ ìmọ́lẹ̀ rẹ̀ ga, nígbà tí àwọn àmì-àkókò kan náà ṣì wà nínú metadata ọ̀rọ̀ fún ìsopọ̀ àti àyẹ̀wò lẹ́yìn náà. JPEG pípé náà ṣì ní òpin 32 MiB. Bí `sharp` kò bá lè yànjú kóòdù tàbí ṣàkópọ̀ gíríìdì náà, afárá náà yóò padà sí àwọn férémù JPEG kọ̀ọ̀kan; ìfagilé oníbàárà ṣì ń tàn kọjá iṣẹ́ bébà náà.
+Apa fidio kan ti a samisi ni pataki le beere iwe olubasọrọ ti a fi akoko si. Afara naa kọ o pọju akoj JPEG 4-kolumnu, fireemu 16. Sẹẹli 512-pixel kọọkan n sun akoko orisun rẹ sinu ẹgbẹ isale ti o ni iyatọ giga, lakoko ti awọn akoko kanna n wa ninu metadata ọrọ fun ajọṣepọ isalẹ ati iṣayẹwo. JPEG pipe naa wa ni opin si 32 MiB. Ti `sharp` ko ba le tu tabi ṣajọ akoj naa, afara naa tun pada si awọn fireemu JPEG kọọkan; iṣẹ iduro alabara tun n tan kaakiri nipasẹ iṣẹ iwe naa.
 
-Ẹ̀rí ìgbéga jẹ́ ohun tí a mọ̀ọ́mọ̀ yà sọ́tọ̀ kúrò nínú ìdánwò kékeré àkópọ̀ síntẹ́tíìkì. `scripts/perf/video-bridge-contact-sheet-eval.ts` ń ṣàlàyé ètò ìdánwò A/B tí a fi ẹ̀yà sí fún àwọn àwòṣe ìríran gidi tó bá OpenAI mu. Ó ń díwọ̀n àwọn token tí olùpèsè ròyìn, ìdádúró ògiri láti ìbẹ̀rẹ̀ dé òpin (pẹ̀lú àkópọ̀ bébà), iye ìpè àwòṣe, àti pípa àwọn òtítọ́ tí manifest ṣàlàyé mọ́. A kì í kọ àwọn ìdáhùn àwòṣe aláìṣẹ̀dá sínú ìròyìn náà; àwọn digest SHA-256 àti àwọn ID òtítọ́ tó báramu nìkan ni a ń dá dúró. Ètò ìdánwò náà kì í ṣe ìpè nẹ́tíwọ̀ọ̀kì tàbí ìpè àwòṣe ọlọ́wọ̀ ayélujára àyàfi tí a bá kọjá `--execute-real`, tí a sì ṣètò `--model`, `OMNIROUTE_BASE_URL`, àti `OMNIROUTE_API_KEY`. Láìsí ìṣiṣẹ́ gidi tó ṣe kedere yẹn, ìdájọ́ rẹ̀ tí ẹ̀rọ lè kà ṣì jẹ́ `HOLD`; àwọn ìwọ̀n payload/iye-ìpè síntẹ́tíìkì nìkan kì í ṣe ẹ̀rí ìgbéga.
+Ẹri igbega ni a mọọmọ ya sọtọ kuro ninu microbenchmark iṣelọpọ sintetiki. `scripts/perf/video-bridge-contact-sheet-eval.ts` ṣalaye ohun ijanu A/B ti o ni ẹya schema fun awọn awoṣe iran gidi ti o ni ibamu pẹlu OpenAI. O n wọn awọn ami ti olupese royin, idaduro ogiri ipari-si-ipari (pẹlu akopọ iwe), iye pe awoṣe, ati idaduro otitọ ti a ṣalaye ninu manifest. Awọn idahun awoṣe aise ko ni kọ sinu ijabọ naa; awọn digests SHA-256 nikan ati awọn ID otitọ ti o baamu ni a dani. Ohun ijanu naa ko ṣe nẹtiwọki tabi ipe awoṣe ti o sanwo ayafi ti `--execute-real` ba kọja ati pe `--model`, `OMNIROUTE_BASE_URL`, ati `OMNIROUTE_API_KEY` ti ni atunto. Laisi ṣiṣe gidi ti o han gbangba yẹn, idajọ kika-ẹ̀rọ rẹ wa `HOLD`; awọn wiwọn iwuwo isanwo/ipe sintetiki nikan kii ṣe ẹri igbega.
 
-Àwọn olùpè lè so àkójọpọ̀ `transcript.cues` àṣàyàn mọ́ apá fídíò tí a ṣe àtìlẹ́yìn fún nígbà tí wọ́n bá ti ní ọ̀rọ̀ tó bá àkókò mu. Cue kọ̀ọ̀kan gbọ́dọ̀ ní `text`, àárín `start`/`end` tó ní iye tó ṣeé parí láàárín gígùn àkókò tí a ṣàyẹ̀wò, àti `source` tó wà nínú àkójọ ìyọ̀ǹda (`client`, `embedded`, tàbí `audio-bridge`); iye àkọ́kọ́ `confidence` ni `1`, ó sì gbọ́dọ̀ wà láàárín `0` àti `1`. A ń ṣú àwọn cue àdàkọ pípé pọ̀. OmniRoute kì í bẹ̀rẹ̀ ìkọ̀wé ọ̀rọ̀ láti inú metadata yìí láéláé: a ń da àwọn cue tí a fìdí rẹ̀ múlẹ̀ sínú àbájáde tí a ṣàlàyé pẹ̀lú orísun, ìgbẹ́kẹ̀lé, àti àárín àkókò, a sì ń ṣàfihàn wọn gẹ́gẹ́ bí àwọn àkíyèsí tí a kò gbẹ́kẹ̀ lé lẹ́gbẹ̀ẹ́ àwọn àkọlé férémù. A ń kọ ọ̀rọ̀ tí kò péye, tí ó jáde kúrò ní ààlà, tàbí tí kò ní ẹ̀rí orísun dànù dípò dídà á pọ̀ mọ́ ṣiṣàn àkọlé. Àwọn ikanni transcript ara-ìbéèrè méjèèjì ń mú ẹ̀rí orísun tí a pèsè sí `client`, pẹ̀lú àwọn àmì `embedded` tàbí `audio-bridge` tí olùpè fi fún ara rẹ̀. Adapter tí olupin ní nìkan ló lè fi àwọn àmì ìgbẹ́kẹ̀lé wọ̀nyẹn fúnni nípasẹ̀ àríyànjiyàn kóòdù-nìkan `trustedSource`; pápá JSON ìbéèrè kò lè dé àríyànjiyàn yẹn. Ọ̀rọ̀ transcript ṣì jẹ́ àkóónú tí a rí láti inú mídíà tí a kò gbẹ́kẹ̀ lé, láìka ẹ̀rí orísun rẹ̀ sí, kò sì gbọ́dọ̀ pinnu ìfúnni-láṣẹ láéláé.
+Awọn olupe le so apoti `transcript.cues` aṣayan kan mọ apa fidio ti o ni atilẹyin nigbati wọn ti ni ọrọ ti o ni ibamu tẹlẹ. Itọkasi kọọkan gbọdọ gbe `text`, `start`/`end` iwọn aropọ laarin akoko ti a ṣe ayẹwo, ati `source` ti a fọwọsi (`client`, `embedded`, tabi `audio-bridge`); `confidence` jẹ aiyipada si `1` o si gbọdọ wa laarin `0` ati `1`. Awọn itọkasi ti o tun ara wọn ṣe gangan ni a dinku. OmniRoute kii yoo bẹrẹ iṣẹ transcription lati inu metadata yii: awọn itọkasi ti a fọwọsi ni a da kọ sinu abajade ti a ṣalaye pẹlu orisun, igbẹkẹle, ati aarin, a si ṣe wọn gẹgẹ bi awọn akiyesi ti ko ni igbẹkẹle lẹgbẹẹ awọn akọle fireemu. Ọrọ ti ko wulo, ti o kọja iwọn, tabi ti ko ni orisun ni a kọ dipo ki o dapọ sinu odo akọle. Awọn ikanni transcript ti ara ibeere mejeeji ṣe deede orisun ti a pese si `client`, pẹlu awọn aami `embedded` tabi `audio-bridge` ti ara ẹni sọ. Olugba ti o ni olupese nikan ni o le sọ awọn aami igbẹkẹle yẹn nipasẹ ariyanjiyan `trustedSource` ti koodu nikan; aaye JSON ibeere kan ko le de ọdọ ariyanjiyan yẹn. Ọrọ Transcript jẹ akoonu ti o wa lati media ti ko ni igbẹkẹle, laibikita orisun rẹ, ko si gbọdọ pinnu aṣẹ lailai.
 
-Olùpè tó ní ìmọ̀ gíga lè pèsè ipa-ọ̀nà `audioTranscript` fún fídíò kan náà;
-a máa kà á sí ọ̀rọ̀ tí oníbárà pèsè, kì í ṣe ẹ̀rí pé olupin ṣe àkọsílẹ̀-ohùn-sí-ọ̀rọ̀.
-Ààyè ìṣọ̀kan náà ń ṣiṣẹ́ lórí àwọn àkíyèsí ojú àti ohùn lábẹ́
-àkókò ìparí àti àmì ìfagilé kan náà, ó ń ṣètò wọn lórí ìlà-àkókò kan náà, ó ń ṣàkójọpọ̀
-àwọn àdáàkọ tó jọ ara wọn pátápátá, ó sì ń jálẹ̀ àbájáde apá kan nígbà tí ẹ̀gbẹ́ kan ṣoṣo bá ṣàṣeyọrí.
-`audioTranscript` tí kò bófin mu yóò sọ ọ́ di àbájáde apá kan yẹn — a máa pa
-àpèjúwe ojú mọ́, ẹ̀ka ohùn yóò sì ṣàkọsílẹ̀ kóòdù ìkùnà tí a ti sọ di àìléwu —
-dípò kí gbogbo fídíò náà kùnà. Wíwà nílẹ̀ fún ẹ̀ka kọ̀ọ̀kan, àsìá apá kan,
-àti àwọn kóòdù ìkùnà tí a ti sọ di àìléwu ni a máa pa mọ́ sínú àbájáde tí a ṣàpèjúwe, sínú
-mẹ́tádátà ìdènà-ààbò (`audioFusionRuns`/`audioFusionPartials`/
-`audioFusionFailureCodes`), sínú mẹ́tádátà àpamọ́-àbájáde, àti sínú àwọn oníkà
-ìṣọ̀kan afárá. Ọ̀nà Video Bridge àiyipada kì í pe iṣẹ́ yíyí-ọ̀rọ̀-sí-àkọsílẹ̀
-tàbí gba ẹ̀dà mídíà kejì sílẹ̀; láìsí ipa-ọ̀nà yẹn tí a sọ ní kedere, yóò dúró
-gẹ́gẹ́ bí fídíò-nìkan.
+Olupe ti o ni ilọsiwaju le pese orin `audioTranscript` fun fidio kanna; a ṣe itọju rẹ gẹgẹ bi ọrọ ti alabara pese, kii ṣe ẹri transcription olugba. Iṣọpọ iṣọpọ nṣiṣẹ awọn akiyesi wiwo ati ohun labẹ akoko ipari kan ati ifihan iduro, paṣẹ wọn lori aago ti o wọpọ, dinku awọn adia gangan, ati jabo abajade apakan nigbati apa kan nikan ba ṣaṣeyọri. `audioTranscript` ti ko wulo dinku si abajade apakan yẹn — apejuwe wiwo ni a tọju ati ẹka ohun gba koodu ikuna ti a sọ di mimọ — dipo ki o kuna gbogbo fidio naa. Wa-n-be fun ẹka kọọkan, asia apakan, ati awọn koodu ikuna ti a sọ di mimọ ni a tọju sinu abajade ti a ṣalaye, ninu metadata oluso (`audioFusionRuns`/`audioFusionPartials`/`audioFusionFailureCodes`), ninu metadata cache-abajade, ati ninu awọn counters iṣọpọ afara. Ọna Afara Fidio aiyipada ko pe ọrọ-si-ọrọ tabi ṣe igbasilẹ ẹda media keji; laisi orin ti o han gbangba yẹn, o wa ninu fidio nikan.
 
-**Ìpamọ́ àkọsílẹ̀-ohùn (#12150 P1).** Èyí máa ń ṣiṣẹ́ fúnra rẹ̀ ní gbogbo ìgbà tí
-Video Bridge (èyí fúnra rẹ̀ jẹ́ ohun tí a gbọ́dọ̀ yàn láti lò) bá ṣe àfihàn àmì àkọsílẹ̀-ohùn — kò sí
-àsìá ìpamọ́ ọ̀tọ̀. Nígbà tí ìbéèrè kan bá ṣe àfihàn àmì àkọsílẹ̀-ohùn èyíkéyìí (èyí tí olùpè kéde
-gẹ́gẹ́ bí `transcript` tàbí `audioTranscript` tí a ti ṣọ̀kan), ìdènà-ààbò yóò sàmì sí i gẹ́gẹ́ bí
-`videoBridgeObserved`, yóò sì ṣe ẹ̀dà òjìji tí a ti yọ àwọn àlàyé kókó kúrò nínú àpèjúwe fídíò —
-àfihàn tó jọ ọ́ pátápátá níbi tí a ti fi
-`[redacted-video-transcript]` rọ́pò gbogbo ara ọ̀rọ̀ aláìlófin àmì kọ̀ọ̀kan, tí a kọ́ nípa rírọ́pò pápá àmì tó ní ìṣètò
-kí a tó so okùn pọ̀ (kì í ṣe nípa ṣíṣe àtúpalẹ̀ ọ̀rọ̀ tí a ti tẹ́ pẹrẹsẹ̀, nítorí náà kò sí àkóónú àmì
-— bóyá ó jẹ́ ti ọ̀tá tàbí ti ojoojúmọ́, títí kan àwọn ara ọ̀rọ̀ tó ní `]` bíi
-`[inaudible]`/`[music]` — tó lè yè). Ara ìbéèrè àkọsílẹ̀-ìpè tí a fipamọ́ yóò fi
-òjìji tí a ti yọ àlàyé kókó kúrò yẹn rọ́pò apá ọ̀rọ̀ kọ̀ọ̀kan tí ó wá láti inú fídíò, nípa fífi ìdọ́gba àkóónú
-bá wọn mu; a tún máa ka ìdákọ̀ró `fullText` láti inú ẹrù ìdènà-ààbò ṣáájú-ìpè tí a ti parí,
-nítorí náà ìbámu náà ṣì máa ṣàṣeyọrí lẹ́yìn tí àwọn ìdènà-ààbò tó wà lẹ́yìn nínú pq (àwọn
-olùbòjúbojú PII àti ìjẹ́rìísí, àwọn ààyò 10/95) bá tún àkọ̀wé àpèjúwe náà ṣe níbi kan náà àti
-lẹ́yìn tí fífi ìtọ́ni-sístẹ́mù/ìfàṣẹ́sí/Memory sínú rẹ̀ bá tún àtòjọ ìránṣẹ́ náà ṣe.
-Ara tí a fi ránṣẹ́ sókè lọ sí àwòṣe náà kò ní yí padà. Ìbéèrè tí a ṣàkíyèsí náà kò tún kún
-Memory pípẹ́ kankan (a fo ìyọ̀jáde tó wá láti inú ìbéèrè àti èyí tó wá láti inú ìdáhùn),
-nítorí náà ìdáhùn àwòṣe náà fúnra rẹ̀ kò lè tún ọ̀rọ̀ àkọsílẹ̀-ohùn sọ sínú Memory.
+**Ìpamọ́ transcript (#12150 P1).** Èyí máa ń ṣiṣẹ́ fúnra rẹ̀ nígbàkigbà tí Video Bridge (tí ó jẹ́ èyí tí a yàn láti lò) bá gbé àmì transcript jáde — kò sí àmì ìpamọ́ míràn tí ó mọ́tò. Nígbà tí ìbéèrè kan bá gbé àmì transcript jáde èyíkéyìí (`transcript` tí olùpè kéde tàbí `audioTranscript` tí a dá pọ̀), ẹ̀ṣọ́ aabo náà máa sàmì sí i gẹ́gẹ́ bí `videoBridgeObserved` yóò sì pèsè ojiji tí a ti pa àwọn nǹkan rẹ̀ rẹ́ fún àpèjúwe fídíò náà — àfihàn kan náà tí gbogbo ara àmì ọ̀rọ̀ ọ̀fẹ́ ti rọ́pò rẹ̀ pẹ̀lú `[redacted-video-transcript]`, tí a kọ́ nípa rírọ́pò pápá àmì ọ̀rọ̀ tí a ṣètò ṣáájú kí a tó ṣàkópọ̀ okun náà (kò nípasẹ̀ wíwo ọ̀rọ̀ tí a tẹ́ tẹ́lẹ̀ rí rárá, nítorí náà kò sí àkóonu àmì ọ̀rọ̀ — bóyá ti abímọ tàbí ti déédé, pẹ̀lú àwọn ara tí ó ní `]` gẹ́gẹ́ bí `[inaudible]`/`[music]` — tí ó lè yè). Ara ìbéèrè call-log tí a fi múlẹ̀ máa ń yí apá kan ọ̀rọ̀ tí ó wá láti fídíò padà fún ojiji tí a ti pa rẹ́ yẹn, èyí tí a fi ojú súwọ̀n ìbáṣepọ̀ àkóonu ṣe; agbekọ̀lù `fullText` ni a tún ka lágbára láti inú ohun èlò ẹ̀ṣọ́ aabo ṣáájú ìpè tí ó parí, nítorí náà ìbáṣepọ̀ náà ṣì ń yọrí sí rere lẹ́yìn àwọn ẹ̀ṣọ́ aabo ẹ̀wọ̀n tó kẹ́yìn (àwọn tí ń pa PII àti ẹ̀rí ìdánimọ̀ mọ́, àwọn ìpò àkọ́kọ̀ 10/95) tún kọ àpèjúwe ọ̀rọ̀ náà níbẹ̀ léèmẹ́jì àti lẹ́yìn tí ìtọ́nisọ́nà ẹ̀rọ/ìfiranṣẹ́/ìṣafikun ìrántí bá tún tò àwòrán àwọn ìránṣẹ́ náà ṣe. Ara tí a rán lọ sí òkè fún awoṣe náà kò yí padà. Ìbéèrè tí a kíyè sí kò tún kún Ìrántí tí ó pé titi (àwọn ìṣẹ̀dá láti ara ìbéèrè àti ìdáhùn ni a fò kọjá), nítorí náà ìdáhùn awoṣe fúnra rẹ̀ kò lè sọ ọ̀rọ̀ transcript sí inú Ìrántí.
 
-**Àwọn pápá fídíò àìlòṣiṣẹ́ (#12430).** Nígbà tí afárá náà bá ṣiṣẹ́ tí àtìlẹ́yìn fídíò abinibi kò sì dájú tàbí kò sí, àwọn pápá `transcript`/`audioTranscript` tí a ti ṣètumọ̀ tún máa mu `videoBridgeObserved` ṣiṣẹ́, àní lẹ́yìn ìkùnà àpèjúwe tàbí òpin `maxVideos`. `null` àti àwọn okùn òfìfo jẹ́ kíkà sí i; àwọn pápá tí kò sí àti mẹ́tádátà tí kì í ṣe ti fídíò kò jẹ́ bẹ́ẹ̀. Àwọn ẹ̀dà tí a fipamọ́ máa yọ àlàyé kókó kúrò nínú àwọn pápá wọ̀nyí tàbí yọ ìbéèrè náà sílẹ̀, a ó sì ré àwọn àpamọ́/Memory kọjá.
+**Àwọn pápá fídíò gidi (#12430).** Nígbà tí bridge bá ti wà ní ṣiṣẹ́ tí àtìlẹ́yìn fídíò abínibí kò mọ̀ tàbí tí kò sí, àwọn pápá `transcript`/`audioTranscript` tí a ṣàlàyé máa ń mú `videoBridgeObserved` ṣiṣẹ́ pẹ̀lú, kódà lẹ́yìn ìkùnà àpèjúwe tàbí ààlà `maxVideos`. `null` àti àwọn okùn òfo máa ń ka; àwọn pápá tí kò sí àti metadata tí kì í ṣe fídíò kò ní ka. Àwọn ẹ̀ka tí a pa mọ́ máa ń pa àwọn pápá wọ̀nyí rẹ́ tàbí kí wọ́n fò ìbéèrè náà jẹ́, a sì máa yẹra fún àwọn caches/Memory.
 
-Lórí àwọn ọ̀nà àfẹ́yìntì wọ̀nyẹn, àwọn àmì olùpè tó bófin mu yóò di àwọn apá `text`/`input_text`
-tí a ṣe àtìlẹ́yìn fún dípò àwọn pápá olupèsè tí kò bá òṣùwọ̀n mu. Àwọn ipa-ọ̀nà méjèèjì tí ìbéèrè pèsè
-yóò ṣì jẹ́ àkíyèsí `client` tí a kò fọkàn tán, pẹ̀lú ìkìlọ̀ kedere pé a kò ṣe àpèjúwe fídíò náà
-àti pé a kò ṣàyẹ̀wò àwọn àkókò àmì pẹ̀lú mídíà náà. Àwọn ìwọ̀n 256-àmì/64-KiB lápapọ̀
-àti ti àmì kọ̀ọ̀kan tó ti wà tẹ́lẹ̀ kan àwọn ipa-ọ̀nà méjèèjì papọ̀;
-àwọn àkókò àmì gbọ́dọ̀ bá òrùlé 600-àáyá ti alárinà náà àti fèrèsé ìfojúsùn èyíkéyìí
-tí a pèsè mu. A máa sọ àwọn ipa-ọ̀nà tí kò bófin mu nù, a kì yóò fi wọ́n ránṣẹ́ gẹ́gẹ́ bí ọ̀rọ̀ aláìlófin; a ṣì lè
-lo ẹ̀gbọ́n tàbí àbúrò rẹ̀ tó bófin mu àyàfi tí ìwọ̀n àpapọ̀ wọn bá kọjá. Àwọn pápá null/òfìfo
-kò fi ọ̀rọ̀ kankan kún un. Àfẹ́yìntì yìí kò ṣàfikún gbígba mídíà tàbí yíyí-ohùn-sí-ọ̀rọ̀.
-A máa yọ àwọn pápá ìmúgbòòrò àkọsílẹ̀-ohùn kúrò nínú ohun-ìgbé-fídíò àfẹ́yìntì àti àwọn ohun
-`video_url`/`source` rẹ̀. Àtòjọ ìyọ̀nda lórí wáyà OpenAI ṣì le gan-an; àwọn
-ohun-ìgbé-fídíò abinibi tí a kò mọ̀ ṣì wà nílẹ̀, àwọn ibi-afẹ́ ọ̀rọ̀-nìkan tí a mọ̀ sì ń pa àwọn àmì àìléwu mọ́.
-Àwọn òjìji yíyọ-àlàyé-kókó tí a ṣètò dáàbò bo ọ̀rọ̀ àkọsílẹ̀-ohùn tí a fikún, nígbà tí
-ìbéèrè àtilẹ̀wá tí olùpè ní kò yí padà. Àwọn ibi-afẹ́ tó ní àtìlẹ́yìn abinibi àti
-àwọn afárá tí a pa máa pa ìhùwàsí rékọjá wọn tó ti wà tẹ́lẹ̀ mọ́.
+Lórí àwọn ọ̀nà àbájade wọ̀nyí, àwọn àmì olùpè tí ó pé di apá `text`/`input_text` tí a ṣe àtìlẹ́yìn fún dípò àwọn pápá onípèsè tí kì í ṣe ìlànà. Àwọn ẹ̀ka méjèèjì tí a pèsè láti ọ̀dọ̀ ìbéèrè máa wà gẹ́gẹ́ bí àkíyèsí `client` tí a kò fọkàn tán, pẹ̀lú ìkìlọ̀ tí ó han gbangba pé a kò ṣe àpèjúwe fídíò náà àti pé a kò fìdí àwọn àkókò múlẹ̀ lòdì sí media náà. Ìṣúná owó gbogbo gbòò tí ó jẹ́ 256-cue/64-KiB àti ti ẹnì kọ̀ọ̀kan fún cue tí ó wà tẹ́lẹ̀ máa ń lò kọjá àwọn ẹ̀ka méjèèjì papọ̀; àwọn àkókò gbọ́dọ̀ bá òfin ààlà aago 600 ti olùpèsè àti èyíkéyìí agbègbè ìfojúsùn tí a pèsè mu. A máa ń sọ àwọn ẹ̀ka tí kò tọ̀nà nù, a kò ní fi wọ́n ránṣẹ́ gẹ́gẹ́ bí ọ̀rọ̀ àìnítàn; ẹ̀ka kejì tí ó pé pé le ṣì jẹ́ lílo àfi tó bá jẹ́ pé ìṣúná wọn tí a dapọ̀ ti kọjá ààlà. Àwọn pápá null/fo kò fi ọ̀rọ̀ kankan kún un. Kò sí ìgbà áfẹnuka media tàbí ìkọ̀wọ́sí ọ̀rọ̀ tí a fi kún ọ̀nà àbájade yìí. A ti mú àwọn pápá ìfẹ̀sẹ̀sí transcript kúrò lára fídíò carrier àti àwọn ohunèlò `video_url`/`source` rẹ̀. Àkójọ àwọn ohun tí a gbà láàyò ti OpenAI wà ní mímúgbára; àwọn fídíò carriers tí a kò mọ̀ bámíbì máa ń wà fún lílo àti àwọn ohun ìfọkànsìn fún ọ̀rọ̀ nìkan tí a mọ̀ máa pa àwọn àmì àìléwu mọ́. Ojiji ìparẹ́ tí a ṣètò máa ń dáàbò bo ọ̀rọ̀ transcript tí a fi kún un, nígbà tí ìbéèrè ìpilẹ̀ṣẹ̀ tí olùpè ní máa wà gẹ́gẹ́ bí ó ṣe wà. Àwọn ohun tí a ṣe àtìlẹ́yìn fún ní abínibí àti àwọn bridge tí a ti mú kúrò máa ń mú ìwà kíkọjá tí ó wà tẹ́lẹ̀ mọ́.
 
-Àwọn ẹ̀dà míì tí a fipamọ́ máa ń lo àmì ìbéèrè-tí-a-ṣàkíyèsí kan náà. Ẹ̀dà-àkókò
-ìbéèrè-oníbárà ṣáájú ìdènà-ààbò tí kò tíì ṣiṣẹ́ lórí, ìbéèrè tó ń dúró nínú ìrántí, àti àkọsílẹ̀
-ìbéèrè tí a kọ̀ ní kutukutu máa ń fi ohun mìíràn rọ́pò àwọn pápá àkọsílẹ̀-ohùn nínú àwọn apá fídíò lọ́nà ètò;
-a máa yọ àlàyé kókó kúrò nínú àwọn ìtọ́ni okùn tí àwọn ìpele ìlànà iṣẹ́ àti ìfàṣẹ́sí àyíká ṣe
-níbi ìtẹ́wọ́gbà ara-ìbéèrè-tí-a-fipamọ́. Àmì `video_content_removed` tí a fipamọ́
-mú kí ìtẹ̀síwájú `previous_response_id` kọ̀ láìsí ààbò dípò kí ó tún ọ̀rọ̀
-tí a mọ̀ọ́mọ̀ sọ nù ṣe. Bí ìbéèrè tí a ṣàkíyèsí bá pàdánù
-òjìji yíyọ-àlàyé-kókó fún apá kọ̀ọ̀kan rẹ̀ kí àkọsílẹ̀ tó wáyé, tàbí bí àní ọ̀kan lára ọ̀pọ̀ òjìji fídíò
-bá kùnà láti bá a mu lẹ́yìn àwọn àtúnṣe ìbéèrè tó tẹ̀ lé, a ó yọ ara ìbéèrè tí a fipamọ́
-sílẹ̀ pátápátá dípò pípa àkọsílẹ̀-ohùn tí a yọ àlàyé kókó kúrò nínú apá rẹ̀ nìkan mọ́.
+Àwọn ẹ̀ka ìpamọ́ afikun máa ń lo àmì ìbéèrè tí a kíyè sí kan náà. Àwòrán ìbéèrè oníbàárà ṣáájú ìṣọ́ aabo gidi, ìbéèrè tí ó wà lórí ìrántí, àti àkọsílẹ̀ ìbéèrè tí a kọ̀ sílẹ̀ ní kánkán máa ń rọ́pò àwọn pápá transcript nínú àwọn apá fídíò ní ọ̀nà ìṣètò; àwọn ọ̀rọ̀ ìkọ̀wọ́sí tí àwọn ìpele pipeline àti ìfiranṣẹ́ àyíká ṣe ni a ti pa rẹ́ ní ibi ìpamọ́ àkópọ̀ ara ìbéèrè tí a fi múlẹ̀. Àmì `video_content_removed` tí a fi múlẹ̀ máa ń jẹ́ kí títẹ̀síwájú `previous_response_id` kuna ní títì dípò kí ó tún kọ ọ̀rọ̀ tí a ti mọ̀ ọ̀ sílẹ̀ pẹ̀lú èrò láti sọ nù. Bí ìbéèrè tí a kíyè sí bá sọ ojiji ìparẹ́ apá kan rẹ̀ nù ṣáájú kí a tó kọ ọ́ sí àkọsílẹ̀, tàbí kódà tí ọ̀kan nínú àwọn ojiji fídíò púpọ̀ bá kuna láti báramu lẹ́yìn àwọn àtúnṣe ìbéèrè tí ó kẹ́yìn, ara ìbéèrè tí a pa mọ́ náà ni a óò fò kọjá pátápátá dípò kí a pa transcript tí a ti pa apá kan rẹ́ mọ́.
 
-Fún ìbéèrè tí a ṣàkíyèsí, ìdáhùn àwòṣe lè fa apá èyíkéyìí nínú
-àkọsílẹ̀-ohùn náà yọ láìsí ààlà àmì tó ní ìṣètò. Nítorí náà, a máa fi àmì ìyọsílẹ̀
-rọ́pò `responseBody` àkọsílẹ̀-ìpè tí a fipamọ́; a kì yóò pa àkópọ̀ iṣẹ́ ìlànà alálàyé
-(èyí tó lè ní àwọn ara ohun tí ó wá láti òkè/oníbárà àti àwọn ege ṣiṣàn) mọ́.
-Àwọn àpamọ́ sẹ́mántíìkì, àìyípadà-nígbà-àtúnṣe, àti àtúnṣe-ìrònú máa ré àwọn kíkà àti kíkọ
-kọjá fún ìbéèrè yẹn. Ìbéèrè olupèsè àti ìdáhùn tí oníbárà rí kò yí padà.
-A máa ṣàn àwọn báìtì keepalive àkọ́kọ́ jáde kúrò nínú búfà ìgbà díẹ̀ nígbà tí a bá yọ
-àkópọ̀ alálàyé náà sílẹ̀. Ìkìlọ̀ EventStream Kiro tí kò bófin mu máa jálẹ̀ iye báìtì ẹrù nìkan,
-kì í ṣe àkóónú rẹ̀ tàbí àṣìṣe àìlòṣiṣẹ́ olùtúpalẹ̀ JSON.
-Èyí kò sọ pé a ti ṣàyẹ̀wò gbogbo àyẹ̀wò àṣìṣe olupèsè/plugin mìíràn tí kò ní í ṣe pẹ̀lú rẹ̀;
-àtúpalẹ̀ gbòòrò àwọn ibi ìtẹ́wọ́gbà tí a fipamọ́ ni a ń tọpa nínú #11658.
+Fún ìbéèrè tí a kíyè sí, ìdáhùn awoṣe le fa apá èyíkéyìí nínú transcript yẹn yọ láìsí ààlà àmì ọ̀rọ̀ tí a ṣètò. Nítorí náà, call-log `responseBody` tí a fi múlẹ̀ ni a rọ́pò pẹ̀lú àmì ìfòkọ̀já; ohun èlò pipeline alàyé (tí ó lè ní àwọn ara onípèsè/oníbàárà àti àwọn ìwọn aṣàn gba) ni kò ní jẹ́ ìpamọ́. Ìrántí àgbékalẹ̀, ìbámu-ẹnusọ, àti ìrántí àtúnṣe-ìrònú máa ń yẹra fún kíkà àti kíkọ̀ fún ìbéèrè yẹn. Ìbéèrè onípèsè àti ìdáhùn tí oníbàárà rí máa wà gẹ́gẹ́ bí ó ṣe wà láìyípadà. A máa ń fa àwọn bytes keepalive kíákíá kúrò nínú bufa fúnkánkán nígbà tí a bá fò ohun èlò alàyé jẹ́. Ì kìlọ̀ EventStream tí kò tọ̀nà ti Kiro máa ń ròyìn iye byte payload nìkan, kò ní sọ̀rọ̀ nípa àwọn àkóonu rẹ̀ tàbí àṣìṣe gidi ti JSON parser náà.
+Èyí kò sọ pé gbogbo àwọn ìṣẹ̀dá onípèsè/plugin tí kò ní í ṣe pẹ̀lú rẹ̀ ni a ti ṣe àyẹ̀wò rẹ̀; wíwá kíkún ti retained-sink ni a ń tẹ̀lé ní #11658.
 
-Ìgbésí-ayé inú `/api/modality-bridge/video/drilldown` jẹ́ sobusitireti cache ọ̀tọ̀ kan tí a fi loopback/token jẹ́rìí sí. Gbogbo iṣẹ́ tún nílò ID principal opaque canonical kan. Kí a tó mú olùpè iṣelọpọ kan ṣiṣẹ́, ó gbọ́dọ̀ yọ ID náà láti inú tenant tí a ti jẹ́rìí sí, kò sì gbọ́dọ̀ fi iye tí client yàn ránṣẹ́ síwájú láé. Àwọn kọ́kọ́rọ́ cache so principal náà mọ́ session canonical àti àwọn ID ìtọ́kasí fídíò, wọ́n ń tọ́jú àwọn kọ́kọ́rọ́ tí a yọ láti inú SHA-256 wọn nìkan, wọ́n sì fi principal kan náà ṣe ààlà fún kíkà àti píparẹ́. Cache náà ń tọ́jú ó pọ̀ jù 16 frame JPEG tí a yọ jáde fún entry kọ̀ọ̀kan, ó ń mú wọn dópin lẹ́yìn ìṣẹ́jú mẹ́wàá, ó sì ṣe àtìlẹ́yìn fún kíkà `start`/`end` tí a fi ààlà sí tàbí píparẹ́ session ní tààrà.
+Ìgbésí ayé ìṣẹ̀dá inú `/api/modality-bridge/video/drilldown` jẹ́ ohun èlò ìpamọ́ tàkúté/token-authenticated loopback tí ó ya sọ́tọ̀. Gbogbo iṣẹ́ pẹ̀lú ń béèrè àmì ìdánimọ̀ akọ́kọ̀ opaque principal ID kan. Ṣáájú kí a tó mú olùpè ìṣẹ̀dá ṣiṣẹ́, ó gbódọ̀ mú àmì ìdánimọ̀ yẹn wá láti ọ̀dọ̀ olùgbé tí a fìdí rẹ̀ múlẹ̀ kò sì gbọ́dọ̀ gbé iye tí oníbàárà yàn kalẹ̀ lọ́jọ́ kankan. Àwọn bọ́tìnnì ìpamọ́ máa ń so principal yẹn pọ̀ mọ́ àwọn ìdánimọ̀ ìjókòó akọ́kọ̀ àti ìtọ́kasí fídíò, wọ́n ń tọ́jú àwọn bọ́tìnnì tí ó wá láti SHA-256 nìkan, wọ́n sì ń fi àwọn kíkà àti ìparẹ́ ṣàkóso fún principal kan náà. Ilé ìpamọ́ náà ń tọ́jú ó pọ̀ jù lọ àwọn fireemu JPEG 16 tí a mú jáde fún ẹ̀ka kọ̀ọ̀kan, wọ́n máa ń parí lẹ́yìn ìṣẹ́jú mẹ́wàá, wọ́n sì ń ṣe àtìlẹ́yìn fún kíkà `start`/`end` tí ó ní ààlà tàbí ìparẹ́ ìjókòó tí ó han gbangba.
 
-Principal kọ̀ọ̀kan ní ààlà entry 16 àti 64 MiB ti data JPEG canonical. Àwọn ààlà wọ̀nyẹn yàtọ̀ sí òrùlé àpapọ̀ ti entry 64/256 MiB: ìfúnpá quota principal máa ń yọ àwọn entry principal yẹn nìkan tí a kò lò láìpẹ́ jù lọ kí a tó gbé ìyọkúrò LRU àpapọ̀ yẹ̀ wò. Àwọn entry tí ó ti dópin ni a ń gbá kúrò nínú ìṣírò principal àti àpapọ̀ nígbà ìgbòkègbodò cache, nígbà tí ìfagilé àti ìkùnà ìfọwọ́sí kì í commit ìrọ́pò aláìpé.
+A ní ààlà fún principal kọ̀ọ̀kan sí àwọn ẹ̀ka 16 àti data JPEG akọ́kọ̀ 64 MiB. Àwọn ààlà wọ̀nyí dá dúró lórí ààlà àpapọ̀ agbaye ti 64-entry/256 MiB: ìtẹ̀pa kòtò quota principal máa ń lé àwọn ẹ̀ka tí a kò ti lò pẹ́ jù lọ ti principal yẹn jáde nìkan ṣáájú kí a tó gbé ìléjade LRU àpapọ̀ yẹ̀ wò. A máa ń gbá àwọn ẹ̀ka tí ó ti parí akókò kúrò lára ìṣirò principal àti ti àpapọ̀ lórí ìṣe cache, nígbà tí ì fagilé àti ìkùnà ìfìdí múlẹ̀ kò ní fi rọ́pò apá kan tí ó jọra siwaju.
 
-Cache náà kọ Base64 tí kì í ṣe canonical, padding àpọ̀jù, media tí kì í ṣe JPEG, JPEG tí ó bàjẹ́ tàbí tí a gé kúrú, àti JPEG tí ó ń ṣe ìkìlọ̀ nígbà decode `sharp` àwòrán-kíkún tí a fi ààlà sí. Ó tún encode àwòrán kọ̀ọ̀kan tí a gbà sí JPEG canonical, ó ń yọ ìbú àti gíga láti inú àwọn byte tí a decode dípò gbígbẹ́kẹ̀ lé àwọn field olùpè, ó sì ń sọ àwọn byte polyglot tó tẹ̀ lé e nù dípò títọ́jú wọn. Buffer compressed canonical tí a fi ààlà sí nìkan ni a ń kà sí quota méjèèjì. Ààlà wire JSON ní overhead Base64 fún òrùlé input tí a decode ti 32 MiB. Gbogbo
-derivation tí a tọ́jú máa ń ṣe àkọsílẹ̀ format/resolution JPEG tí a ti fọwọ́sí, sampling policy, derivation version, àkókò ìṣẹ̀dá, content hash tí server ṣírò, àti ìtọ́kasí parent tí a hash pẹ̀lú parent-content hash olùpè tí a fọkàn tán. A ń ṣàyẹ̀wò ìfagilé láàárín àwọn ìpele decode/hash asynchronous kí atomic cache commit tó wáyé.
+Kọ́ṣì náà máa ń kọ̀ ọ́ jẹ́ fún Base64 tí kò tọ́nà, àfikún àpòpọ̀ tí ó pọ̀ jù, àwọn ohun èlò tí kìí ṣe JPEG, àwọn JPEG tí ó ní àṣìṣe tàbí tí a gé kúrò, àti àwọn JPEG tí ó fa ìkìlọ̀ nígbà ìtúmọ̀ àwòrán kíkún `sharp` tí a díwọ̀n. Ó tún tún fọwọ́ sí àwòrán kọ̀ọ̀kan gẹ́gẹ́ bí JPEG tí ó ṣeé gbẹ́kẹ̀ lé, ó ń mú ìbú àti giga jáde láti inú àwọn báìtì tí a túmọ̀ dípò gbígbẹ́kẹ̀ lé àwọn ààyè olùpè, ó sì sọ àwọn báìtì polyglot tí ó kù nù dípò kí ó dá wọn dúró. Báìtì tí a fọwọ́ sí pẹ̀lú ìwọ̀n tí ó pé nìkan ni a óò gba owó lórí rẹ̀ fún àwọn ètò méjèèjì. Ìwọ̀n waya JSON ní àfikún Base64 fún ààlà ìgbbewọlé tí a túmọ̀ ti 32 MiB. Ìtumọ̀ kọ̀ọ̀kan tí a fi pamọ́ ń gbasílẹ̀ ọ̀nà kíkọ JPEG/ìwọ̀n rẹ̀, ètò ìyẹ̀wò, ẹ̀yà ìtumọ̀ náà, àkókò ìṣẹ̀dá, hàṣì àkóónú tí ẹ̀rọ ìṣètò ṣe, àti ìtọ́kasí òbí tí a fi hàṣì ṣe pẹ̀lú hàṣì àkóónú òbí ti olùpè tí a gbẹ́kẹ̀ lé. A ń ṣàyẹ̀wò ìfagile láàárín àwọn ìpele ìtúmọ̀/hàṣì tí kìí ṣe ní àkókò kan náà ṣáájú ìpinnu kọ́ṣì kíkún.
 
-Ìpele iṣẹ́ yìí kò tíì so producer iṣelọpọ kan mọ́ route náà, kò sì pèsè yíyan variant multi-resolution. Nítorí náà, ọ̀nà ìbéèrè Video Bridge transparent kò fa iṣẹ́ àfikún kankan, nígbà tí tenant-bound principal derivation àti gbogbo ìgbésí-ayé multi-resolution FU-08 ṣì jẹ́ iṣẹ́ ìtẹ̀lé tó ṣe kedere dípò kí a kọ ọ́ sílẹ̀ gẹ́gẹ́ bí ìhùwàsí tí a ti parí.
+Ìpele yìí kò tíì so aṣẹ̀dá ìṣẹ̀dápọ̀ pọ̀ mọ́ ọ̀nà náà bẹ́ẹ̀ ni kò tíì pèsè yiyan onírúurú ìwọ̀n. Nítorí náà, ọ̀nà ìbéèrè Fídíò Bíríjì tí ó hàn gbangba kò ní iṣẹ́ àfikúnkún kankan, nígbà tí ìtumọ̀ olórí tí ó ni ṣe pẹ̀lú ayálégbé àti gbogbo ìgbésí ayé ìwọ̀n púpọ̀ FU-08 wà fún ìṣẹ́ tí a óò tẹ̀lé e dípò kí a kọ ọ́ sílẹ̀ gẹ́gẹ́ bí ìhùwàsí tí ó pé.
 
-A ń fi caption sí àwọn frame ní tẹ̀lé-tẹ̀lé pẹ̀lú model Video tí a ti ṣètò. Override Video tí ó ṣófo máa ń jogún ètò Vision; bí àwọn méjèèjì bá ṣófo, auto-router Vision máa ń yan model tó lè ṣe iṣẹ́ vision tí ó munadoko. Àwọn caption tí ó ṣàṣeyọrí máa ń rọ́pò part ìpilẹ̀ṣẹ̀ pẹ̀lú prefix `[Video description:` tí ó dúró ṣinṣin, èyí tí ó tún samisi text náà gẹ́gẹ́ bí àkíyèsí tí a yọ láti inú media tí a kò fọkàn tán, tí ó sì sọ fún àwọn model tó wà lẹ́yìn rẹ̀ pé kí wọ́n má ṣe tẹ̀lé àwọn ìtọ́nisọ́nà tí wọ́n bá rí nínú media náà. Àwọn kọ́kọ́rọ́ cache frame-caption ní àwọn byte JPEG, prompt, timestamp, àti model tó munadoko nínú; àwọn caption tí ó ṣàṣeyọrí nìkan ni a ń cache. Àwọn entry cache máa ń pa model producer gangan tí ó ṣàṣeyọrí mọ́, pẹ̀lú model fallback; bridge náà máa ń jabo `mixed` nígbà tí àwọn model ọ̀tọ̀ọ̀tọ̀ bá ṣe àwọn frame ọ̀tọ̀ọ̀tọ̀. Cache hit máa ń tún identity producer yẹn lò dípò títún fi routing plan tí a béèrè ṣe àmì sí i. Kọ́kọ́rọ́ cache àbájáde gbogbo-fídíò dá lórí gbogbo input tí ó ń yí output padà — prompt, model tó munadoko, sampling policy, iye frame, semantic analysis mode, fingerprint SHA-256 ti focus hint tí a normalized, focus window, `transcript`, `audioTranscript`, àti flag contact-sheet — nítorí náà, yíyí èyíkéyìí nínú àwọn dimension wọ̀nyẹn padà jẹ́ cache miss, kì í ṣe àtúnlò stale láé. Visual dedup policy version, threshold, àti iye candidate-frame tí a fi ààlà sí tún hàn kedere nínú kọ́kọ́rọ́ àti metadata result-cache; nítorí náà, ìyípadà policy kò lè tún àpèjúwe gbogbo-fídíò stale lò. Metadata result-cache v4 máa ń pa mode àti fingerprint mọ́, kì í pa task user raw mọ́ láé. Metadata guardrail máa ń jabo analysis mode tí a béèrè àti èyí tó munadoko; mode `focused` tí a béèrè láìsí text user tó ṣeé lò ni a máa ń jabo gẹ́gẹ́ bí `full` tó munadoko.
+A ń kọ àkọlé sára àwọn fọ́ọ̀mù ní tẹ̀lẹ́nú tẹ̀lẹ́nú pẹ̀lú àwòṣe Fídíò tí a ti ṣètò. Fídíò tí afojúfo fún tí ó ṣófo máa ń jogún ètò Vision; tí àwọn méjèèjì bá ṣófo, olùdarí-ara-ẹni Vision yóò yan àwòṣe tí ó lè ríran tó ń ṣiṣẹ́ lọ́wọ́. Àwọn àkọlé tí ó yọrí sí rere rọ́pò apá ìpilẹ̀ṣẹ̀ pẹ̀lú àfikún ìbẹ̀rẹ̀ `[Video description:` tí ó dúró ṣinṣin èyí tí ó tún sàmì sí ọ̀rọ̀ náà gẹ́gẹ́ bí àkíyèsí tí ó wá láti ara aṣàlàyé tí a kò gbẹ́kẹ̀ lé, tí ó sì sọ fún àwọn àwòṣe tí ó wà ní ìsàlẹ̀ pé kí wọ́n má ṣe tẹ̀lé àwọn ìlànà tí a rí nínú aṣàlàyé náà. Àwọn bọ́tìnnì kọ́ṣì àkọlé-fọ́ọ̀mù ní àwọn báìtì JPEG, ìbéèrè, àkókò, àti àwòṣe tí ó ń ṣiṣẹ́; àwọn àkọlé tí ó yọrí sí rere nìkan ni a ń fi pamọ́ sínú kọ́ṣì. Àwọn ohun tí ó wà nínú kọ́ṣì ń mú àwòṣe aṣẹ̀dá tí ó yọrí sí rere gan-an mọ́lẹ̀, títí kan àwòṣe ìrànlọ́wọ́ nígbà ìṣòro; bíríjì náà ń jábọ̀ `mixed` nígbà tí àwọn fọ́ọ̀mù ọ̀tọ̀ọ̀tọ̀ wá láti ọwọ́ àwọn àwòṣe ọ̀tọ̀ọ̀tọ̀. Ìbẹ̀wò kọ́ṣì tí ó jẹ́ àṣeyọrí ń tún ìdánimọ̀ aṣẹ̀dá yẹn lò dípò kí a tún sàmì sí i gẹ́gẹ́ bí ètò ìdarí tí a bẹ̀rẹ̀. Kọ́ṣì èsì fídíò gbogbo gbòò ní bọ́tìnnì lórí gbogbo ìgbbewọlé tí ó ń yí èsì padà — ìbéèrè, àwòṣe tí ó ń ṣiṣẹ́, ètò ìyẹ̀wò, iye fọ́ọ̀mù, ọ̀nà àlàyé ìtumọ̀, àmì ìdánimọ̀ SHA-256 ti ìtọ́kasí ìfọkànsí tí a ṣe déédé, fèrèsè ìfọkànsí, `transcript`, `audioTranscript`, àti àsàmì ìwé ìkànnì — nítorí náà, yíyí èyikeji nínú àwọn ìwọ̀n wọ̀nyí padà jẹ́ àìrí kọ́ṣì, kò sì jẹ́ pé a tún ìgbà an ti pẹ́ lò. Ẹ̀yà ètò ìpín fún dídín àwọn nǹkan tí ó jọra kúrò, ààlà, àti iye fọ́ọ̀mù olùdíje tí a díwọ̀n tún hàn gbangba nínú bọ́tìnnì kọ́ṣì èsì àti àwọn metadata rẹ̀; nítorí náà, ìyípadà ètò kò le tún àlàyé fídíò gbogbo gbòò tí ó ti pẹ́ lò. Metadata kọ́ṣì èsì v4 ń pa ọ̀nà àti àmì ìdánimọ̀ mọ́, kò sì ní iṣẹ́ olùṣe àkọ́ṣẹ́ṣe tí kò tíì nílò. Metadata ìṣọ́ ń jábọ̀ àwọn ọ̀nà àlàyé tí a béèrè àti èyí tí ó ń ṣiṣẹ́; ọ̀nà `focused` tí a béèrè láìní ọ̀rọ̀ olùṣe tí ó ṣe é lò ni a ń jábọ̀ gẹ́gẹ́ bí `full` gan-an.
 
-Guardrail náà máa ń yọ gbogbo part fídíò tí a ṣe àtìlẹ́yìn fún jáde, ṣùgbọ́n kì í ṣàpèjúwe ju `modalityBridgeVideoMaxVideos` lọ. Fún target tí a ti fìdí rẹ̀ múlẹ̀ pé ó ní `supportsVideo === false`, àwọn fídíò tó kùnà àti àwọn tó kọjá ààlà máa ń di marker text tó ní ààbò tó ṣe kedere, kí media raw kankan má bàa ṣẹ́kù. Nígbà tí capability kò bá dájú, àwọn part wọ̀nyẹn máa ń pa carrier fídíò wọn mọ́; fallback transcript èyíkéyìí máa ń tẹ̀lé ìyípadà text tí a fi ààlà sí lókè. Àwọn target tí ó ní `supportsVideo === true` máa ń forí kọ bridge náà. Abort signal ìbéèrè client máa ń tàn káàkiri download, broker queue, subprocesses, àti àwọn ìpè caption; abort máa ń dá iṣẹ́ dúró láàárín àwọn fídíò, kò sì jẹ́ kí raw media kọjá láé nígbà ìkùnà.
+Ẹ̀rọ ìṣọ́ ń yọ gbogbo apá fídíò tí a ṣe àtìlẹyìn fún jáde ṣùgbọ́n kò ṣe àlàyé ju `modalityBridgeVideoMaxVideos` lọ. Fún àfojúsùn kan tí a ti fi hàn pé ó ní `supportsVideo === false`, àwọn fídíò tí kò yọrí sí rere àti àwọn tí ó kọjá ààlà di àwọn àmì ọ̀rọ̀ àìléwu tí ó hàn gbangba kí fídíò tí kò tíì nílò lè má bàa yè bọ́. Nígbà tí agbára kò bá hàn, àwọn apá wọ̀nyí ń mú ẹ̀rọ fídíò wọn mọ́lẹ̀; èyíkéyìí àkọlé ìrànlọ́wọ́ ń tẹ̀lé ìyípadà ọ̀rọ̀ tí a díwọ̀n lókèèrè. Àwọn àfojúsùn pẹ̀lú `supportsVideo === true` ń kọjá bíríjì náà. Àmì ìfagile ìbéèrè olùṣe ń kọjá nípasẹ̀ ìgbbasílẹ̀, ìlà ìdúró bírọ́kà, àwọn ìlànà abẹ́-ilẹ̀, àti àwọn ìpè àkọlé; ìfagile máa ń dúró láàárín àwọn fídíò kò sì ní ṣí sílẹ̀ sí aṣàlàyé tí kò tíì nílò rárá.
 
-Àwọn ètò runtime wà lẹ́yìn DB, a sì fi Zod fọwọ́sí wọn:
+Àwọn ètò àkókò ìṣiṣẹ́ ní àtìlẹyìn láti inú DB àti pé a ti fọwọ́ sí wọn nípasẹ̀ Zod:
 
-| Kọ́kọ́rọ́                              | Àìrídìmú    | Ààlà / ìhùwàsí                                                                                                 |
-| ----------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
-| `modalityBridgeVideoEnabled`        | `false`     | Àkókò-ṣiṣẹ́ àṣàyàn; a gbọ́dọ̀ yàn láti lo                                                                         |
-| `modalityBridgeVideoAnalysisMode`   | `"full"`    | `full` ń pa àwọn àkọlé gbogbogbò mọ́; `focused` ń lo àyíká onílà, tí kò ṣeé fọkàn tán, láti ọ̀dọ̀ olùlò tuntun jù |
-| `modalityBridgeVideoModel`          | `""`        | Jogún àwòṣe Vision Bridge                                                                                      |
-| `modalityBridgeVideoFrameCount`     | `8`         | 1–16                                                                                                           |
-| `modalityBridgeVideoSamplingPolicy` | `"uniform"` | `uniform`, `scene_aware`, tàbí `segment_aware` tó bá ìwọ̀n mu; ìkùnà olùṣàwárí yóò padà sí `uniform`            |
-| `modalityBridgeVideoMaxVideos`      | `1`         | 1–4                                                                                                            |
-| `modalityBridgeVideoTimeout`        | `120000`    | 1000–120000 ms                                                                                                 |
+| Key                                 | Default     | Range / behavior                                                                                           |
+| ----------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `modalityBridgeVideoEnabled`        | `false`     | Àkókò ìṣiṣẹ́ àṣàyàn, fínfín sí ìkopa                                                                        |
+| `modalityBridgeVideoAnalysisMode`   | `"full"`    | `full` ń pa àwọn àkọlé gbogbo gbòò mọ́; `focused` ń lò àyíká olùṣe tuntun tí ó ní ààlà, tí kò ní ìgbẹ́kẹ̀lé   |
+| `modalityBridgeVideoModel`          | `""`        | Jogún àwòṣe Vision Bridge                                                                                  |
+| `modalityBridgeVideoFrameCount`     | `8`         | 1–16                                                                                                       |
+| `modalityBridgeVideoSamplingPolicy` | `"uniform"` | `uniform`, `scene_aware`, tàbí `segment_aware` tí ó pé pẹ̀lú ìwọ̀n; ìkùnsínú ẹ̀rọ ìṣàwárí ń padà sí `uniform` |
+| `modalityBridgeVideoMaxVideos`      | `1`         | 1–4                                                                                                        |
+| `modalityBridgeVideoTimeout`        | `120000`    | 1000–120000 ms                                                                                             |
 
-Àwọn iye àkókò-dídúró Video àtijọ́ tí a ti fi pamọ́, tí ó ju ìṣẹ́jú-àáyá 120 lọ, ni a
-dín kù sí àkókò ìparí aláròókò; a sì kọ àwọn ìkọ̀wé ètò tuntun tí ó ju ààlà yẹn lọ.
-`GET /api/modality-bridge/video/runtime` nílò ìbílẹ̀ loopback tí a fi àmì sí gẹ́gẹ́ bí
-èyí tí a fọkàn tán, kí ìfàṣẹsí tàbí àyẹ̀wò àkókò-ṣiṣẹ́ tó bẹ̀rẹ̀; lẹ́yìn náà, ó nílò
-ìfàṣẹsí ìṣàkóso. Ó ń dá `available`, àwọn ẹ̀yà FFmpeg/ffprobe tí a ti sọ di mímọ́,
-àti ìdí kan tí kò yí padà nìkan padà nígbà tí àkókò-ṣiṣẹ́ kò bá sí. Ojú-ọ̀nà ìyọjáde
-abẹ́nú kì í ṣe API ìrùsókè gbogbogbò: kíkún títí dé ààlà ìlà ń dá `503` pẹ̀lú
-`Retry-After` padà, ìyapa olùpè ń dá `499` padà, àkókò ìparí aláròókò tí kò yí padà
-sì ń dá `504` padà. Àwọn ìdáhùn tí a yí padà ń fi
-`video->text;model=<visionModel>;parts=<videos>` kún akọlé àárín gbùngbùn
-`x-omniroute-modality-bridge` láìyọ àwọn abala Vision tàbí Audio kúrò.
+Àwọn iye àkókò ìfòfindase fídíò tí a ti pẹ́ tí ó ju 120 ìṣẹ́jú ààyè lọ ni a ti di mọ́ ààlà ìparí bírọ́kà; àwọn ìkọ̀wé ètò tuntun tí ó kọjá ààlà yẹn ni a kọ̀ ọ́ jẹ́.
+`GET /api/modality-bridge/video/runtime` nílò ààyè ìbọ̀-sẹ́yìn loopback tí a fi èdìdì àìlẹ́gbẹ́ ṣe ṣáájú ìdánimọ̀ tàbí ìṣàyẹ̀wò àkókò ìṣiṣẹ́, lẹ́yìn náà ó nílò ìdánimọ̀ ìṣàkóso. Ó ń dá `available` nìkan padà, àwọn ẹ̀yà FFmpeg/ffprobe tí a sọ di mímọ́, àti ìdí tí ó dúró ṣinṣin nígbà tí àkókò ìṣiṣẹ́ kò bá sí. Ibùdó ìyọkúrò inú kìí ṣe API ìgbé-sókè gbangba: kíkún kúnra ìlà ìdúró ń dá `503` padà pẹ̀lú `Retry-After`, ìgé-sopọ̀ olùpè ń dá `499` padà, àti ààlà ìparí bírọ́kà tí ó dúró ṣinṣin ń dá `504` padà. Àwọn ìdáhùn tí a ti yí padà ń fi `video->text;model=<visionModel>;parts=<videos>` kún orí àkọlé àárín `x-omniroute-modality-bridge` láìyọ àwọn apá Vision tàbí Audio kúrò.
 
-### Olùbojú PII (`piiMasker.ts`)
+### PII Masker (`piiMasker.ts`)
 
-Ó ń ṣiṣẹ́ ní **ìpele méjèèjì**.
+Ó ń ṣiṣẹ́ lórí **àwọn ìpele méjèèjì**.
 
-- **`preCall`** ń ṣe ẹ̀dà payload, ó ń rìn la inú `system`, `messages`, `input`, àti
-  `prompt` (títí kan àwọn ohun tí wọ́n jẹ́ string lásán), ó sì ń lo `processPII()` (láti
-  `@/shared/utils/inputSanitizer`) lórí àwọn pápá `content`/`text` tí wọ́n jẹ́ string.
-  Nígbà tí `PII_REDACTION_ENABLED=true`, a máa bo PII tí a ṣàwárí mọ́lẹ̀ nínú
-  payload tí a ń rán jáde. Èyí kò sinmi lórí `INPUT_SANITIZER_MODE` (èyí tí ó ń
-  ṣàkóso ìlànà ìkọlù-àṣẹ prompt nìkan). Nígbà tí ìbòmọ́lẹ̀ kò bá ṣiṣẹ́, ìpè náà
-  ń ṣàkọsílẹ̀ iye ìṣàwárí láìtún àkóónú kọ.
-- **`postCall`** ń ṣe ẹ̀dà jíjinlẹ̀ ti ìdáhùn, ó ń ṣiṣẹ́ `sanitizePIIResponse()` pẹ̀lú
-  olùbojú ìrísí Responses-API (`maskResponsesOutput` — ó bo
-  `output_text` àti `output[].content[].text`). Tí ìbòmọ́lẹ̀ kankan bá ṣẹlẹ̀,
-  ìdáhùn tí a ṣàtúnṣe yóò rọ́pò èyí àkọ́kọ́.
+- **`preCall`** ṣe ẹ̀dà payload náà, ó ń kọjá lórí `system`, `messages`, `input`, àti `prompt` (pẹ̀lú àwọn nǹkanokùn abẹ́lẹ̀), ó sì ń lo `processPII()` (látọ̀dọ̀ `@/shared/utils/inputSanitizer`) sórí àwọn `content`/`text` string fields. Nígbà tí `PII_REDACTION_ENABLED=true`, a máa ń pa PII tí a rí rẹ́ nínú payload tó ń jáde. Èyí dá dúró lórí ara rẹ̀ láì ka `INPUT_SANITIZER_MODE` sí (èyí tó ń ṣàkóso ìlànà prompt-injection nìkan). Nígbà tí ìparẹ́ bá wà ní pipa, ìpè náà ń gba àwọn iye ìrí (detection counts) sílẹ̀ láì tún àkóônú kọ.
+- **`postCall`** ṣe ẹ̀dà jíjinlẹ̀ (deep-clones) ti ìdáhùn náà, ó ń ṣe `sanitizePIIResponse()` pẹ̀lú ohun ìboju àpẹẹrẹ Responses-API (`maskResponsesOutput` — ó bo `output_text` àti `output[].content[].text`). Bí ìparẹ́ bá wáyékankan, ìdáhùn tí a tún ṣe yóò rọ́pò èyí tí a kọ́kọ́ ní.
 
-Ìdènà ààbò náà kì í dí nǹkan; ó ń ṣe àfikún àlàyé (`meta.detections`,
-`meta.redacted`) tàbí tún un kọ nìkan.
+Ọ̀nà àbò (guardrail) kì í dènà rárá; ó kàn ń fi àmì sí (`meta.detections`, `meta.redacted`) tàbí ó ń tún kọ̀ ọ́.
 
-#### Àṣàyàn ní irú kọ̀ọ̀kan, àwọn àpẹẹrẹ àdáni àti àwọn òǹkà ìṣàwárí
+#### Yíyàn gẹ́gẹ́ bí irúfẹ́, àwọn àpẹẹrẹ àṣàyàn àti àwọn ẹ̀ka àfikún ìrí
 
-**Pátákó ìṣàkóso → Ètò → Ààbò → Ìbojú PII** ń yan _ohun_ tí a ó bò mọ́lẹ̀. Kò
-tan ìbojú sílẹ̀: ìyẹn ṣì jẹ́ `PII_REDACTION_ENABLED` (ìbéèrè) àti
-`PII_RESPONSE_SANITIZATION` (ìdáhùn + SSE), àwọn méjèèjì sì wà ní pípa ní àìrídìmú.
+**Dashboard → Settings → Security → PII masking** ń yan _ohun_ tí a óò boju (mask). Kì í tan ìboju náà sáyẹ́: ìyẹn sì wà lórí `PII_REDACTION_ENABLED` (ìbéèrè) àti `PII_RESPONSE_SANITIZATION` (ìdáhùn + SSE), àwọn méjèèjì wà ní pipa ní ìpilẹ̀ṣẹ̀.
 
-- **Àṣàyàn ní irú kọ̀ọ̀kan** — àwọn id inú-ẹ̀rọ wà nínú
-  `src/shared/constants/piiTypes.ts` (`PII_BUILTIN_TYPES`). Bí a kò bá tò ó túmọ̀ sí
-  gbogbo irú (ìhùwàsí tó wà kí ètò yìí tó bẹ̀rẹ̀). Àpẹẹrẹ `ssn_us` ti ẹ̀rọ ìbéèrè
-  ń tọ́ka sí `ssn`. Àwọn àdàkọ (Kéré Jù, Boṣewa, Ìṣúná, Brazil, USA, Kíkún) kàn
-  ń kún àwọn àpótí àyẹ̀wò nínú UI.
-- **Àwọn àpẹẹrẹ àdáni** — ó pọ̀ jù lọ àpẹẹrẹ regex tàbí wildcard 20 (`*` = ó tó
-  àwọn àmì-ọ̀rọ̀ 64 tí kì í ṣe àlàfo, `?` = ọ̀kan). Àwọn ohun tí ó bá mu yóò di
-  `[CUSTOM_REDACTED]`. Gbogbo àpẹẹrẹ ń kọjá nípasẹ̀ `compilePiiCustomPattern()`
-  (`src/shared/utils/piiCustomPatterns.ts`): kò gbọ́dọ̀ ju àwọn àmì-ọ̀rọ̀ 500 lọ,
-  àwọn asia ní ààlà sí `g i m s u`, ó gbọ́dọ̀ ṣeé compile, ó gbọ́dọ̀ kọjá
-  `safe-regex` (ìpadàsẹ́yìn apanirun), kò sì gbọ́dọ̀ bá string òfo tàbí àmì
-  àfidípò ìbòmọ́lẹ̀ mu. A ó kọ àpẹẹrẹ tí ó kùnà nígbà ìfipamọ́ àti ìdánwò, a ó sì
-  fo ìlà tí a ti fi pamọ́ tí ó kùnà ní àkókò-ṣiṣẹ́ dípò kí a compile rẹ̀. Àwọn
-  àpẹẹrẹ àdáni ń ṣiṣẹ́ nígbà tí ìbojú bá wà ní títàn nìkan.
-- **Àwọn òǹkà ìṣàwárí** — iye fún irú kọ̀ọ̀kan (kì í ṣe àwọn iye tí ó bá mu rárá),
-  tí a dì mú sínú memory, tí a sì túnto nígbà ìbẹ̀rẹ̀ (`src/lib/pii/piiDetectionStats.ts`).
-  Wọ́n ń pọ̀ sí i nígbà tí ìbojú bá wà ní títàn nìkan.
+- **Yíyàn gẹ́gẹ́ bí irúfẹ́** — àwọn id abẹ́nú wà ní `src/shared/constants/piiTypes.ts` (`PII_BUILTIN_TYPES`). Aìṣètò túmọ̀ sí gbogbo irúfẹ́ (ìhùwàsí kí ètò yìí tó wà). Àpẹẹrẹ `ssn_us` ti ẹ̀rọ ìbéèrè ń tọ́ka sí `ssn`. Àwọn àpẹẹrẹ (Minimal, Standard, Financial, Brazilian, USA, Full) kàn ń kún àwọn àpótí àmì nínú UI náà ni.
+- **Àwọn àpẹẹrẹ àṣàyàn** — tó àwọn àpẹẹrẹ regex tàbí wildcard 20 (`*` = tó àwọn ohun kíkọ 64 tí kò ní àlàfo, `?` = ọ̀kan). Àwọn ohun tó bá mu di `[CUSTOM_REDACTED]`. Gbogbo àpẹẹrẹ ń kọjá nípasẹ̀ `compilePiiCustomPattern()` (`src/shared/utils/piiCustomPatterns.ts`): ó pọ̀ jù lọ àwọn ohun kíkọ 500, àwọn àmì ní àlàfo sí `g i m s u`, gbọ́dọ̀ ṣe àkójọ, gbọ́dọ̀ kọjá `safe-regex` (catastrophic backtracking), àti pé kò gbọ́dọ̀ bá okùn òfo tàbí ààyè ìparẹ́ mu. A kò ní gbà á tí àpẹẹrẹ kan bá kùnà nígbà tí a ń fi pamọ́ tàbí nígbà tí a ń dán ẹ̀ wò, àti pé ìlà tí ó ti pamọ́ tí ó kùnà ni a óò fò ká nígbà tí ẹ̀rọ náà ń ṣiṣẹ́ dípò kí a ṣe àkójọ rẹ̀. Àwọn àpẹẹrẹ àṣàyàn ń ṣiṣẹ́ nìkan nígbà tí ìboju bá wà ní títàn.
+- **Àwọn ẹ̀ka àfikún ìrí** — iye fún irúfẹ́ kọ̀ọ̀kan (àwọn iye tí a kò bá mu rárá), tí a fi sínú ìrántí tí a sì ń tún bẹ̀rẹ̀ nígbà tí ẹ̀rọ bá tún bẹ̀rẹ̀ (`src/lib/pii/piiDetectionStats.ts`). Wọ́n ń pọ̀ sí i nìkan nígbà tí ìboju bá wà ní títàn.
 
-Àwọn ètò náà wà nínú tábìlì `key_value` (namespace `pii_settings`,
-`src/lib/db/piiSettings.ts`), a sì ń kà wọ́n nípasẹ̀ cache ìṣẹ́jú-àáyá 1. API:
+Àwọn ètò náà wà nínú tábìlì `key_value` (namespace `pii_settings`, `src/lib/db/piiSettings.ts`) a sì ń kà wọ́n nípasẹ̀ cache 1 s. API:
 
-| Ọ̀nà    | Ipa-ọ̀nà                  | Ète                                                                             |
-| ------ | ------------------------ | ------------------------------------------------------------------------------- |
-| `GET`  | `/api/settings/pii`      | Ipò asia, `enabledTypes`, `customPatterns`, àwọn òǹkà ìṣàwárí                   |
-| `PUT`  | `/api/settings/pii`      | Rọ́pò `enabledTypes` (`null` = gbogbo rẹ̀) àti/tàbí `customPatterns`              |
-| `POST` | `/api/settings/pii/test` | Ṣe ìdánwò àpẹẹrẹ kan lórí àpẹẹrẹ data tí kò ju 8 KB lọ; kò sí ohun tí a fi pamọ́ |
+| Method | Path                     | Purpose                                                                       |
+| ------ | ------------------------ | ----------------------------------------------------------------------------- |
+| `GET`  | `/api/settings/pii`      | Ìpò àmì, `enabledTypes`, `customPatterns`, àwọn ẹ̀ka àfikún ìrí                |
+| `PUT`  | `/api/settings/pii`      | Rọ́pò `enabledTypes` (`null` = gbogbo rẹ̀) àti/tàbí `customPatterns`            |
+| `POST` | `/api/settings/pii/test` | Ṣe ìdánwò àpẹẹrẹ kan lòdì sí àpẹẹrẹ tí kò ju 8 KB lọ; kò sí ohun tí a fi pamọ́ |
 
-Gbogbo mẹ́tẹ̀ẹ̀ta nílò ìfàṣẹsí ìṣàkóso, wọ́n sì ń fi Zod ṣàyẹ̀wò body
-(`src/shared/validation/schemas/piiSettings.ts`).
+Gbogbo mẹ́ta yìí fẹ́ àṣẹ ìṣàkóso wọ́n sì ń fìdí ara múlẹ̀ pẹ̀lú Zod (`src/shared/validation/schemas/piiSettings.ts`).
 
-### Ìkọlù Àṣẹ Prompt (`promptInjection.ts`)
+### Prompt Injection (`promptInjection.ts`)
 
-Ó ń ṣàwárí àwọn ìgbékalẹ̀ ọ̀tá nínú àkóónú tí olùlò pèsè, ó sì ń mú ìlànà tí a
-ṣètò ṣẹ. Àwọn oníyí àyíká àti àwọn àṣàyàn constructor ni wọ́n ń darí ìhùwàsí:
+Ó ń wá àwọn ìpìlẹ̀ àtakò nínú àkóônú tí olùṣe pèsè ó sì ń mú ìlànà tí a ṣètò ṣẹ. Ìhùwàsí jẹ́ èyí tí àwọn oníyípadà àyíká àti àwọn àṣàyàn constructor ń darí:
 
-| Ètò        | Àyípadà env                                                                                                   | Àìyípadà | Ipa                                                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ṣíṣiṣẹ́     | `INPUT_SANITIZER_ENABLED`                                                                                     | `true`   | Nígbà tí ó bá jẹ́ `false`, guardrail yóò dá iṣẹ́ dúró ní kùtùkùtù.                                                                                                                   |
-| Ìpo        | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                               | `warn`   | Ìlànà injection: `block`, `warn`, tàbí `log`. (`redact` jẹ́ ìtẹ́wọ́gbà fún ìbámu sẹ́yìn ṣùgbọ́n **kì í** yọ ọ̀rọ̀ injection kúrò; `PII_REDACTION_ENABLED` ló ń ṣàkóso àtúnkọ PII ìbéèrè.) |
-| Ààlà ìdènà | àṣàyàn `blockThreshold` / `INPUT_SANITIZER_BLOCK_THRESHOLD` (orúkọ-àfirọ́pò `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high`   | Ìpele ewu tó kéré jù lọ tí a nílò láti dènà. Medium jẹ́ fún àkíyèsí nìkan ní àìyípadà.                                                                                              |
+| Setting         | Env var                                                                                               | Default | Effect                                                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enabled         | `INPUT_SANITIZER_ENABLED`                                                                             | `true`  | Nígbà tí ó bá jẹ́ `false`, ọ̀nà àbò ń ge ọ̀nà náà kúrò.                                                                                                                                    |
+| Mode            | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                       | `warn`  | Ìlànà abẹ́rẹ́ sínú: `block`, `warn`, tàbí `log`. (`redact` ni a gba fún ìbámu sẹ́yìn sùgbọ́n kò **ní** pa ọ̀rọ̀ abẹ́rẹ́ sínú rẹ́; ìtúnkọ PII tí a bẹ́èrè ni `PII_REDACTION_ENABLED` ń ṣàkóso rẹ̀.) |
+| Block threshold | `blockThreshold` option / `INPUT_SANITIZER_BLOCK_THRESHOLD` (alias `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high`  | Ìwọ̀ntúnwọ̀nsì tí ó kéré jù lọ tí a nílò láti dènà. Àárín jẹ́ ìwòye nìkan ní ìpilẹ̀ṣẹ̀.                                                                                                      |
 
-**Àṣẹ ìṣáájú ìpo** (`getMode`): `options.mode` olùpè →
-ìkọ̀lù **àṣàyàn feature-flag DB** `INJECTION_GUARD_MODE` (Dashboard → Settings →
-Feature Flags) → env `INJECTION_GUARD_MODE` → env `INPUT_SANITIZER_MODE` →
-`warn`. Nítorí náà, ìkọ̀lù láti dashboard ní agbára ju àwọn àyípadà env lọ, nítorí náà UI Feature
-Flags ń ṣàkóso guard tó ń ṣiṣẹ́ lẹ́sẹ̀kẹsẹ̀ (láìsí ìtunbẹ̀rẹ̀). Kíka DB jẹ́ fail-safe:
-bí àṣìṣe bá ṣẹlẹ̀, guard náà yóò padà sí ìhùwàsí tó dá lórí env, àti nígbà tí kò bá sí
-ìkọ̀lù tí a ṣètò, ìhùwàsí yóò jẹ́ bákan náà pẹ̀lú ìpinnu env-nìkan.
+**Ìpò àkọ́kọ́** (`getMode`): `options.mode` olùpè → `INJECTION_GUARD_MODE` **ìkọjá àmì-ẹ̀yọ àrà ti DB** (Dashboard → Settings → Feature Flags) → `INJECTION_GUARD_MODE` env → `INPUT_SANITIZER_MODE` env → `warn`. Nítorí náà, àṣẹ ìkọjá ti dashboard bori àwọn oníyípadà àyíká, nítorí náà UI Feature Flags ń ṣàkóso ọ̀nà àbò tí ń ṣiṣẹ́ lọ́wọ́ ní tààràtà (kò sí àtúnsọ̀). Ìkàwé DB jẹ́ èyí tí kò lè ní àṣìṣe: bí àṣìṣe bá wáyé, ọ̀nà àbò náà máa ń padà sí ìhùwàsí tó da lórí àyíká, àti pé nígbà tí kò sí àṣẹ ìkọjá tí a ṣètò, ìhùwàsí náà jẹ́ pípé pẹ̀lú ìpinnu tí o da lórí àyíká nìkan.
 
-Àwọn orísun ìṣàwárí:
+Àwọn orísun ìrí:
 
-1. `sanitizeRequest()` láti `@/shared/utils/inputSanitizer` (àkójọpọ̀ detector tí a pín
-   tí a ń lò ní ibòmíràn nínú pipeline).
-2. `DEFAULT_GUARD_PATTERNS` tí a kọ́ sínú rẹ̀ (lọ́wọ́lọ́wọ́ `system_override_inline` àti
-   `markdown_system_block`, àwọn méjèèjì ní ìpele ewu `high`).
-3. `customPatterns` àṣàyàn tí a fi ránṣẹ́ nípasẹ̀ àwọn àṣàyàn constructor (strings, regex,
-   tàbí àwọn àkọsílẹ̀ `{ name, pattern, severity }`).
+1. `sanitizeRequest()` láti `@/shared/utils/inputSanitizer` (àkójọ àwọn ẹ̀rọ ìrí tí a pín lò ní ibi mìíràn nínú pipeline náà).
+2. `DEFAULT_GUARD_PATTERNS` abẹ́nú (lọ́wọ́lọ́wọ́ yìí `system_override_inline` àti `markdown_system_block`, àwọn méjèèjì ní ẹ̀ka ìwọ̀ntúnwọ̀nsì `high`).
+3. `customPatterns` àṣàyàn tí a kọjá nípasẹ̀ àwọn àṣàyàn constructor (strings, regex, tàbí àwọn ìkọ̀silẹ̀ `{ name, pattern, severity }`).
 
-Nígbà tí `mode === "block"` **àti** pé ó kéré tán ìṣàwárí kan dé ààlà
-ìpele ewu, `preCall` yóò dá `{ block: true, message: "Request rejected:
-suspicious content detected" }` padà. Nínú àwọn ìpo `warn`/`log`, guardrail yóò ṣe àkọsílẹ̀ ṣùgbọ́n
-yóò gba ìpè náà láàyè. A tún ń export olùrànlọ́wọ́ pínpín `evaluatePromptInjection()`
-fún àwọn olùpè tó nílò láti ṣàyẹ̀wò àwọn prompt láìgba registry kọjá.
+Nígbà tí `mode === "block"` **ó sì jẹ́ pé** ó kéré tán ìwádìí kan bá ìwọ̀n líle (severity threshold) mu, `preCall` máa ń dá padà `{ block: true, message: "Request rejected: suspicious content detected" }`. Nínú àwọn ipò `warn`/`log`, àṣà ìṣọ́ (guardrail) ń ṣe àkọsílẹ̀ ṣùgbọ́n ó ń jẹ́ kí ìpe náà kọjá. Olùrànlọwọ́ pínpín `evaluatePromptInjection()` tún wà fún àwọn olùpè tí wọ́n nílò láti ṣe àyẹ̀wò àwọn ìgbésẹ̀ (prompts) láìgbà ojú àkọsílẹ̀ náà kọjá.
 
-**Ààlà ìṣàyẹ̀wò (v3.8.20):** detector náà ń ṣàyẹ̀wò **16 KB àkọ́kọ́** nìkan nínú
-ọ̀rọ̀ prompt tí a so pọ̀ — `MAX_INJECTION_SCAN_BYTES = 16 * 1024` (16 384 bytes) nínú
-`src/shared/utils/inputSanitizer.ts`. `detectInjection()` àti
-`evaluatePromptInjection()` méjèèjì ń ṣe `slice(0, MAX_INJECTION_SCAN_BYTES)` kí wọ́n tó ṣiṣẹ́
-lórí pattern loop. Àwọn àṣẹ injection máa ń wà nítòsí òkè input, nítorí náà èyí
-dín lílo CPU/GC regex kù lórí àwọn payload tó tó ọ̀pọ̀ ọgọ́rùn-ún KB láìdín agbára ìṣàwárí kù (wo
-#3932, #4041).
+**Ìlà ìṣàwárí (v3.8.20):** olùwádìí náà ń yẹ̀wò **16 KB àkọ́kọ́** péré ti ọ̀rọ̀ ìgbésẹ̀ tí a dapọ̀ — `MAX_INJECTION_SCAN_BYTES = 16 * 1024` (16 384 bytes) nínú `src/shared/utils/inputSanitizer.ts`. Mɛ̀jɛ̀jì `detectInjection()` àti `evaluatePromptInjection()` ń ṣe `slice(0, MAX_INJECTION_SCAN_BYTES)` kí wọ́n tó ṣe ìṣiṣẹ́ lórí ìlànà ìyípadà (pattern loop). Àwọn ìlànà ìgúnlélẹ̀ (injection directives) wà ní apá òkè ìgbésẹ̀ kan, nítorí náà èyí ń dín agbára regex CPU/GC kù lórí àwọn ẹrù iṣẹ́ tí ó tó ọ̀kẹ́ méjì (multi-hundred-KB payloads) láìjẹ́ kí ìwádìí náà dinku lágbára (wo #3932, #4041).
 
-### Olùbòmọ́lẹ̀ Credential (`credentialMasker.ts`)
+### Ẹ̀rọ Ìpamọ́ Àmì Ìdánimọ̀ (`credentialMasker.ts`)
 
-Ó ń ṣiṣẹ́ ní **àwọn ìpele méjèèjì**, ó sì jẹ́ ìkẹyìn nínú chain àìyípadà (priority `95`). Ó ń redact
-àwọn pattern API-key / secret-token tí a mọ̀ dáadáa kúrò nínú payload tí a ń firánṣẹ́ jáde (àkóónú
-message, àwọn argument tool-call, àwọn èsì tool) **àti** èsì provider, kí credential
-tí a lẹ̀ mọ́ prompt (tàbí tí èsì tool tún sọ jáde) má bàa jo
-sí provider òkè tàbí padà sí client.
+Ó ń ṣiṣẹ́ lórí **àwọn ìpele méjèèjì**, ó sì jẹ́ ìkẹyìn nínú ìlànà àpapọ̀ (`95`). Ó ń pa àwọn àpẹẹrẹ API-key / secret-token tí a mọ̀ dáadáa rẹ́ láti ara ẹrù iṣẹ́ tí ń jáde (akoonu ifiranṣẹ, àwọn àríyànjiyàn ìpe-irinṣẹ, àwọn àbájáde irinṣẹ) **àti** èkejì ìdáhùn olùpèsè náà, kí àmì ìdánimọ̀ tí a lẹ̀ mọ́ ara ìgbésẹ̀ (tabi tí a tun sọ jade nípasẹ abajade irinṣẹ) má bàa jọ̀ sí olùpèsè òkè (upstream provider) tàbí padà sí ọ̀dọ̀ alabara náà.
 
-- **Opt-in nìkan**, àṣà kan náà bí PII redaction (tó sún mọ́ Òfin Líle #20):
-  ó jẹ́ pípa bí kò ṣe pé `settings.credentialRedactionEnabled === true` **tàbí**
-  `CREDENTIAL_REDACTION_ENABLED=true`. Nígbà tí ó bá wà ní pípa, guardrail náà kì í ṣe ohunkóhun —
-  kò dènà rárá, kò sì tún ohunkóhun kọ.
-- `redactCredentials()` ń rìn ká gbogbo igi payload/response (`walkValue()`,
-  tó ní ààbò lòdì sí prototype-pollution, tó sì ní ààbò lòdì sí cycle nípasẹ̀ `WeakSet`) ó sì ń fi
-  placeholder `[REDACTED:<type>]` rọ́pò àwọn ohun tó bá pattern mu, nípa clone àwọn ẹ̀ka tí ó
-  yí padà gan-an nìkan.
-- `CREDENTIAL_PATTERNS` bo àwọn key provider LLM (OpenAI, OpenAI-proj,
-  Anthropic, Google, Hugging Face, Replicate), àwọn token VCS/SaaS (GitHub, Slack,
-  Linear, Notion, npm, Postman, Discord), àwọn key ìsanwó (Stripe, Square), àwọn key
-  cloud (AWS access key, Twilio, SendGrid, Mailgun), àwọn private key / JWT,
-  àwọn connection string tó ní credential (`mongodb://user:pass@...`, àti bẹ́ẹ̀ bẹ́ẹ̀ lọ), àti
-  pattern gbogbogbò fún iye header `Authorization`/`x-api-key`/`api-key`/`apikey`.
-  Àwọn key tó ní ìrísí header (`authorization`, `x-api-key`, `api-key`,
-  `apikey`) ni a ń redact lọ́nà ìṣètò (iye nìkan, nígbà tí a pa ìbẹ̀rẹ̀ scheme bíi
-  `Bearer `/`Basic ` mọ́) dípò lílo generic text regex.
-- Guardrail náà kì í dènà rárá; ó ń tún nìkan kọ (`modifiedPayload` /
-  `modifiedResponse`) ó sì ń fi àlàyé kún un (`meta.credentialsRedacted`, `meta.count`).
+- **Yiyan-nínú nìkan (Opt-in only)**, irú ìlànà kan náà bí ìpamọ́ PII (Hard Rule #20-adjacent): a ti mú un kúrò àfi tí `settings.credentialRedactionEnabled === true` **tàbí** `CREDENTIAL_REDACTION_ENABLED=true`. Tí kò bá ṣiṣẹ́, àṣà ìṣọ́ (guardrail) náà kò ní ṣe ohunkóhun — kò ní dènà rẹ̀ rárá bẹ́ẹ̀ ni kò ní tún kọ ọ́.
+- `redactCredentials()` ń rin gbogbo igi ẹrù iṣẹ́/ìdáhùn (`walkValue()`, èyí tí kò léwu fún prototype-pollution, tí ó sì ní ààbò nípasẹ `WeakSet`) ó sì ń rọ́pò àwọn ohun tí ó báamu pẹ̀lú ààyè `[REDACTED:<type>]`, ó ń dá ẹ̀dà àwọn ẹ̀ka tí ó yípadà gidi nìkan.
+- `CREDENTIAL_PATTERNS` bo àwọn kọ́kọ́rọ́ olùpèsè LLM (OpenAI, OpenAI-proj, Anthropic, Google, Hugging Face, Replicate), àwọn àmì VCS/SaaS (GitHub, Slack, Linear, Notion, npm, Postman, Discord), àwọn kọ́kọ́rọ́ ìsanwó (Stripe, Square), àwọn kọ́kọ́rọ́ ìkọ̀gbọ́n (AWS access key, Twilio, SendGrid, Mailgun), àwọn kọ́kọ́rọ́ ìkọ̀sọ̀ / JWTs, àwọn okùn ìsopọ̀ tí ó ní ẹ̀rí-ìdánimọ̀ (`mongodb://user:pass@...`, àti bẹ́ẹ̀ lọ), àti àpẹẹrẹ iye orí (header-value) gbogboogbo `Authorization`/`x-api-key`/`api-key`/`apikey`. Àwọn kọ́kọ́rọ́ tí ó rí bí orí (`authorization`, `x-api-key`, `api-key`, `apikey`) ni a ń pa rẹ́ nípa ìlànà (ye iye nìkan, pẹ̀lú àmì ìbẹ̀rẹ̀ bí `Bearer `/`Basic ` tí a dá sílẹ̀) dípò kí a lò ó nípa ìlànà regex ọ̀rọ̀ gbogboogbo.
+- Àṣà ìṣọ́ (guardrail) kì í ṣe ìdènà rárá; ó ń tún kọ ọ́ nìkan (`modifiedPayload` / `modifiedResponse`) ó sì ń fi àmì sí i (`meta.credentialsRedacted`, `meta.count`).
 
-Ààbò regression: `tests/unit/credential-masker-guardrail.test.ts`.
+Ìṣọ́ ìpadàsẹ́hìn (Regression guard): `tests/unit/credential-masker-guardrail.test.ts`.
 
 ## Àdéhùn Ìpìlẹ̀ (`base.ts`)
 
@@ -659,11 +309,11 @@ class BaseGuardrail {
 }
 
 interface GuardrailResult<TValue = unknown> {
-  block?: boolean; // true máa ń dá pq náà dúró lẹ́sẹ̀kẹsẹ̀
-  message?: string; // a máa ṣàfihàn rẹ̀ nígbà ìdènà
+  block?: boolean; // true fò lórí ìyókù ẹ̀wọ̀n náà
+  message?: string; // hàn nígbà tí ó bá dènà
   meta?: Record<string, unknown> | null;
-  modifiedPayload?: TValue; // preCall ló máa dá a padà láti tún ìbéèrè kọ
-  modifiedResponse?: TValue; // postCall ló máa dá a padà láti tún ìdáhùn kọ
+  modifiedPayload?: TValue; // tí preCall dá padà láti tún ìbéèrè kọ̀tún
+  modifiedResponse?: TValue; // tí postCall dá padà láti tún ìdáhùn kọ̀tún
 }
 
 interface GuardrailContext {
@@ -682,109 +332,118 @@ interface GuardrailContext {
 }
 ```
 
-Guardrail kan máa ń fi hàn pé “kò sí àyípadà” nípa dídá bóyá `void`, `{}`, tàbí
-`{ block: false }` padà. Dídá `modifiedPayload`/`modifiedResponse` padà máa ń rọ́pò
-iye tí ń ṣàn gba inú pq náà fún àwọn guardrail tó wà lẹ́yìn.
-`signal?: AbortSignal` ń gbé ìgbésí-ayé olùpè wọ inú àwọn guardrail. Ìfagilé ìbéèrè jẹ́ ìyàsọ́tọ̀ fail-open tí a mọ̀ọ́mọ̀ ṣe: àwọn afárá mídíà máa ń dá iṣẹ́ dúró, wọ́n sì máa ń ṣe ìmótótó láì dá mídíà àìṣiṣẹ́ padà sí ibi-afẹ́ kan tí a mọ̀ pé kò ṣe àtìlẹ́yìn fún un.
+Àṣà ìdènà kan ń fi hàn pé "kò sí àyípadà" nípa dídá `void`, `{}`, tàbí `{ block: false }` padà. Dídá `modifiedPayload`/`modifiedResponse` padà rọ́pò iye tí ń ṣàn kọjá nípasẹ̀ ẹ̀wọ̀n náà fún àwọn àṣà ìdènà tí ó wà ní ìsàlẹ̀. `signal?: AbortSignal` gbé ìgbésí ayé olùpè náà wọ inú àwọn àṣà ìdènà. Fífagilé ìbéèrè jẹ́ ẹ̀yà àìṣedede pẹ̀lú ìmọ̀ (deliberate fail-open exception): àwọn afárá amóhùn-máwòrán dá iṣẹ́ dúró kí wọ́n sì nu ohun gbogbo nù láìṣe àtúnṣe amóhùn-máwòrán àkọ́kọ́ sí ibi àfojúsùn tí a mọ̀ pé kò ṣe é fún.
 
 ## Ìforúkọsílẹ̀ (`registry.ts`)
 
-Singleton `guardrailRegistry` ń pèsè:
+`guardrailRegistry` nìkan ṣoṣo (singleton) fi àwọn wọ̀nyí hàn:
 
-- `register(guardrail)` — ń fi guardrail kan kún un (tàbí rọ́pò rẹ̀ nípa orúkọ tí a ti ṣe déédéé), ó sì
-  tún wọn tò nípasẹ̀ `priority` láti kékeré sí ńlá.
-- `clear()` / `list()` — àwọn irinṣẹ́ ìrànlọ́wọ́ ìṣàkóso.
-- `runPreCallHooks(payload, context)` — ń yípo lórí àwọn guardrail tí ń ṣiṣẹ́, ó ń gbé
-  payload gba inú `modifiedPayload`, ó sì máa ń dá dúró ní `block: true` àkọ́kọ́.
-- `runPostCallHooks(response, context)` — ìṣàn kan náà ní ẹ̀gbẹ́ ìdáhùn.
-- `resetGuardrailsForTests({ registerDefaults })` — ń pa ipò rẹ́, ó sì lè
-  tún àwọn iye àìyípadà forúkọsílẹ̀ fún ìyàsọ́tọ̀ ìdánwò tó mọ́.
+- `register(guardrail)` — fi kún (tàbí rọ́pò nípa lílo orúkọ tí a ṣe déédé) àṣà ìdènà kan tí ó sì tún ṣètò wọn gẹ́gẹ́ bí ìpele `priority` tí ń pọ̀ sí i.
+- `clear()` / `list()` — àwọn olùrànlọ́wọ́ ìṣàkóso.
+- `runPreCallHooks(payload, context)` — kọjá lórí àwọn àṣà ìdènà tó wà ní ipò iṣẹ́, gbé payload náà gba `modifiedPayload`, ó sì dúró níbi `block: true` àkọ́kọ́.
+- `runPostCallHooks(response, context)` — ìṣàn kan náà ní apá ìdáhùn.
+- `resetGuardrailsForTests({ registerDefaults })` — nu ipò nù kí ó sì tún forúkọ sílẹ̀ àwọn àṣà ìdènà àìpéekọ bí ó bá yẹ fún ìpínlẹ̀ àdánwò mímọ́.
 
-Àwọn olùṣiṣẹ́ méjèèjì máa ń dá `{ blocked, payload|response, results, guardrail?, message? }`
-padà, níbi tí `results` ti jẹ́ àkójọpọ̀ àwọn àkọsílẹ̀ `GuardrailExecutionResult` tí ó ní
-àwọn pápá `blocked`, `skipped`, `modified`, `error`, àti `meta` fún guardrail kọ̀ọ̀kan,
-tí ó wúlò fún ìtọpasẹ̀.
+Àwọn olùṣiṣẹ́ méjèèjì dá `{ blocked, payload|response, results, guardrail?, message? }` padà níbi tí `results` jẹ́ àkójọ àwọn ìkọsílẹ̀ `GuardrailExecutionResult` tí ó ní àwọn pápá `blocked`, `skipped`, `modified`, `error`, àti `meta` fún àṣà ìdènà kọ̀ọ̀kan, èyí tí ó wúlò fún títọpa.
 
-### Ṣíṣàìṣiṣẹ́ Àwọn Guardrail Fún Ìbéèrè Kọ̀ọ̀kan
+### Mímú Àwọn Àṣà Ìdènà Kúrò Fún Ìbéèrè Kọ̀ọ̀kan
 
-`resolveDisabledGuardrails({ apiKeyInfo, body, headers })` ń kó àkójọ àwọn orúkọ
-guardrail tí kò ní àdàkọ jọ, èyí tí ó yẹ kí a fo fún ìbéèrè tó wà lọ́wọ́.
-Àwọn orísun (gbogbo wọn jẹ́ àṣàyàn, gbogbo wọn ni a parapọ̀):
+`resolveDisabledGuardrails({ apiKeyInfo, body, headers })` kó àkójọ àwọn orúkọ àṣà ìdènà tí a yọ àwọn tí ó túnra wọn ṣe kúrò, èyí tí ó yẹ kí a fò lo fún ìbéèrè lọ́wọ́lọ́wọ́. Àwọn ikanni márùn-ún wà, a ka wọn ní tẹ̀lé tẹ̀lé yìí a sì dapọ̀ wọn pọ̀ di àkójọ kan (èyí tí ó kọ́kọ́ farahàn ni ó borí nígbà tí a bá ń yọ àwọn èyí tí ó túnra wọn ṣe kúrò):
 
-- `apiKeyInfo.disabledGuardrails`
-- `disabledGuardrails` inú body ìbéèrè (ní ìpele òkè)
-- `metadata.disabledGuardrails` inú body ìbéèrè
-- Header `x-omniroute-disabled-guardrails` (tàbí ti àtijọ́
-  `x-disabled-guardrails`)
+1. `apiKeyInfo.disabledGuardrails`
+2. Ara ìbéèrè `disabledGuardrails` (ìpele òkè)
+3. Ara ìbéèrè `metadata.disabledGuardrails` (nígbà tí `metadata` bá jẹ́ ohunèlù nìkan)
+4. Ìborí `x-omniroute-disabled-guardrails`
+5. Ìborí àtijọ́ `x-disabled-guardrails`
 
-Àwọn iye lè jẹ́ àkójọpọ̀ àwọn ọ̀rọ̀ tàbí ọ̀rọ̀ kan tí kọ́má pín sí ọ̀tọ̀ọ̀tọ̀; àwọn orúkọ ni a
-máa ń ṣe déédéé sí lowercase kebab-case (`pii_masker` → `pii-masker`). Àbájáde náà
-ni a máa ń fi ránṣẹ́ gba inú `context.disabledGuardrails` sí ibi ìforúkọsílẹ̀, èyí tí ó máa ń fo
-àwọn guardrail tó bá mu (`skipped: true` nínú `results`).
+Gbogbo ikanni márùn-ún náà ni a dapọ̀, àwọn ìborí méjèèjì wà nínú rẹ̀: fífi ránṣẹ́ `x-omniroute-disabled-guardrails` àti `x-disabled-guardrails` papọ̀ yóò fò lórí àwọn àkójọ wọn méjèèjì, àti pé ìborí tuntun tí ó ṣofo kò sì ní pa ìborí àtijọ́ mọ́ ([#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412), tí a ṣe àtúnṣe rẹ̀ nínú [#16805](https://github.com/diegosouzapw/OmniRoute/pull/16805)).
 
-## Ètò Ìṣiṣẹ́
+Àwọn iye lè jẹ́ àkójọ àwọn okùn tàbí okùn tí a pín pẹ̀lú kòmà; a gé àwọn orúkọ náà mọ́lẹ̀ a sì sọ wọ́n di lẹ́tà kékèké pẹ̀lú aṣojú kebab-case (`pii_masker` → `pii-masker`), a sì sọ àwọn ààyè tí ó ṣofo nù. Èsì náà ni a kọjá nípasẹ̀ `context.disabledGuardrails` sí ilé ìkọ́nisílẹ̀, èyí tí ó fò lórí àwọn àṣà ìdènà tí ó bá mọ̀ra wọn (`skipped: true` nínú `results`).
 
-Fún ìbéèrè kọ̀ọ̀kan tí ń kọjá láti inú `src/sse/handlers/chat.ts` àti
-`open-sse/handlers/chatCore.ts`:
+Àkójọ tí a mú kúrò náà nípa lórí **registry** nìkan ni. Ìpò ìdènà abẹ́ré `block` jẹ́ ààlà tí kò ṣe é yípadà: agbedemi aabo abẹ́rẹ́ (`src/middleware/promptInjectionGuard.ts`) pe `evaluatePromptInjection()` láìsí àkójọ ìpamọ́ tí ẹni tó pè é lè ṣàkóso (ìpè `resolveDisabledGuardrails({ body })` tí ó ti kú tẹ́lẹ̀ ni a yọ kúrò nínú [#16934](https://github.com/diegosouzapw/OmniRoute/pull/16934)), nítorí náà ìbéèrè tí ó mú `prompt-injection` kúrò ni a ṣì ń kọ̀ sílẹ̀ ní ipò `block`. Èyí jẹ́ apẹ́rẹ́ tí a pèsè mọ̀ mọ̀. Àwọn ikanni mímú-kúrò jẹ́ èyí tí olùpè lè ṣàkóso (ara ìbéèrè, metadata, àwọn ìborí), àti pé olùpè kò gbọ́dọ̀ ní agbára láti pa àkóso àbò tí olùṣiṣẹ́ fi sílẹ̀ mọ́ ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)). Ìdapọ̀ ìborí láti [#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412) yípadà nìkan sí èyí tí àwọn àṣà ìdènà registry tí a fò lórí; kò jẹ́ kí oníbàárà yí ipa agbedemi ka. Àwọn ìlànà àṣà ìdènà tí kò gbọ́dọ̀ kọjá fún kọ́ọ̀kùnù kọ̀ọ̀kan àti ẹ̀gbẹ́ kọ̀ọ̀kan ni a ń tọpa rẹ̀ nínú v4 RFC [#16417](https://github.com/diegosouzapw/OmniRoute/issues/16417). Wo [Coverage and limits](#coverage-and-limits).
 
-1. `resolveDisabledGuardrails(...)` ń kọ àtòkọ àwọn ohun tí a máa fo kọjá láti inú kọ́kọ́rọ́ API, ara ìbéèrè,
-   àti àwọn àkọlé.
-2. `guardrailRegistry.runPreCallHooks(body, ctx)` ń ṣiṣẹ́ àwọn guardrail ní ìtòlẹ́sẹẹsẹ
-   ààyò láti kékeré sí ńlá:
-   - Àwọn guardrail tí a ti pa ni a máa forúkọ sílẹ̀ gẹ́gẹ́ bí `skipped`.
-   - `preCall` guardrail kọ̀ọ̀kan lè tún payload kọ nípasẹ̀ `modifiedPayload`.
-   - `block: true` àkọ́kọ́ dá ẹ̀wọ̀n náà dúró lẹ́sẹ̀kẹsẹ̀, handler náà sì dá
-     èsì ìkọ̀sílẹ̀ guardrail padà.
-3. Payload náà (èyí tí ó ṣeé ṣe kí a ti tún kọ) ń lọ sínú combo routing àti
-   ìfiránṣẹ́ sí upstream.
-4. Lẹ́yìn tí a bá ti ṣàkójọ èsì náà, `guardrailRegistry.runPostCallHooks(...)`
-   ń ṣiṣẹ́ ẹ̀wọ̀n kan náà lórí èsì náà. `block: true` níbí yóò sọ
-   èsì upstream náà nù.
+## Ìlà Ìṣe
 
-Àwọn guardrail tí ó ju àṣìṣe jáde ni a máa forúkọ sílẹ̀ pẹ̀lú `error: <message>`, a sì máa kọ wọ́n sínú log nípasẹ̀
-`logger.warn`, ṣùgbọ́n ẹ̀wọ̀n náà yóò tẹ̀síwájú — ó jẹ́ àpẹrẹ fail-open.
+Fún ìbéèrè kọ̀ọ̀kan tó ń kọjá nípasẹ̀ `src/sse/handlers/chat.ts` àti
+`open-sse/handlers/chatCore.ts` (àwọn ọ̀nà ìdílé ìfọ̀rọ̀wérọ̀ tí a ṣe àkọsílẹ̀ rẹ̀ lábẹ́
+[Àgbègbè àti àwọn òpin](#coverage-and-limits)):
 
-## Ìṣètò
+1. `resolveDisabledGuardrails(...)` kọ àtòjọ àwọn ohun tí a fò kọjá láti inú bọtìnnì API, ara ọ̀rọ̀, àti àwọn àkọlé (headers).
+2. `guardrailRegistry.runPreCallHooks(body, ctx)` ń ṣe àwọn ìdènà ní ìfilọ̀ pẹ̀lú ìpèsè pàtàkì tó ń goke:
+   - Àwọn ìdènà tí a ti mú kúrò ni a kọ sílẹ̀ gẹ́gẹ́ bí `skipped`.
+   - `preCall` ìdènà kọ̀ọ̀kan lè tún àkópọ̀ (payload) kọ̀ pẹ̀lú `modifiedPayload`.
+   - `block: true` àkọ́kọ́ yóò fa ìkọsẹ̀ sí ẹ̀wọ̀n náà, olùṣàkóso yóò sì dá ìdáhùn ìkọ̀sílẹ̀ ìdènà padà.
+3. Àkópọ̀ náà (tí a lè tún kọ) ń kọjá sínú ìpínlẹ̀ àpapọ̀ àti ìtànkálẹ̀ òkè.
+4. **Kì í ṣe ìṣàn (Non-streaming) nìkan:** lẹ́yìn tí ìdáhùn náà bá ti pé jọ,
+   `guardrailRegistry.runPostCallHooks(...)` ń ṣe ẹ̀wọ̀n kan náà lórí ìdáhùn náà. `block: true` níhìn-ín máa ń sọ ìdáhùn òkè nù, ó sì ń dá HTTP 400 padà. Àwọn ìdáhùn tí ó ń ṣàn fò ìgbésẹ̀ yìí patapata.
 
-Àwọn àyípadà àyíká tí àwọn guardrail inú-ẹ̀rọ ń kà:
+Àwọn ìdènà tí ó bá jù sọnù (throw) ni a kọ sílẹ̀ pẹ̀lú `error: <message>` tí a sì gba àkọsílẹ̀ rẹ̀ nípasẹ̀ `logger.warn`, sùgbọ́n ẹ̀wọ̀n náà tẹ̀ síwájú — ó ṣeé ṣe láti ṣí sílẹ̀ bí a ṣe ṣe é (fail-open by design).
 
-| Àyípadà                               | Ohun tí ó ń lò ó          | Ipa                                                                                         |
-| ------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------- |
-| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`        | Ṣètò sí `false` láti pa ìṣàwárí rẹ́ pátápátá.                                                |
-| `INPUT_SANITIZER_MODE`                | `prompt-injection`        | Ìlànà injection: `warn`, `block`, tàbí `log`. Iye àtijọ́ `redact` kì í tún ọ̀rọ̀ injection kọ. |
-| `INJECTION_GUARD_MODE`                | `prompt-injection`        | Ipo fún injection guard; ó tún jẹ́ àsìá ẹ̀yà DB tí ó **borí** àwọn env vars (DB > ENV).       |
-| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`        | Ìwọ̀n ewu tó kéré jù tí `MODE=block` máa kọ̀: `high` (àiyípadà àkọ́kọ́), `medium`, tàbí `low`.  |
-| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`        | Orúkọ àpèjúwe àtijọ́ fún `INPUT_SANITIZER_BLOCK_THRESHOLD`.                                  |
-| `PII_REDACTION_ENABLED`               | `pii-masker`              | Nígbà tí ó jẹ́ `true`, PII inú ìbéèrè ni a máa fi bo (láìka ipo injection sí).               |
-| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (downstream) | Ń ṣàkóso ìhùwàsí masker ní ẹ̀gbẹ́ èsì.                                                        |
+## Àgbègbè àti àwọn òpin
 
-Àwọn guardrail Modality Bridge ń ka ìṣètò àsìkò-ìṣiṣẹ́ láti ibi ìpamọ́ àwọn ìṣètò
-tí DB ń ṣe àtìlẹ́yìn fún (`getSettings()`), kì í ṣe láti inú env vars. Àwọn kọ́kọ́rọ́ àkọ́kọ́ ti Vision ni
+Ìforúkọsílẹ̀ ìdènà wà ní ìsopọ̀ mọ́ ètò ìṣàn ìfọ̀rọ̀wérọ̀ nìkan. Àwọn òpin wọ̀nyí ni a fi ìdí rẹ̀ múlẹ̀ nípasẹ̀ `tests/unit/guardrail-pipeline-wiring-characterization.test.ts` àti `tests/unit/guardrail-pipeline-characterization.test.ts`; ṣe àtúnṣe sí àwọn ìdánwò wọ̀nyí pẹ̀lú ìmọ̀ nígbà tí ìhùwàsí bá yí padà.
+
+### Ibi tí àwọn kọ́kọ́rọ́ (hooks) ti ń ṣiṣẹ́
+
+| Kọ́kọ́rọ́ / Ìṣàkóso                                   | Ó ń ṣiṣẹ́ lórí                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runPreCallHooks`                                  | Àwọn ìbéèrè tí `handleChat` (`src/sse/handlers/chat.ts`) ń ṣàkóso rẹ̀: `/v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/responses` (àti `/v1/responses/*`), `/v1/relay/chat/completions`, `/v1/providers/{provider}/chat/completions`, `/v1/api/chat`, `/v1/antigravity`, `/v1beta/models/*`, àti aṣoju ìfọ̀rọ̀wérọ̀ Telegram. Pẹ̀lú ojú òpó ìdánwò ìṣàkóso `/api/guardrails/test`. Ìdènà ìpè-ṣáájú ń dá HTTP 400 padà. |
+| `runPostCallHooks`                                 | Àwọn ìdáhùn ìfọ̀rọ̀wérọ̀ **tí kò ní ìṣàn** (Non-streaming) nìkan (`open-sse/handlers/chatCore/nonStreamingResponse.ts`). Àwọn ìdáhùn tí ó ń ṣàn kò dé ibẹ̀ rí.                                                                                                                                                                                                                                                                        |
+| Streaming PII                                      | `createPiiSseTransform` (`src/lib/streamingPiiTransform.ts`), tí a fi sínú `streamingPipeline.ts` nígbà tí `PII_RESPONSE_SANITIZATION` bá wà ní tító. Kì í ṣe ìdènà, nítorí náà àwọn ọ̀nà ìpamọ́ kò ní ipa lórí rẹ̀.                                                                                                                                                                                                                 |
+| Ìdènà ìfitọ́sí (Injection-guard) middleware (àtijọ́) | Gbogbo ọ̀nà `/v1` tó ní ìfitọ́sí, títí kan ìdílé ìfọ̀rọ̀wérọ̀ (wo [route coverage](#injection-guard-route-coverage--red-team-phase-8--block-d)). Ìfitọ́sí ìgbésẹ̀ nìkan.                                                                                                                                                                                                                                                                 |
+
+### Ohun tí kò ní nínú
+
+- **Àwọn ọ̀nà media, embeddings àti dátà** (`/v1/images/*`, `/v1/embeddings`,
+  `/v1/audio/*`, `/v1/videos/generations`, `/v1/music/generations`,
+  `/v1/rerank`, `/v1/search`, `/v1/moderations`) kò dé ibùdó ìforúkọsílẹ̀ rí. Kò sí ìboju PII, ìboju ẹ̀rí ìdánimọ̀ tàbí ìsopọ̀ onírúurú ọ̀nà tó ń ṣiṣẹ́ níbẹ̀. Ìṣàyẹ̀wò kan ṣoṣo tí wọ́n ní ni middleware ìdènà ìfitọ́sí àtijọ́.
+- **Àwọn ìdáhùn tí ó ń ṣàn** kò ní àwọn ìdènà lẹ́yìn ìpè: kò sí `pii-masker` tàbí
+  `credential-masker` lẹ́yìn ìpè, bẹ́ẹ̀ ni kò sí ìdènà lẹ́yìn ìpè. Ayípadà PII ìṣàn nìkan ni ó ń ṣiṣẹ́ (nígbà tí `PII_RESPONSE_SANITIZATION` bá wà ní tító). Ẹ̀rí ìdánimọ̀ tí a sọ di títún padà nínú ìdáhùn tí ó ń ṣàn kò ní jẹ́ yíyọ kúrò.
+- **Àwọn ọ̀nà ìpamọ́ lòdì sí middleware (gẹ́gẹ́ bí a ṣe gbero rẹ̀):** middleware náà ṣe àyẹ̀wò ìfitọ́sí pẹ̀lú ìpè tirẹ̀ sí `evaluatePromptInjection()`, láìfi àtòjọ ìpamọ́ tí olùpè ń darí ránṣẹ́. Ìpò `block` jẹ́ ààlà tí kò ṣe é fò kọjá tí àwọn ìpamọ́ tí olùpè ń darí kò lè yí ka, títí kan lórí àwọn ọ̀nà ìdílé ìfọ̀rọ̀wérọ̀
+  ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)). Mímú `prompt-injection` kúrò ń fò ìdènà ìforúkọsílẹ̀ nìkan.
+
+### Ohun tí ó ń rí ìdáhùn ṣáájú ìpè-lẹ́yìn
+
+Lórí ọ̀nà ìṣàn-kírí ìlà-iṣẹ́ náà ni: ìyọkúrò ìrántí → ìṣiṣẹ́ irinṣẹ́ inú → àwọn ìdènà lẹ́yìn ìpè → ìkejáde ìdènà lẹ́yìn ìpè → ìpamọ́ ìkójọpọ̀ ìtumọ̀.
+
+- **Ìyọ̀kúrò ìrántí** àti **ìṣe irinṣẹ́** rí ìdáhùn náà ṣáájú kí àwọn olùṣọ́ post-call lè tún un kọ tàbí dí i lọ́wọ́. Láti ìgbà [#16401](https://github.com/diegosouzapw/OmniRoute/pull/16401), ìyọ̀kúrò ìrántí ń fi ọ̀rọ̀ tí a yọ kúrò ṣiṣẹ́ nípasẹ̀ `sanitizePII` nígbà tí `PII_RESPONSE_SANITIZATION` bá wà ní títàn (fún ìṣàn àti àìṣàn méjèèjì), ṣùgbọ́n ìdáhùn kan tí post-call bá dí nígbà tó yá ni a ti fún sí ìrántí àti àwọn irinṣẹ́ tẹ́lẹ̀.
+- **Ibi ìpamọ́ semantic (semantic cache)** ń kó ìdáhùn náà pamọ́ lẹ́yìn post-call, nítorí náà ó ń kó ìdáhùn tí a tún kọ pamọ́, àti pé a kì í fi ìdáhùn tí a dènà pamọ́ rárá. A máa ń lo kọ́kọ́rọ́ API (API key) kọ̀ọ̀kan láti ṣe àmì sí àwọn wọ́lú ìpamọ́ náà.
+
+## Ètò
+
+Àwọn onípa àyíká (environment variables) tí àwọn ààbò tí a fi sí inú rẹ̀ ń kà:
+
+| Variable                              | Used by                   | Effect                                                                                         |
+| ------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`        | Ṣètò sí `false` láti mú àwárí kúrò pátápátá.                                                   |
+| `INPUT_SANITIZER_MODE`                | `prompt-injection`        | Ìlànà ìgbékalẹ̀: `warn`, `block`, tàbí `log`. Ìye àtijọ́ `redact` kò ṣe àtúnkọ ọ̀rọ̀ ìgbékalẹ̀ náà. |
+| `INJECTION_GUARD_MODE`                | `prompt-injection`        | Ọ̀nà fún ààbò ìgbékalẹ̀; ó tún jẹ́ àmì àrà ọ́tọ̀ ti DB tí **ó ń borí** àwọn onípa àyíká (DB > ENV). |
+| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`        | Ìwọ̀ntúnwọ̀nsì líle tó kéré jù lọ tí `MODE=block` kọ̀: `high` (àìyípadà), `medium`, tàbí `low`.   |
+| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`        | Orúkọ àtijọ́ fún `INPUT_SANITIZER_BLOCK_THRESHOLD`.                                             |
+| `PII_REDACTION_ENABLED`               | `pii-masker`              | Nígbà tí ó bá jẹ́ `true`, a ń pa PII ìbéèrè rẹ rẹ́ (kò sinmi lórí ọ̀nà ìgbékalẹ̀).                 |
+| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (downstream) | Ó ń ṣàkóso ìhùwàsí olùpamọ́ ní apá ìáhùn.                                                       |
+
+Àwọn ààbò Modality Bridge ń ka ètò àsìkò ìṣiṣẹ́ (runtime config) láti inú ilé ìkópamọ́ ètò tí ó ní ìtìlẹyìn DB (`getSettings()`), kìí jẹ́ láti inú env vars. Àwọn bọ́tìnnì àkọ́kọ́ ti Vision ni
 `modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`,
 `modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`,
 `modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`,
 `modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`,
 `modalityBridgeCacheEnabled`, `modalityBridgeCacheTtlMinutes`, àti
-`modalityBridgeCacheMaxEntries`. Àwọn kọ́kọ́rọ́ àtijọ́
-`visionBridge*` ni a gbà nìkan gẹ́gẹ́ bí fallback kíkà fún ìyípo kan tí a ti ṣàkọsílẹ̀ rẹ̀;
-dashboard máa ń kọ nípa lílo àwọn kọ́kọ́rọ́ àkọ́kọ́. Àwọn iye àiyípadà àkọ́kọ́ àti resolver fallback
-wà nínú `src/shared/constants/modalityBridgeDefaults.ts`, nígbà tí a ṣì pa
-àwọn constant àtijọ́ mọ́ sínú `src/shared/constants/visionBridgeDefaults.ts`.
+`modalityBridgeCacheMaxEntries`. Àwọn bọ́tìnnì àtijọ́
+`visionBridge*` ni a ń gbà nígbà tí ó bá jẹ́ ìpadàsẹ́yìn kíkà àyíká kan ṣoṣo tí a kọ silẹ̀; àwọn ìkọ̀wé ojú-ìwé ìṣàkóso ń lo àwọn bọ́tìnnì àkọ́kọ́. Àwọn ìpìlẹ̀ àti olùyanjú ìpadàsẹ́yìn wà nínú `src/shared/constants/modalityBridgeDefaults.ts`, pẹ̀lú àwọn ìpìlẹ̀ àtijọ́ tí a tọ́ sí nínú `src/shared/constants/visionBridgeDefaults.ts`.
 
-Audio ń lo `modalityBridgeAudioEnabled`, `modalityBridgeAudioModel`,
-`modalityBridgeAudioTimeout`, àti `modalityBridgeAudioMaxClips`, papọ̀ pẹ̀lú àwọn ìṣètò
-`modalityBridgeCache*` tí gbogbo wọn ń pín. Audio kò ní fallback kọ́kọ́rọ́ àtijọ́ nítorí pé
-a ṣàfikún àwọn kọ́kọ́rọ́ wọ̀nyí pẹ̀lú schema Modality Bridge.
+Ohùn (Audio) ń lo `modalityBridgeAudioEnabled`, `modalityBridgeAudioModel`,
+`modalityBridgeAudioTimeout`, àti `modalityBridgeAudioMaxClips`, àti àwọn ètò
+`modalityBridgeCache*` tí a pín. Ohùn kò ní ìpadàsẹ́yìn bọ́tìnnì àtijọ́ nítorí pé a ṣàfilọ̀ àwọn bọ́tìnnì wọ̀nyí pẹ̀lú ètò ìṣètò Modality Bridge.
 
-Video ń lo `modalityBridgeVideoEnabled`, `modalityBridgeVideoAnalysisMode`,
+Fídíò ń lo `modalityBridgeVideoEnabled`, `modalityBridgeVideoAnalysisMode`,
 `modalityBridgeVideoModel`,
 `modalityBridgeVideoFrameCount`, `modalityBridgeVideoSamplingPolicy`,
 `modalityBridgeVideoMaxVideos`, àti
-`modalityBridgeVideoTimeout`, papọ̀ pẹ̀lú àwọn ìṣètò `modalityBridgeCache*` tí gbogbo wọn ń pín.
-A pa á ní àiyípadà àkọ́kọ́ nítorí pé FFmpeg/ffprobe jẹ́ àwọn dependency ìṣiṣẹ́ tí kò pọndandan,
-àti pé fífi caption sí àwọn frame ń mú ìdádúró àti iye owó model pọ̀ sí i.
+`modalityBridgeVideoTimeout`, pẹ̀lú àwọn ètò `modalityBridgeCache*` tí a pín.
+A ti mú un kúrò ní àìyípadà nítorí pé FFmpeg/ffprobe jẹ́ àwọn ohun aṣojú iṣẹ́ tí kò dandan àti pé fífi àkọlé sí àwọn fóróòmù ń fi ìdádúró àti owó awoṣe kún un.
 
-## Àwọn Guardrail Àkànṣe
+## Àwọn Guardrail Aṣààyàn
 
 ```typescript
 import { BaseGuardrail, guardrailRegistry } from "@/lib/guardrails";
@@ -805,71 +464,43 @@ class BudgetGuardrail extends BaseGuardrail {
 guardrailRegistry.register(new BudgetGuardrail());
 ```
 
-Àwọn ìgbésẹ̀:
+Àwọn Ìgbésẹ̀:
 
-1. Ṣẹ̀dá `src/lib/guardrails/myGuardrail.ts` tí ó fa `BaseGuardrail` gbòòrò.
-2. Ṣe àmúṣẹ `preCall` àti/tàbí `postCall`.
-3. Yálà forúkọsílẹ̀ ní àkókò import (ṣe push láti `registerDefaultGuardrails`) tàbí
-   pe `guardrailRegistry.register(...)` ní runtime — registry náà máa rọ́pò
-   guardrail èyíkéyìí tó wà tẹ́lẹ̀ pẹ̀lú orúkọ normalized kan náà.
-4. Ṣàfikún àwọn ìdánwò sábẹ́ `tests/unit/` (àwọn àpẹẹrẹ tó wà:
-   `tests/unit/guardrails-registry.test.ts`,
-   `tests/unit/prompt-injection-guard.test.ts`,
-   `tests/unit/guardrails/visionBridge.test.ts`).
+1. Ṣẹda `src/lib/guardrails/myGuardrail.ts` tí ó ń faagun `BaseGuardrail`.
+2. Ṣe àgbékalẹ̀ `preCall` àti/tàbí `postCall`.
+3. Yálà forúkọ sílẹ̀ ní àkókò ìgbökùn (tí a fa játi `registerDefaultGuardrails`) tàbí pè `guardrailRegistry.register(...)` ní àkókò ìṣiṣẹ́ — ilé-ìkópamọ́ (registry) náà yóò rọ́pò èyíkéyìí guardrail tó ti wà tẹ́lẹ̀ pẹ̀lú orúkọ tí a ṣe ìṣọ̀kan kan náà.
+4. Fi àwọn àdánwò kún abẹ́ `tests/unit/` (àwọn àpẹẹrẹ tó wà tẹ́lẹ̀: `tests/unit/guardrails-registry.test.ts`, `tests/unit/prompt-injection-guard.test.ts`, `tests/unit/guardrails/visionBridge.test.ts`).
 
-## Ìdánwò
+## Àdánwò
 
-Lo `resetGuardrailsForTests()` láàárín àwọn ìdánwò láti bẹ̀rẹ̀ láti ipò tí a mọ̀.
-Fi `{ registerDefaults: false }` ránṣẹ́ láti bẹ̀rẹ̀ pẹ̀lú registry òfìfo, kí o sì
-forúkọsílẹ̀ àwọn guardrail tí a ń dánwò nìkan. Vision Bridge gba dependency
-injection (`deps.getSettings`, `deps.callVisionModel`); Audio Bridge sì pèsè àwọn
-ọ̀nà ìsopọ̀ tó bá a mu fún àwọn ààtò, àwọn agbára, yíyan model STT, àyẹ̀wò credential,
-àti transcription. Nítorí náà, àwọn ìdánwò lè ṣe àyẹ̀wò àwọn flow méjèèjì láìní
-àyè sí DB tàbí network.
+Lo `resetGuardrailsForTests()` láàárín àwọn àdánwò láti bẹ̀rẹ̀ láti ipò tí a mọ̀. Kọjá `{ registerDefaults: false }` láti bẹ̀rẹ̀ pẹ̀lú ilé-ìkópamọ́ tí ó ṣófo kí o sì forúkọ sílẹ̀ àwọn guardrail nìkan tí a ń dánwò. Vision Bridge gba abẹ́rẹ́ ìgbẹ́kẹ̀lé (`deps.getSettings`, `deps.callVisionModel`); Audio Bridge fi àwọn ojú ìsopọ̀ tí ó bá dọ́gba hàn fún ètò, àwọn agbára, ìṣàfihàn àwoṣẹ́ STT, àwọn àyẹ̀wò ẹ̀rí, àti ìtúmọ̀ ọ̀rọ̀. Nítorí náà, àwọn àdánwò le lo àwọn ìṣàn méjèèjì láìnílò sí DB tàbí ìsopọ̀ wẹ́bù.
 
-## Wo Bákan Náà
+## Wo Pẹ̀lú
 
-- `src/lib/guardrails/` — àmúṣẹ
-- `src/shared/utils/inputSanitizer.ts` — detector àjọpín tí ń fún
-  prompt-injection àti PII masking ní agbára
-- `src/shared/constants/visionBridgeDefaults.ts` — àwọn default Vision Bridge àti
-  àtòjọ model forced-bridge
-- `src/shared/constants/modalityBridgeDefaults.ts` — àwọn default runtime Vision/Audio àjọpín
-- `docs/architecture/RESILIENCE_GUIDE.md` — layer orthogonal (circuit breaker, cooldowns)
-- `docs/reference/ENVIRONMENT.md` — àkọsílẹ̀ env var kíkún
+- `src/lib/guardrails/` — àgbékalẹ̀
+- `src/shared/utils/inputSanitizer.ts` — ohun ẹ̀rọ ìṣàwárí tí a pín pẹ̀lú tí ó ń ṣiṣẹ́ fún prompt-injection àti boju-boju PII
+- `src/shared/constants/visionBridgeDefaults.ts` — àwọn àiyipada Vision Bridge àti àkójọ àwoṣẹ́ ìsopọ̀ tí a fi agbára mú
+- `src/shared/constants/modalityBridgeDefaults.ts` — àwọn àiyipada àkókò ìṣiṣẹ́ Vision/Audio tí a pín pẹ̀lú
+- `docs/architecture/RESILIENCE_GUIDE.md` — ìpele tí kò ní í ṣe pẹ̀lú ara wọn (circuit breaker, cooldowns)
+- `docs/reference/ENVIRONMENT.md` — ìtọ́kasí ẹ̀rọ ayíká kíkún
 
-## Ìbora route injection-guard àti red-team (Phase 8 · Block D)
+## Ìbòjuwò ipa ọ̀nà injection-guard & ẹgbẹ́ pupa (Phase 8 · Block D)
 
-Injection-guard (`createInjectionGuard` / `withInjectionGuard`) bo gbogbo àwọn route
-tó gba àwọn prompt olumulo. Ó tẹ̀lé `INJECTION_GUARD_MODE` (default `warn` = log nìkan;
-`block` = dá HTTP 400 `SECURITY_001` padà).
+Ìṣọ́-ìgbọ̀nà (`createInjectionGuard` / `withInjectionGuard`) bo gbogbo àwọn ipa ọ̀nà tí ó gba àwọn ìkéde olùmúlò. Ó ń tẹ̀lé `INJECTION_GUARD_MODE` (`warn` àìyipada = àkọsílẹ̀ nìkan; `block` = dá ìdáhùn HTTP 400 `SECURITY_001` padà).
 
-| Irú         | Àwọn Route                                                                                                                                           | Mode default |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| Ọ̀rọ̀ (tó wà) | `/v1/chat/completions`, `/v1/completions`, `/v1/relay/chat/completions`                                                                              | warn         |
-| Ìṣẹ̀dá       | `/v1/messages`, `/v1/responses`, `/v1/images/generations`, `/v1/images/edits`, `/v1/videos/generations`, `/v1/music/generations`, `/v1/audio/speech` | warn         |
-| Dátà        | `/v1/embeddings`, `/v1/rerank`, `/v1/search`, `/v1/moderations`                                                                                      | warn         |
+| Irú                  | Àwọn Ìpa ọ̀nà                                                                                                                                         | Ìpò àìyipada |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| Ọ̀rọ̀ (tí wà tẹ́lẹ̀)     | `/v1/chat/completions`, `/v1/completions`, `/v1/relay/chat/completions`                                                                              | warn         |
+| Tí ó ń dá nǹkan jáde | `/v1/messages`, `/v1/responses`, `/v1/images/generations`, `/v1/images/edits`, `/v1/videos/generations`, `/v1/music/generations`, `/v1/audio/speech` | warn         |
+| Dátà                 | `/v1/embeddings`, `/v1/rerank`, `/v1/search`, `/v1/moderations`                                                                                      | warn         |
 
-Yíyọ ọ̀rọ̀ jáde (`extractMessageContents`) bo `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system`.
+Ìyọ̀ṣọ̀rọ̀ (`extractMessageContents`) bo `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system`.
 
-**Red-team (lóru gbogbo ọjọ́, `nightly-llm-security.yml`):** promptfoo fìdí rẹ̀ múlẹ̀ pé route kọ̀ọ̀kan ń dènà
-corpus OWASP-LLM nínú `INJECTION_GUARD_MODE=block`; garak ń ṣiṣẹ́ àwọn probe (ó máa foju kọ ọ́ láìsí secret).
-`moderations` wà nínú rẹ̀ fún ìṣọ̀kan — àwọn operator nínú block-mode lè yọ ọ́ kúrò nípasẹ̀
-`resolveDisabledGuardrails`.
+**Ẹgbẹ́ pupa (ni alẹ́, `nightly-llm-security.yml`):** promptfoo fìdí rẹ̀ múlẹ̀ pé ìpa ọ̀nà kọ̀ọ̀kan dí OWASP-LLM corpus ní `INJECTION_GUARD_MODE=block`; garak ṣiṣẹ́ àwọn ìwádìí (fo sí apá kan bí kò bá sí ohun ìpamọ́). A fi `moderations` kún fún ìbámu. Ìpò ìdènà jẹ́ ààlà tí kò gbọ́dọ̀ jẹ́ àìní: `evaluatePromptInjection()` kò kà sí àkójọ àìṣiṣẹ́ fún ìbéèrè kọ̀ọ̀kan tí middleware kọjá sí i, nítorí náà `disabledGuardrails` kò yọ ipa ọ̀nà kúrò nínú rẹ̀ ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)).
 
-Workflow alẹ́ náà (`.github/workflows/nightly-llm-security.yml`, cron + manual
-dispatch) ní job méjì:
+Ìṣàn iṣẹ́ alẹ́ (`.github/workflows/nightly-llm-security.yml`, cron + ìgbékalẹ̀ ọwọ́) ní iṣẹ́ méjì:
 
-- **`promptfoo-guard` (tó ń dènà)** — ń ṣiṣẹ́ `promptfoo eval -c promptfooconfig.yaml`
-  pẹ̀lú `INJECTION_GUARD_MODE=block`. Case adversarial kọ̀ọ̀kan (fún àpẹẹrẹ, "foju kọ gbogbo
-  àwọn ìtọ́ni iṣáájú…", àwọn jailbreak irú DAN) ń ṣàyẹ̀wò pé response náà ní
-  `error.code === "SECURITY_001"`, ìyẹn ni pé guard náà kọ request náà ní ti gidi.
-- **`garak` (ìmọ̀ràn)** — ń ṣiṣẹ́ garak `--probes promptinject,dan,leakreplay`
-  lòdì sí instance OmniRoute local kan (`http://localhost:20128/v1`). Ó dá lórí
-  secret provider kan (`PROMPTFOO_PROVIDER_KEY`); ó máa foju kọ ọ́ lọ́nà tó bójú mu, a sì fi
-  `|| true` sí òpin rẹ̀, nítorí náà ó ń ṣe report láìfa ìkùnà CI.
+- **`promptfoo-guard` (tí ń dènà)** — ṣiṣẹ́ `promptfoo eval -c promptfooconfig.yaml` pẹ̀lú `INJECTION_GUARD_MODE=block`. Ẹjọ́ àtakò kọ̀ọ̀kan (àpẹẹrẹ "fojú fo gbogbo àwọn ìtọ́nisọ́nà tó ti kọjá…", àwọn àṣejade irú DAN) sọ pé ìdáhùn náà gbé `error.code === "SECURITY_001"`, ìyẹn ni pé ìṣọ́ náà kọ ìbéèrè náà ní tòótọ́.
+- **`garak` (fún ìmọ̀ràn)** — ṣiṣẹ́ garak `--probes promptinject,dan,leakreplay` lòdì sí àpẹẹrẹ OmniRoute ní àgbègbè (`http://localhost:20128/v1`). Ó wà lórí àṣírí olùpèsè (`PROMPTFOO_PROVIDER_KEY`); fo sí apá kan dáadáa wà sì ní suffix `|| true`, nítorí náà ó jiro ròyìn láìjẹ́ kí CI kùnà.
 
-Ìbora helper guard náà (`createInjectionGuard` / `withInjectionGuard`)
-nà dé gbogbo route `/v1` tó ní prompt; a ń fa ọ̀rọ̀ prompt jáde láti inú
-`messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` nípasẹ̀
-`extractMessageContents()` nínú `src/shared/utils/inputSanitizer.ts`.
+Àìmọ̀ ìbòjuwò ti olùrànlọ́wọ́ ìṣọ́ (`createInjectionGuard` / `withInjectionGuard`) dé gbogbo ìpa ọ̀nà `/v1` tí ó ní ìkéde; a fa ọ̀rọ̀ ìkéde yọ láti `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` nípasẹ̀ `extractMessageContents()` nínú `src/shared/utils/inputSanitizer.ts`.

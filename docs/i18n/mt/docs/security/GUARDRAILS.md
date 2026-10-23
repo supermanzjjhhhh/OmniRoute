@@ -5,21 +5,28 @@
 ---
 
 > **Sors awtorevoli:** `src/lib/guardrails/`
-> **Aġġornat l-aħħar:** 2026-08-29 — v3.8.51 (il-provenjenza tat-traskrizzjoni ta’ Video Bridge tiġi ddikjarata minn min isejjaħ,
-> u għadha mhix ivverifikata mis-server — iċċarat skont #11661)
+> **Aġġornat l-aħħar:** 2026-10-17 — v3.8.52 (żdiedet [Kopertura u limiti](#coverage-and-limits):
+> liema rotot u mogħdijiet tar-rispons jilħqu l-hooks, l-headers magħquda tad-diżattivazzjoni (#16412), il-modalità
+> tal-imblukkar tal-injezzjoni bħala konfini obbligatorju (#16413), u x’jara rispons qabel il-post-call)
 
 Il-guardrails jinfurzaw is-sikurezza, il-politiki u t-trasformazzjonijiet tal-kontenut fil-konfini
-bejn OmniRoute u l-fornituri upstream. Kull guardrail jista’ jispezzjona (u,
-b’mod fakultattiv, jirrifjuta, jittrasforma jew jannota) il-payloads tat-talbiet (`preCall`) u
-r-risposti upstream (`postCall`).
+bejn OmniRoute u l-fornituri upstream. Kull guardrail jista’ jispezzjona (u
+b’mod fakultattiv jirrifjuta, jittrasforma jew jannota) il-payloads tat-talbiet (`preCall`) u
+r-risponsi upstream (`postCall`).
 
-Is-sistema hija **fail-open**: jekk guardrail jitfa’ eċċezzjoni waqt l-eżekuzzjoni, ir-reġistru
+Is-sistema **tħalli t-talba tkompli f’każ ta’ żball**: jekk guardrail jitfa’ eċċezzjoni waqt l-eżekuzzjoni, ir-reġistru
 jirreġistra l-iżball u jkompli bil-guardrail li jmiss minflok ifalli
 t-talba. L-imblukkar huwa deċiżjoni espliċita (`block: true`), qatt aċċident.
+L-unika eċċezzjoni hija talba abortita: meta s-`signal` ta’ min jagħmel is-sejħa jiġi abortit,
+guardrail li jitfa’ eċċezzjoni jirrifjuta l-eżekuzzjoni tal-hook minflok jinqabeż.
 
-## Protezzjonijiet Inkorporati
+Il-hooks **ma** jitħaddmux fuq kull rotta jew kull rispons. Aqra
+[Kopertura u limiti](#coverage-and-limits) qabel tiddependi fuq guardrail bħala
+kontroll tas-sigurtà.
 
-Ir-reġistru jgħabbi awtomatikament sitt protezzjonijiet skont l-ordni ta’ prijorità waqt l-importazzjoni
+## Guardrails Inkorporati
+
+Ir-reġistru jgħabbi awtomatikament sitt guardrails f’ordni ta’ prijorità waqt l-importazzjoni
 (ara `registry.ts` → `registerDefaultGuardrails()`):
 
 | Prijorità | Isem                | Stadju/i       | Fajl                  |
@@ -35,701 +42,775 @@ Numri ta’ prijorità aktar baxxi jitħaddmu **l-ewwel**.
 
 ### Pont tal-Viżjoni (`visionBridge.ts`) — Pont tal-Modalità PR-1
 
-Jinterċetta talbiet li fihom immaġnijiet u li huma mmirati lejn **mudelli mingħajr viżjoni**, u jew
-jidderieġi mill-ġdid it-talba kollha lejn mudell li jappoġġja l-viżjoni, jew jissostitwixxi l-partijiet
-tal-immaġni b’deskrizzjonijiet testwali prodotti minn mudell tal-viżjoni konfigurabbli qabel
-is-sejħa upstream. Dan jippermetti lill-fornituri li jaħdmu bit-test biss jimmaniġġjaw
+Il-mudell bażi GLM 5.3 u `glm-5.3-{low,high,max}` għandhom metadata espliċita
+`supportsVision:false` fir-reġistru/fl-ispeċifikazzjoni. Il-varjanti GLM 5.3 Flash
+jibqgħu mudelli b’viżjoni nattiva. Ir-rotta `/v1/messages` ta’ Claude Code tidħol
+fil-katina kondiviża tal-guardrails ta’ qabel is-sejħa ta’ `handleChat` **qabel** it-traduzzjoni minn Claude għal OpenAI;
+l-immaġnijiet imbejta fir-riżultati tal-għodda `Read` iridu jiġu deskritti jew ipproċessati
+qabel ma dik it-traduzzjoni tikkonvertihom f’kontenut OpenAI `image_url` (#17069).
+
+Jinterċetta talbiet li fihom immaġnijiet u li huma mmirati lejn **mudelli mingħajr viżjoni** u jew
+jidderieġi t-talba kollha lejn mudell b’kapaċità ta’ viżjoni jew jissostitwixxi l-partijiet tal-immaġnijiet
+b’deskrizzjonijiet testwali prodotti minn mudell tal-viżjoni konfigurabbli qabel
+is-sejħa upstream. Dan jippermetti lill-fornituri li jappoġġjaw biss it-test jipproċessaw
 payloads multimodali b’mod trasparenti.
 
 Fluss:
 
 1. Aqbeż jekk il-mudell fil-mira diġà jappoġġja l-viżjoni (sakemm ma jidhirx fil-
-   lista ta’ pontijiet sfurzati `isVisionBridgeForcedModel`).
-2. Oħroġ il-partijiet tal-immaġni permezz ta’ `extractImageParts(messages)`
-   (`visionBridgeHelpers.ts`), li tiddelega lid-**ditekter unifikat tal-midja**
-   `detectMediaParts()` f’`open-sse/utils/mediaParts.ts` — is-sors uniku
-   tal-verità kondiviż mal-filtru tal-kompatibbiltà combo.
-   L-estrazzjoni hija limitata permezz ta’ lista ta’ permessi għall-partijiet tal-ogħla livell bil-forom
-   li `replaceImageParts` jista’ jerġa’ jdaħħal (il-kuntratt extract↔replace): OpenAI
-   `image_url`, Anthropic base64 `source.type:"base64"`, Anthropic URL
-   `source.type:"url"`, u Responses API `input_image`. Sejbiet imqiegħda ġewwa oħrajn u
-   forom indikattivi biss huma materjal għall-filtru combo u qatt ma jiġu estratti.
-   Aqbeż jekk ma jinstab xejn.
-3. Irrisolvi l-konfigurazzjoni waqt it-tħaddim permezz ta’ `resolveVisionBridgeRuntimeSettings()`
-   (`src/shared/constants/modalityBridgeDefaults.ts`): il-kjavi l-ġodda tas-settings `modalityBridge*`
-   jieħdu preċedenza; il-kjavi legati `visionBridge*` jibqgħu bħala **fallback għal
-   ċiklu wieħed** (tieqa ta’ rollback). Aqbeż qabel kwalunkwe traversar tal-midja meta
+   lista tal-pont obbligatorju `isVisionBridgeForcedModel`).
+2. Oħroġ il-partijiet tal-immaġnijiet permezz ta’ `extractImageParts(messages)`
+   (`visionBridgeHelpers.ts`), li jiddelega lid-**detettur unifikat tal-midja**
+   `detectMediaParts()` f’`open-sse/utils/mediaParts.ts` — l-
+   uniku sors awtorevoli kondiviż mal-filtru tal-kompatibbiltà tal-combo.
+   L-estrazzjoni hija limitata għall-forom li `replaceImageParts` jista’ jerġa’
+   jdaħħal f’posthom (il-kuntratt ta’ estrazzjoni↔sostituzzjoni): OpenAI `image_url`, Anthropic base64
+   `source.type:"base64"`, Anthropic URL `source.type:"url"`, u Responses
+   API `input_image`. Immaġnijiet li jaqblu u li huma mbejta f’Claude Code
+   `tool_result.content` u fl-outputs tal-għodod ta’ Responses jiġu wkoll estratti u
+   sostitwiti fil-mogħdijiet oriġinali tagħhom; forom li huma biss indikaturi huma materjal għall-filtru tal-combo
+   u ma jiġux estratti.
+   Aqbeż jekk ma tinstab l-ebda waħda.
+3. Iddetermina l-konfigurazzjoni waqt l-eżekuzzjoni permezz ta’ `resolveVisionBridgeRuntimeSettings()`
+   (`src/shared/constants/modalityBridgeDefaults.ts`): iċ-ċwievet il-ġodda tas-settings `modalityBridge*`
+   jieħdu preċedenza; iċ-ċwievet preċedenti `visionBridge*` jibqgħu **alternattiva ta’ riżerva
+   għal ċiklu wieħed** (perjodu biex terġa’ lura għall-verżjoni preċedenti). Aqbeż qabel kwalunkwe traversata tal-midja meta
    l-pont ikun diżattivat.
 4. Is-selettur tal-modalità (`modalityBridgeVisionMode`, ara t-tabella hawn taħt) jiddeċiedi
-   bejn direzzjoni mill-ġdid u deskrizzjoni. Id-direzzjoni mill-ġdid tirritorna `modifiedPayload` fejn jinbidel
-   biss `model`, flimkien mal-meta `{ rerouted, fromModel, toModel, imagesKept }`.
-5. Rotta tad-deskrizzjoni: illimita l-immaġnijiet għal `maxImages`, ikkomponi l-prompt konxju tal-kompitu,
+   bejn direzzjoni mill-ġdid u deskrizzjoni. Id-direzzjoni mill-ġdid tirritorna `modifiedPayload` bil-`model`
+   biss mibdul, flimkien mal-metadata `{ rerouted, fromModel, toModel, imagesKept }`.
+5. Mogħdija tad-deskrizzjoni: illimita l-immaġnijiet għal `maxImages`, ikkomponi l-prompt skont il-kompitu,
    ikkonsulta l-cache tad-deskrizzjonijiet, sejjaħ il-mudell tal-viżjoni **b’mod parallel**
    (`Promise.allSettled`), u daħħal partijiet testwali `[Image N]: <description>`
-   minflokhom. Deskrizzjoni li tfalli tipproduċi `null` u l-parti oriġinali tal-immaġni tiġi
-   **ppreservata** (#4012) — ħlief fir-rotta combo tad-deskrizzjoni meta kull
-   deskrizzjoni tkun falliet, fejn upstream ikkonfermat bħala mingħajr viżjoni jirċievi placeholder
-   `(unavailable — no vision-capable provider connected)` minflok (#8430).
-6. Irritorna `modifiedPayload` + meta (`imagesProcessed`, `descriptions`,
+   minflokhom. Deskrizzjoni li tfalli tagħti `null`: l-immaġni mhux ipproċessata tinżamm għal
+   miri mhux magħrufa/b’kapaċità ta’ viżjoni (#4012), iżda **mira diretta kkonfermata li tappoġġja biss
+   it-test** jew combo mingħajr viżjoni jirċievi test sostitut espliċitu
+   `(unavailable — no vision-capable provider connected)` għal
+   kull immaġni mhux deskritta, inklużi fallimenti parzjali u immaġnijiet lil hinn mil-
+   limitu tas-sejħiet għad-deskrizzjoni (#17069). L-alternattiva ta’ riżerva eżistenti għad-deskrizzjoni tal-combo meta jfallu kollha
+   tibqa’ fis-seħħ (#8430).
+6. Irritorna `modifiedPayload` + metadata (`imagesProcessed`, `descriptions`,
    `processingTimeMs`, `visionModel`).
 
 #### Selettur tal-modalità (`modalityBridgeVisionMode`)
 
-| Modalità   | Default | Imġiba                                                                                                                                                                                                                                                                                                                                                              |
-| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auto`     | ✔       | Euristika legata, mhux mibdula (#6640/#7204): mudelli mhux combo/`auto/` jiġu diretti mill-ġdid lejn l-aħjar mudell tal-viżjoni sakemm il-mudell oriġinali ma jkollux diġà kredenzjali li jistgħu jintużaw (f’dak il-każ issir deskrizzjoni); miri combo dejjem jiġu deskritti.                                                                                     |
-| `describe` |         | Dejjem iddeskrivi — il-blokka tad-direzzjoni mill-ġdid tinqabeż kompletament; il-mudell magħżul mill-utent dejjem iwieġeb.                                                                                                                                                                                                                                          |
-| `reroute`  |         | Sforza d-direzzjoni mill-ġdid: il-protezzjoni li żżomm il-mudell bi kredenzjali tinqabeż. Il-protezzjoni tal-kredenzjali tal-**mira** tad-direzzjoni mill-ġdid xorta tapplika — meta ma teżisti ebda mira tal-viżjoni li tista’ tintuża, it-talba tgħaddi għad-deskrizzjoni sabiex immaġnijiet mhux ipproċessati qatt ma jaslu għand backend tat-test biss (#8430). |
+| Modalità   | Valur predefinit | Imġiba                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`     | ✔                | Ewristika preċedenti, mhux mibdula (#6640/#7204): mudelli mhux combo/`auto/` jiġu ridiretti lejn l-aħjar mudell tal-viżjoni sakemm il-mudell oriġinali ma jkollux diġà kredenzjali li jistgħu jintużaw (f’dak il-każ issir deskrizzjoni); il-miri combo dejjem jagħmlu deskrizzjoni.                                                                                   |
+| `describe` |                  | Dejjem issir deskrizzjoni — il-blokk tar-ridirezzjoni jinqabeż kompletament; dejjem iwieġeb il-mudell magħżul mill-utent.                                                                                                                                                                                                                                              |
+| `reroute`  |                  | Iġġiegħel ir-ridirezzjoni: il-kontroll li jżomm il-mudell li għandu kredenzjali jinqabeż. Il-kontroll tal-kredenzjali tal-**mira** tar-ridirezzjoni jibqa’ japplika — meta ma teżisti l-ebda mira tal-viżjoni li tista’ tintuża, il-pont jimblokka b’żball ċar minflok jagħmel deskrizzjoni jew jibgħat immaġnijiet mhux ipproċessati lil mira li tappoġġja biss test. |
 
-Il-modalitajiet sfurzati jagħmlu short-circuit **qabel** ma titħaddem l-euristika awtomatika; l-imġiba `auto`
-hija identika byte b’byte għall-protezzjoni ta’ qabel PR-1.
+Il-modalitajiet sfurzati jaqtgħu l-fluss **qabel** ma titħaddem l-ewristika awtomatika; l-imġiba ta’ `auto`
+hija identika byte b’byte għall-kontroll ta’ protezzjoni ta’ qabel PR-1.
 
-#### Ambitu tal-kjavi tal-API (`visionBridgeKeyScope.ts`)
+#### Ambitu taċ-ċavetta API (`visionBridgeKeyScope.ts`)
 
-Meta l-kjavi tal-API tas-sejjieħ tirrestrinġi `allowedConnections`, pools tal-kwota
+Meta ċ-ċavetta API ta’ min jagħmel is-sejħa tirrestrinġi `allowedConnections`, gruppi ta’ kwoti
 (`allowedQuotas`) jew mudelli (`allowedModels` / `blockedModels` /
 `modelAccessMode: "restricted"` / `disableNonPublicModels`), il-pont jagħżel biss
-mudelli ta’ direzzjoni mill-ġdid u deskrizzjoni li l-kjavi tista’ tuża, fuq konnessjonijiet li l-kjavi tista’
-tuża. Is-sejħa tad-deskrizzjoni mbagħad dejjem tgħaddi mis-self-loop ta’ OmniRoute bl-
-header `x-omniroute-self-loop-key-id`, sabiex it-talba taċ-chat riċeventi
-terġa’ tinforza l-politika ta’ konnessjoni u mudell ta’ dik il-kjavi. `enforceApiKeyPolicy()`
-jirrispetta dak il-header biss flimkien mas-self-loop bearer, għalhekk jista’ biss
-jirrestrinġi aktar l-aċċess, u id li ma tiġix riżolta tiġi rrifjutata.
+mudelli għar-ridirezzjoni u għad-deskrizzjoni li ċ-ċavetta tista’ tuża, fuq konnessjonijiet li ċ-ċavetta tista’
+tuża. Is-sejħa tad-deskrizzjoni mbagħad dejjem tgħaddi mil-linja interna ta’ OmniRoute bl-
+intestatura `x-omniroute-self-loop-key-id`, sabiex it-talba taċ-chat li tirċeviha
+terġa’ tinforza l-politika tal-konnessjonijiet u tal-mudelli ta’ dik iċ-ċavetta. `enforceApiKeyPolicy()`
+tirrispetta dik l-intestatura biss flimkien mal-bearer tal-linja interna, għalhekk tista’ biss
+tirrestrinġi l-aċċess, u id li ma tikkorrispondix għal ċavetta tiġi rrifjutata.
 
-Jekk l-ebda mudell tal-viżjoni ma jkun permess għall-kjavi, ir-rotta tad-deskrizzjoni twarrab u
-t-talba tgħaddi mingħajr tibdil, bl-istess imġiba fail-open bħal protezzjoni
-diżattivata (meta `{ skipped: true, reason: "no_permitted_vision_model" }`).
-Talbiet mingħajr kjavi, u kjavi mingħajr dawn ir-restrizzjonijiet, jaġixxu eżattament bħal
+Jekk l-ebda mudell tal-viżjoni ma jkun permess għaċ-ċavetta, **mira kkonfermata li tappoġġja
+biss test** tirrifjuta t-talba tal-immaġni lokalment bi żball HTTP 400 ċar minflok
+tgħaddi l-bytes tal-immaġni lil servizz upstream li ma jistax jipproċessahom (#17069). Għal miri b’kapaċità
+tal-viżjoni mhux magħrufa jew nattiva, il-mogħdija tad-deskrizzjoni żżomm l-imġiba preċedenti tagħha
+li tippermetti l-ipproċessar f’każ ta’ falliment (meta `{ skipped: true, reason: "no_permitted_vision_model" }`).
+Talbiet mingħajr ċavetta, u ċwievet mingħajr dawn ir-restrizzjonijiet, iġibu ruħhom eżattament bħal
 qabel.
 
-#### Prompt tad-deskrizzjoni konxju tal-kompitu (`modalityBridgeVisionTaskAware`)
+#### Prompt tad-deskrizzjoni konxju mill-kompitu (`modalityBridgeVisionTaskAware`)
 
-Il-valur awtomatiku huwa **true**. `composeVisionPrompt()` (`visionBridgeHelpers.ts`) iżżid
+Il-valur predefinit huwa **veru**. `composeVisionPrompt()` (`visionBridgeHelpers.ts`) iżżid
 it-test tal-**aħħar messaġġ tal-utent** (maqtugħ għal 500 karattru) mal-prompt
-bażiku tad-deskrizzjoni, biex tidderieġi d-deskrizzjoni lejn dak li fil-fatt talab
-l-utent (il-mudell codex-vision-proxy) u titlob lill-mudell tal-viżjoni jittraskrivi
-t-test viżibbli. Meta l-flag ikun mitfi — jew ma jkun hemm l-ebda test tal-utent —
-il-prompt bażiku jintuża mingħajr tibdil.
+bażiku tad-deskrizzjoni, u tidderieġi d-deskrizzjoni lejn dak li l-utent fil-fatt talab
+(mudell codex-vision-proxy) u titlob lill-mudell tal-viżjoni jittraskrivi t-test
+viżibbli. Meta l-għażla tkun mitfija — jew ma jkunx hemm test tal-utent — il-prompt bażiku jintuża mingħajr tibdil.
 
-It-talba kompatibbli ma’ OpenAI tal-istess self-loop tad-deskrizzjoni (`callVisionModelSingle()`
+It-talba kompatibbli ma’ OpenAI tal-linja interna tad-deskrizzjoni nnifisha (`callVisionModelSingle()`
 f’`visionBridgeHelpers.ts`) dejjem titlob `image_url.detail: "high"` —
-mingħajr kundizzjonijiet, għal kull min isejjaħha/fornitur, u mhix ikkontrollata
-minn xi sinjal tal-klijent. Il-kampjunar b’dettall baxx inaqqas il-preċiżjoni tal-OCR
-proprju għall-kompitu ta’ traskrizzjoni tat-test li jitlob dan il-prompt, għalhekk
-it-talba tad-deskrizzjoni nnifisha dejjem titlob dettall għoli irrispettivament
-mil-livell ta’ dettall użat mit-talba oriġinali li waslet. Dan jaffettwa biss
-il-body tat-talba interna tad-deskrizzjoni; ma jbiddilx kif OmniRoute jgħaddi
-`image_url.detail` ta’ min jagħmel it-talba fit-talba primarja — dak il-valur
-awtomatiku jiġi applikat separatament, u biss għal klijenti OpenCode identifikati,
-f’`defaultImageDetail()` (`open-sse/handlers/chatCore/upstreamBody.ts`). Il-fergħa
-bil-format fuq il-wire ta’ Anthropic tas-self-loop tad-deskrizzjoni ma għandhiex
-field `detail` u mhix affettwata minn ebda wieħed minn dawn il-valuri awtomatiċi.
+mingħajr kundizzjonijiet, għal kull min jagħmel is-sejħa/fornitur, mingħajr ma tiddependi fuq xi sinjal mill-klijent.
+Il-kampjunar b’dettall baxx inaqqas il-preċiżjoni tal-OCR proprju għall-kompitu tat-traskrizzjoni
+tat-test li jitlob dan il-prompt, għalhekk is-sejħa tad-deskrizzjoni nnifisha dejjem titlob livell għoli
+ta’ dettall irrispettivament mil-livell ta’ dettall li użat it-talba oriġinali li daħlet. Dan
+jaffettwa biss il-korp tat-talba interna tad-deskrizzjoni; ma jbiddilx kif
+OmniRoute jgħaddi l-`image_url.detail` ta’ min jagħmel is-sejħa fit-talba primarja —
+dak il-valur predefinit jiġi applikat separatament, u biss għal klijenti OpenCode identifikati, f’
+`defaultImageDetail()` (`open-sse/handlers/chatCore/upstreamBody.ts`). Il-fergħa
+tal-format ta’ trażmissjoni Anthropic tal-linja interna tad-deskrizzjoni m’għandhiex kamp `detail`
+u ma tiġi affettwata mill-ebda wieħed miż-żewġ valuri predefiniti.
 
 #### Limitu tal-output tad-deskrizzjoni (`modalityBridgeVisionMaxChars`)
 
-| Ċavetta                        | Valur awtomatiku | Medda             |
+| Ċavetta                        | Valur predefinit | Medda             |
 | ------------------------------ | ---------------- | ----------------- |
 | `modalityBridgeVisionMaxChars` | `0`              | `0` jew 100–50000 |
 
-`0` (il-valur awtomatiku) jfisser **mingħajr limitu** — id-deskrizzjoni rritornata
-minn `callVisionModel()` tgħaddi mingħajr modifika, u b’hekk jinżamm l-aġir
-eżistenti. Kull valur fil-medda 100–50000 jaqta’ d-deskrizzjoni u jżid
-is-suffiss `…` qabel ma tiddaħħal lura bħala `[Image N]: <description>`
+`0` (il-valur predefinit) ifisser **ebda limitu** — id-deskrizzjoni rritornata minn
+`callVisionModel()` tgħaddi mingħajr tibdil, u żżomm l-imġiba
+eżistenti. Kwalunkwe valur fil-medda 100–50000 jaqta’ d-deskrizzjoni b’
+suffiss `…` qabel ma terġa’ tiddaħħal bħala `[Image N]: <description>`
 (`VisionBridgeGuardrail.preCall()` f’`src/lib/guardrails/visionBridge.ts`).
-Għolli dan għal kompiti tal-OCR b’ħafna dettalji fejn il-mudell downstream
-jeħtieġ it-traskrizzjoni sħiħa; baxxih biex tillimita l-użu tat-tokens minn
-mudelli tal-viżjoni li jiġġeneraw ħafna test. Il-field tad-dashboard jinsab
-fil-pannell Avvanzat tat-tab Vision (`modality-bridge-max-chars`
-f’`ModalityBridgeVisionTab.tsx`) u jgħolli kull valur bejn 1 u 99 sal-limitu
-minimu ta’ 100, filwaqt li jħalli `0` espliċitu mhux mibdul — `0` huwa valur
-Zod validu fih innifsu (`z.union([z.literal(0), z.number().int().min(100).max(50000)])`),
-mhux sempliċement il-valur awtomatiku ta’ “mhux issettjat”.
+Żid dan il-valur għal kompiti OCR b’ħafna dettall fejn il-mudell downstream jeħtieġ
+it-traskrizzjoni sħiħa; naqqsu biex tillimita l-użu tat-tokens f’mudelli tal-viżjoni li jipproduċu ħafna test.
+Il-kamp tad-dashboard jinsab fil-pannell Avvanzat tat-tab Viżjoni
+(`modality-bridge-max-chars` f’`ModalityBridgeVisionTab.tsx`) u jgħolli kwalunkwe
+valur bejn 1 u 99 sal-minimu ta’ 100 filwaqt li jħalli `0` espliċitu
+mhux mibdul — `0` huwa valur Zod validu fih innifsu
+(`z.union([z.literal(0), z.number().int().min(100).max(50000)])`), mhux sempliċement
+il-valur predefinit għal meta ma jkun issettjat xejn.
 
 #### Cache tad-deskrizzjoni (`modalityBridge/bridgeCache.ts`)
 
-Cache LRU + TTL fil-memorja għall-output tad-deskrizzjonijiet, kondiviż
-mal-proċess kollu. Ċavetta = `sha256(imageRef + composedPrompt + configuredBridgeModel)`
-b’framing bi prefiss tat-tul (mingħajr kolliżjonijiet fil-konfini bejn il-fields).
-Il-komponent tal-mudell huwa l-mudell tal-bridge **ikkonfigurat**, mhux il-mudell
-li fil-fatt wieġeb — `callVisionModel` jista’ juża fallback internament, u
-l-użu ta’ ċavetta għal kull tentattiv jifframmenta l-cache. Deskrizzjonijiet
-li jfallu qatt ma jinżammu fil-cache. Settings:
+Cache LRU + TTL fil-memorja għall-outputs tad-deskrizzjoni, kondiviża mal-proċess kollu.
+Ċavetta = `sha256(imageRef + composedPrompt + configuredBridgeModel)` bi
+struttura bi prefiss tat-tul (mingħajr kolliżjonijiet fil-konfini tal-kampi). Il-komponent tal-mudell huwa
+l-mudell tal-pont **ikkonfigurat**, mhux il-mudell li fil-fatt wieġeb —
+`callVisionModel` tista’ tirrikorri internament għal alternattiva, u l-użu ta’ ċavetta għal kull tentattiv
+jifframmenta l-cache. Deskrizzjonijiet li jfallu qatt ma jinħażnu fil-cache. Settings:
 
-| Ċavetta                         | Valur awtomatiku | Medda   |
+| Ċavetta                         | Valur predefinit | Medda   |
 | ------------------------------- | ---------------- | ------- |
 | `modalityBridgeCacheEnabled`    | `true`           | —       |
 | `modalityBridgeCacheTtlMinutes` | `60`             | 1–1440  |
 | `modalityBridgeCacheMaxEntries` | `200`            | 10–5000 |
 
-#### Normalizzazzjoni ta’ immaġnijiet remoti (self-loop tad-deskrizzjoni/fetch tal-base64)
+#### Normalizzazzjoni ta’ immaġnijiet remoti (describe permezz ta’ self-loop/irkupru base64)
 
-Meta l-bridge nnifsu jġib immaġni **remota** — is-self-call tad-deskrizzjoni
-ta’ Anthropic u l-konverżjoni għal base64 bil-format fuq il-wire ta’ Claude
+Meta l-bridge jirkupra immaġni **remota** hu stess — is-sejħa describe
+lilu nnifsu ta’ Anthropic u l-konverżjoni base64 fil-format claude-wire
 (`ensureBase64ImagesForClaudeWire`), it-tnejn permezz ta’
-`fetchRemoteImageAsDataUri()` f’`visionBridgeHelpers.ts` — id-data URI
-li tirriżulta tgħaddi minn `normalizeDataUri()`
-(`open-sse/utils/imageNormalize.ts`) qabel ma tiġi inkorporata fit-talba
-tal-mudell tal-viżjoni. Immaġnijiet kbar wisq jitnaqqsu għal **tarf twil ta’
-2048px** (li jaqbel mal-limitu tar-ridimensjonar li OpenAI/Anthropic diġà
-japplikaw min-naħa tas-server), u dan inaqqas il-bytes tal-upload/latency
-mingħajr ma jbiddel dak li jara l-mudell tal-viżjoni. Ir-ridimensjonar juża
-`sharp`, mgħobbi permezz ta’ import dinamiku: fuq pjattaforma fejn il-binary
-nattiv tiegħu jonqos milli jitgħabba, `normalizeDataUri()` **qatt ma titfa’
-eċċezzjoni** — minflok tgħaddi l-bytes oriġinali mingħajr tibdil, biex il-path
-tad-deskrizzjoni/konverżjoni għal base64 dejjem jibqa’ jaħdem. Bytes li mhumiex
-ta’ immaġni (fetch li ma rritornax immaġni li tista’ tiġi dekodifikata) ukoll
-jgħaddu mingħajr tibdil. Din in-normalizzazzjoni hija limitata għall-immaġnijiet
-li l-bridge jġib għas-self-call tiegħu stess — qatt ma tiġi applikata għall-payload
-mhux ipproċessat li jgħaddi direttament mingħand min jagħmel it-talba, skont
-il-prinċipju li l-modifika ssir biss meta tintgħażel espliċitament (Regola
-Stretta #20).
+`fetchRemoteImageAsDataUri()` f’`visionBridgeHelpers.ts` — l-URI tad-data li jirriżulta
+jgħaddi minn `normalizeDataUri()`
+(`open-sse/utils/imageNormalize.ts`) qabel jiddaħħal fit-talba
+lill-mudell tal-viżjoni. Immaġnijiet kbar wisq jitnaqqsu għal **naħa twila ta’ 2048px** (li taqbel
+mal-limitu tat-tibdil fid-daqs li OpenAI/Anthropic diġà japplikaw fuq in-naħa tas-server), u dan inaqqas
+il-bytes imtellgħin u l-latenza mingħajr ma jbiddel dak li jara l-mudell tal-viżjoni. It-tibdil fid-daqs
+juża `sharp`, mgħobbi permezz ta’ importazzjoni dinamika: fuq pjattaforma fejn il-binarju nattiv tiegħu
+jonqos milli jitgħabba, `normalizeDataUri()` **qatt ma jitfa’ eċċezzjoni** — minflok
+iħalli l-bytes oriġinali jgħaddu kif inhuma, sabiex il-mogħdija describe/konverżjoni base64
+dejjem tibqa’ taħdem. Bytes li mhumiex immaġni (irkupru li ma rritornax
+immaġni li tista’ tiġi dekodifikata) ukoll jgħaddu mingħajr tibdil. Din in-normalizzazzjoni hija
+limitata għall-immaġnijiet li l-bridge jirkupra għas-sejħa tiegħu nnifsu — qatt ma
+tiġi applikata għall-payload mhux ipproċessat li min jagħmel is-sejħa jgħaddi kif inhu, f’konformità mal-
+prinċipju ta’ tibdil biss b’kunsens espliċitu (Regola Stretta #20).
 
 #### Skema tas-settings + migrazzjoni
 
-Iċ-ċwievet il-ġodda `modalityBridge*` jiġu vvalidati minn Zod
-f’`updateSettingsSchema` (`src/shared/validation/settingsSchemas.ts`):
-`modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`,
-`modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`,
-`modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`,
-`modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`,
-it-trio `modalityBridgeCache*`, u l-grupp `modalityBridgeAudio*` użat
-mill-Audio Bridge. Il-migrazzjoni `141_modality_bridge_settings.sql`
-tikkopja l-valuri legacy eżistenti `visionBridge*` lejn iċ-ċwievet il-ġodda
-korrispondenti (hija idempotenti u qatt ma tissostitwixxi valur
-`modalityBridge*` issettjat minn operatur); iċ-ċwievet legacy jibqgħu
-aċċettati bħala fallback għall-qari għal ċiklu wieħed ta’ rilaxx.
+Iċ-ċwievet il-ġodda `modalityBridge*` jiġu vvalidati minn Zod f’`updateSettingsSchema`
+(`src/shared/validation/settingsSchemas.ts`): `modalityBridgeVisionEnabled`,
+`modalityBridgeVisionMode`, `modalityBridgeVisionModel`,
+`modalityBridgeVisionTaskAware`, `modalityBridgeVisionPrompt`,
+`modalityBridgeVisionTimeout`, `modalityBridgeVisionMaxImages`,
+`modalityBridgeVisionMaxChars`, it-trio `modalityBridgeCache*`, u l-
+grupp `modalityBridgeAudio*` użat mill-Audio Bridge. Il-migrazzjoni
+`141_modality_bridge_settings.sql` tikkopja l-valuri eżistenti tal-format preċedenti
+`visionBridge*` għaċ-ċwievet il-ġodda korrispondenti (idempotenti, qatt ma tissostitwixxi
+valur `modalityBridge*` issettjat mill-operatur); iċ-ċwievet tal-format preċedenti jibqgħu aċċettati bħala
+alternattiva għall-qari għal ċiklu wieħed ta’ rilaxx.
 
 #### Header tat-trasparenza + statistika
 
-Ir-responses trasformati permezz tad-deskrizzjoni jkollhom
+It-tweġibiet ittrasformati permezz ta’ describe jinkludu
 `x-omniroute-modality-bridge: image->text;model=<visionModel>;parts=<n>`
 (mibni minn `buildModalityBridgeHeader()` f’`modalityBridge/bridgeStats.ts`,
-u miżjud minn `withModalityBridgeHeader()` f’`src/sse/handlers/chatHelpers.ts`).
-Talbiet rerouted **ma jkollhom l-ebda** header — il-payload ma nbidilx u
-l-bidla tal-mudell diġà tidher fil-field `model` tal-body tar-response.
+miżjud minn `withModalityBridgeHeader()` f’`src/sse/handlers/chatHelpers.ts`).
+Talbiet ridirezzjonati **ma jirċievu ebda** header — il-payload ma nbidilx u s-sostituzzjoni
+tal-mudell diġà tidher fil-qasam `model` tal-korp tat-tweġiba.
 
-`GET /api/modality-bridge/stats` (awtentikazzjoni tal-ġestjoni, tal-istess livell bħal
+`GET /api/modality-bridge/stats` (awtentikazzjoni tal-ġestjoni, l-istess livell bħal
 `GET /api/settings`) jirritorna l-counters fil-memorja għal kull modalità
 `{ attempts, successes, bridged, cacheHits, failures, totalLatencyMs,
 latencySamples, averageLatencyMs, lastUsedAt }` għal `vision`, `audio`, u
 `video`. `averageLatencyMs` juża `latencySamples`, mhux it-tentattivi kollha, bħala
 d-denominatur tiegħu; operazzjoni mingħajr kejl tal-ħin ma tivvintax kampjun ta’
-żero millisekondi. `bridged` jibqa’ l-alias kompatibbli mal-verżjonijiet preċedenti
-għal konverżjonijiet li rnexxew; tentattivi falluti ma jżiduhx.
-Il-counters jerġgħu jiġu ssettjati meta l-proċess jerġa’ jinbeda, skont id-disinn
-(telemetrija, mhux kontabbiltà).
+żero millisekondi. `bridged` jibqa’ l-alias kompatibbli b’lura għall-
+konverżjonijiet li rnexxew; tentattivi li fallew ma jżiduhx.
+Il-counters jiġu rrisettjati meta jerġa’ jinbeda l-proċess, kif previst fid-disinn
+(telemetrija, mhux kontabilità).
 
 #### Konfigurazzjoni tad-dashboard
 
 Il-paġna ddedikata tad-dashboard hija
 `/dashboard/settings/modality-bridge`. It-tabs tagħha `Vision`, `Audio`,
-u `Video`, li jistgħu jiġu indirizzati permezz tal-URL, jippreservaw il-parametri
-tal-query waqt li jibdlu l-valur ta’ `tab`.
-It-tab Vision jesponi l-attivazzjoni, il-modalità, l-għażla tal-mudell (inkluż
-id-default awtomatiku), il-prompts konxji tal-kompitu, limiti avvanzati għat-timeout,
-l-immaġni, it-tul tad-deskrizzjoni u l-cache, counters waqt it-tħaddim, u talba
-ta’ kampjun protetta. It-tab Audio hija wkoll attiva: tesponi l-attivazzjoni,
-għażla ta’ mudell STT biss b’Auto, limiti għat-timeout u t-tul massimu tal-klipp,
-counters tal-awdjo, u test ta’ kampjun `input_audio`. It-tab Video hija funzjonali:
-tirrapporta l-istat waqt it-tħaddim ta’ FFmpeg/ffprobe — wieħed minn erba’ stati
-espliċiti tal-UI (`unknown` waqt li l-probe jkun għaddej jew ma jkunx seta’
-jitlesta, `restricted` fuq host tad-dashboard li mhuwiex loopback fejn il-probe
-jinqabeż min-naħa tal-klijent, `unavailable` wara li jsir il-probe u jiġi kkonfermat
-li huwa nieqes, jew `available` bil-verżjonijiet ta’ FFmpeg/ffprobe) — tippersisti
-l-limiti tal-attivazzjoni, il-mudell, il-frames, il-vidjo u t-timeout, tiffiltra
-l-għażla tal-mudell għal mudelli li jappoġġjaw il-viżjoni, u tesponi counters
-tal-vidjo.
+u `Video`, li jistgħu jiġu indirizzati permezz tal-URL, iżommu l-parametri tal-query waqt li jibdlu l-valur `tab`.
+It-tab tal-Viżjoni tipprovdi l-attivazzjoni, il-modalità, l-għażla tal-mudell (inkluż il-valur
+awtomatiku predefinit), prompts adattati għall-kompitu, limiti avvanzati għall-ħin ta’ stennija/immaġnijiet/tul tad-deskrizzjoni/cache,
+counters waqt
+it-tħaddim, u talba ta’ prova b’miżuri ta’ protezzjoni. It-tab tal-Awdjo hija wkoll attiva: tipprovdi
+l-attivazzjoni, selettur ta’ mudelli STT biss b’għażla Awtomatika, limiti għall-ħin ta’ stennija/tul massimu tal-klipp, counters
+tal-awdjo, u test ta’ prova `input_audio`. It-tab tal-Vidjo hija funzjonali: tirrapporta
+l-istat ta’ FFmpeg/ffprobe waqt it-tħaddim — wieħed minn erba’ stati espliċiti fl-UI (`unknown` waqt li
+l-verifika tkun għaddejja jew ma setgħetx titlesta, `restricted` fuq host tad-dashboard li mhuwiex loopback
+fejn il-verifika tinqabeż fuq in-naħa tal-klijent, `unavailable` wara l-verifika
+u l-konferma li huma neqsin, jew `available` bil-verżjonijiet ta’ FFmpeg/ffprobe) — tissejvja
+l-attivazzjoni u l-limiti tal-mudell/frejms/vidjo/ħin ta’ stennija, tiffiltra s-selettur tal-mudelli għal mudelli li jappoġġjaw
+il-viżjoni, u tipprovdi counters tal-vidjo.
 
-Il-card preċedenti Vision Bridge taħt is-settings tal-AI hija link ta’
-kompatibbiltà għall-paġna l-ġdida; m’għadhiex iżżomm it-tieni kopja tal-formola.
-Media Providers jorbot ukoll il-flussi tax-xogħol Image-to-Text u Speech-to-Text
-mat-tabs korrispondenti ta’ Modality Bridge mingħajr ma jneħħi l-playground
-eżistenti ta’ Speech-to-Text.
+Il-karta preċedenti Vision Bridge taħt is-settings tal-AI hija link ta’ kompatibbiltà għall-
+paġna l-ġdida; m’għadhiex iżżomm it-tieni kopja tal-formola. Media Providers ukoll
+jillinkja l-flussi tax-xogħol minn Immaġni għal Test u minn Diskors għal Test mat-tabs korrispondenti ta’ Modality
+Bridge mingħajr ma jneħħi l-playground eżistenti minn Diskors għal Test.
 
-**Qbiż tal-ammissjoni għas-self-loop:** meta s-sejħa describe tiġi rrutata
-permezz tas-self-loop `/v1` ta’ OmniRoute stess (mudell ta’ provider mhux
-standard), is-sub-request jibgħat
-`x-omniroute-admission-bypass: internal` u jiġi awtentikat bil-kredenzjali
-tas-self-loop solvuta — is-sentinel lokali `sk_omniroute` fil-modalità lokali,
-jew iċ-ċavetta tal-env `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` ikkonfigurata
-mill-operatur (#1350), sabiex deployments b’`REQUIRE_API_KEY=true` xorta jkunu
-jistgħu jwettqu s-sejħa describe. Il-qbiż jiġi rrispettat biss għal dawk
-il-kredenzjali eżatti, għalhekk klijenti esterni ma jistgħux jużaw il-header
-biex jaqbżu l-ammissjoni.
+**Qbiż tal-kontroll tad-dħul għas-self-loop:** meta s-sejħa describe tgħaddi mis-self-loop
+`/v1` ta’ OmniRoute stess (mudell ta’ fornitur mhux standard), is-sottotalba tibgħat
+`x-omniroute-admission-bypass: internal` u tiġi awtentikata bil-kredenzjal tas-self-loop
+riżolt — il-valur sentinella lokali `sk_omniroute` fil-modalità lokali, jew iċ-
+ċavetta tal-ambjent `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` ikkonfigurata mill-operatur (#1350) sabiex
+installazzjonijiet b’`REQUIRE_API_KEY=true` xorta jkunu jistgħu jwettqu s-sejħa describe. Il-qbiż
+jiġi aċċettat biss għal dawk il-kredenzjali eżatti, sabiex klijenti esterni ma jkunux jistgħu jużaw il-
+header biex jaqbżu l-kontroll tad-dħul.
 
-Id-defaults legacy jinsabu f’`src/shared/constants/visionBridgeDefaults.ts`;
-id-defaults il-ġodda tal-modalità, tal-għarfien tal-kompitu u tal-cache, kif ukoll
-ir-resolver tas-settings, jinsabu f’
-`src/shared/constants/modalityBridgeDefaults.ts`. Il-guardrail jesponi opzjoni
-tal-constructor `deps` sabiex it-tests ikunu jistgħu jinjettaw implimentazzjonijiet
-foloz ta’ `getSettings` u `callVisionModel`.
+Il-valuri predefiniti tal-format preċedenti jinsabu f’`src/shared/constants/visionBridgeDefaults.ts`; il-
+valuri predefiniti l-ġodda għall-modalità/adattament għall-kompitu/cache u r-riżolvitur tas-settings jinsabu f’
+`src/shared/constants/modalityBridgeDefaults.ts`. Il-mekkaniżmu ta’ protezzjoni jipprovdi
+għażla `deps` fil-kostruttur sabiex it-testijiet ikunu jistgħu jinjettaw implimentazzjonijiet fittizji ta’ `getSettings` u
+`callVisionModel`.
 
 ### Audio Bridge (`audioBridge.ts`) — Modality Bridge PR-3
 
-Jinterċetta talbiet taċ-chat li jkun fihom awdjo qabel ma jilħqu target li mhuwiex
-magħruf li jaċċetta input tal-awdjo. Qatt ma jerġa’ jirrotta t-talba taċ-chat:
-il-partijiet tal-awdjo jiġu traskritti permezz tal-endpoint multipart eżistenti
-kompatibbli ma’ OpenAI, u l-mudell taċ-chat magħżul ikompli bit-traskrizzjonijiet
-tat-test.
+Jinterċetta talbiet taċ-chat li fihom awdjo qabel ma jaslu għand destinazzjoni li mhijiex
+magħrufa li taċċetta input awdjo. Qatt ma jirridirezzjona t-talba taċ-chat: il-partijiet tal-awdjo jiġu
+traskritti permezz tal-endpoint multipart eżistenti kompatibbli ma’ OpenAI u l-
+mudell taċ-chat magħżul ikompli bit-traskrizzjonijiet testwali.
 
 Fluss:
 
-1. Isolvi `supportsAudio` permezz ta’ `getResolvedModelCapabilities()`. Il-metadata
-   espliċita tar-reġistru tal-provider tieħu preċedenza, imbagħad il-metadata
-   statika tal-mudell, u mbagħad `modalities_input` sinkronizzat. Lista ddikjarata
-   tal-input mingħajr `audio` hija `false`; jekk ma jkun hemm ebda evidenza
-   tal-kapaċità, il-valur jibqa’ `null`. Kemm `false` kif ukoll `null` jattivaw
-   il-bridge konservattiv, filwaqt li `true` jaqbżu.
-2. Isolvi s-settings `modalityBridgeAudio*` u estratta partijiet tal-awdjo
-   tal-ogħla livell li jistgħu jiġu splajsjati minn kull messaġġ permezz
-   tad-detector kondiviż `detectMediaParts()`. Il-forom tal-wire appoġġjati huma
-   `input_audio` ta’ OpenAI, `audio_url`, u `source.media_type: "audio/*"`.
-   Awdjo nested jiġi identifikat għar-routing iżda ma jitneħħiex mill-path
-   tal-isplicing. Ix-xogħol jiġi limitat minn `modalityBridgeAudioMaxClips`;
-   partijiet ta’ wara jibqgħu mhux mibdula.
-3. Irrispetta `provider/model` ikkonfigurat, jew ħalli lil
-   `selectAudioBridgeModel()` jgħaddi minn `AUDIO_TRANSCRIPTION_PROVIDERS`
-   fl-ordni stabbli tal-katalgu u jagħżel l-ewwel mudell bi kredenzjali attiva
-   u użabbli tal-provider.
-4. `callAudioTranscription()` jikkonverti awdjo base64/data-URI għal `file`
-   multipart, jew iniżżel `audio_url` remot permezz tal-protezzjoni outbound
-   għal riżorsi pubbliċi biss, b’DNS pinning u limitu ta’ 25 MB. Imbagħad jibgħat
-   POST tal-file u tal-mudell magħżul lis-self-loop lokali
-   `/v1/audio/transcriptions`, awtentikat b’`resolveSelfLoopBearer()`. Ir-rotta
-   eżistenti tat-traskrizzjoni twettaq it-tiftix normali tal-kredenzjali,
-   l-immaniġġjar tal-cooldown u tar-rate limits, u d-dispatch lejn il-provider.
-5. Sejħiet li jirnexxu jissostitwixxu l-partijiet tagħhom b’
-   `[Audio N]: <transcript>`. Is-sejħiet jitwettqu b’`Promise.allSettled`:
-   falliment individwali jippreserva dik il-parti oriġinali tal-awdjo
-   (kuntratt #4012). Jekk is-sejħiet kollha jfallu u jkun ippruvat li t-target
-   għandu `supportsAudio === false`, il-partijiet isiru
-   `[Audio N]: (unavailable — no STT provider connected)` (kuntratt #8430).
-   Għal target mhux magħruf (`null`), riżultat fejn kollox ifalli jibqa’ mhux
-   mibdul. Target li jkun ippruvat bħala text-only u li ma jkollux kredenzjali
-   STT użabbli jirċievi l-istess placeholder espliċitu mingħajr ma tinħareġ
-   sejħa tan-network.
+1. Iddetermina `supportsAudio` permezz ta’ `getResolvedModelCapabilities()`. Il-metadata
+   espliċita tar-reġistru tal-fornituri tieħu prijorità, imbagħad il-metadata statika tal-mudell, u mbagħad
+   `modalities_input` sinkronizzat. Lista ddikjarata ta’ inputs mingħajr `audio` tfisser `false`; jekk
+   ma jkun hemm ebda evidenza ta’ kapaċità, il-valur jibqa’ `null`. Kemm `false` kif ukoll `null` jattivaw il-
+   pont konservattiv, filwaqt li `true` jevitah.
+2. Iddetermina s-settings `modalityBridgeAudio*` u estratta l-partijiet tal-awdjo tal-ogħla livell li jistgħu jiġu sostitwiti
+   minn kull messaġġ permezz tad-ditekter kondiviż `detectMediaParts()`.
+   Il-forom appoġġjati fil-protokoll huma OpenAI `input_audio`, `audio_url`, u
+   `source.media_type: "audio/*"`. L-awdjo mdaħħal f’livelli interni jiġi identifikat għar-routing iżda ma
+   jitneħħiex mill-proċess ta’ sostituzzjoni. Ix-xogħol huwa limitat minn `modalityBridgeAudioMaxClips`;
+   il-partijiet sussegwenti jibqgħu mhux mibdula.
+3. Irrispetta `provider/model` ikkonfigurat, jew ħalli `selectAudioBridgeModel()` jgħaddi minn
+   `AUDIO_TRANSCRIPTION_PROVIDERS` fl-ordni stabbli tal-katalgu u jagħżel l-ewwel
+   mudell bi kredenzjal attiv u li jista’ jintuża għall-fornitur.
+4. `callAudioTranscription()` jikkonverti awdjo base64/data-URI f’`file`
+   multipart, jew iniżżel `audio_url` remot permezz tal-protezzjoni tat-traffiku ’l barra li tippermetti biss destinazzjonijiet pubbliċi,
+   b’pinning tad-DNS u limitu ta’ 25 MB. Imbagħad jibgħat il-fajl u l-mudell
+   magħżul permezz ta’ POST lis-self-loop lokali `/v1/audio/transcriptions`, awtentikat bi
+   `resolveSelfLoopBearer()`. Ir-rotta eżistenti tat-traskrizzjoni twettaq it-tfittxija normali
+   tal-kredenzjali, il-ġestjoni tal-perjodu ta’ stennija/tal-limiti tar-rata, u t-tqassim lill-fornitur.
+5. Sejħiet li jirnexxu jissostitwixxu l-partijiet tagħhom b’`[Audio N]: <transcript>`. Is-sejħiet
+   jitħaddmu b’`Promise.allSettled`: falliment individwali jżomm dik il-parti
+   tal-awdjo oriġinali (il-kuntratt #4012). Jekk kull sejħa tfalli u jkun ikkonfermat li d-destinazzjoni għandha
+   `supportsAudio === false`, il-partijiet isiru
+   `[Audio N]: (unavailable — no STT provider connected)` (il-kuntratt #8430). Għal
+   destinazzjoni mhux magħrufa (`null`), riżultat fejn ifallu s-sejħiet kollha jibqa’ mhux mibdul. Destinazzjoni
+   kkonfermata bħala waħda li tappoġġja biss it-test, mingħajr kredenzjal STT li jista’ jintuża, tirċievi l-istess
+   test sostitut espliċitu mingħajr ma ssir sejħa tan-network.
 
-Traskrizzjonijiet li jirnexxu jużaw il-cache LRU/TTL ta’ Modality Bridge komuni
-għall-proċess kollu. Iċ-ċavetta tgħaqqad ir-referenza tal-awdjo, it-tikketta
-stabbli tal-operazzjoni `audio-transcription`, u l-mudell STT magħżul; il-fallimenti
-qatt ma jinħażnu fil-cache. It-tentattivi tal-awdjo jaġġornaw il-counters
-kondiviżi `bridged`, `cacheHits`, `failures`, u `lastUsedAt`.
-Risposti trasformati jkollhom
-`x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>`;
-talbiet mhux mibdula ma jirċevux segment ta’ Audio Bridge.
+It-traskrizzjonijiet li jirnexxu jużaw il-cache LRU/TTL ta’ Modality Bridge kondiviż mill-proċess kollu. Iċ-
+ċavetta tgħaqqad ir-referenza tal-awdjo, it-tikketta stabbli tal-operazzjoni `audio-transcription`,
+u l-mudell STT magħżul; il-fallimenti qatt ma jinħażnu fil-cache. It-tentattivi tal-awdjo jaġġornaw
+il-counters kondiviżi `bridged`, `cacheHits`, `failures`, u `lastUsedAt`.
+It-tweġibiet trasformati jinkludu
+`x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>`; it-talbiet mhux mibdula
+ma jirċevux segment ta’ Audio Bridge.
 
-Is-settings waqt it-tħaddim huma sostnuti mid-DB u vvalidati b’Zod:
+Is-settings waqt it-tħaddim huma maħżuna fid-DB u vvalidati b’Zod:
 
-| Ċavetta                       | Valur Predefinit | Firxa                 |
-| ----------------------------- | ---------------- | --------------------- |
-| `modalityBridgeAudioEnabled`  | `true`           | —                     |
-| `modalityBridgeAudioModel`    | `""`             | Awtomatiku jew ID STT |
-| `modalityBridgeAudioTimeout`  | `60000`          | 1000–300000           |
-| `modalityBridgeAudioMaxClips` | `3`              | 1–10                  |
+| Ċavetta                       | Valur prestabbilit | Medda                 |
+| ----------------------------- | ------------------ | --------------------- |
+| `modalityBridgeAudioEnabled`  | `true`             | —                     |
+| `modalityBridgeAudioModel`    | `""`               | Awtomatiku jew ID STT |
+| `modalityBridgeAudioTimeout`  | `60000`            | 1000–300000           |
+| `modalityBridgeAudioMaxClips` | `3`                | 1–10                  |
 
-Il-cache kondiviż jibqa' kkontrollat minn `modalityBridgeCacheEnabled`,
+Il-cache kondiviż jibqa’ kkontrollat minn `modalityBridgeCacheEnabled`,
 `modalityBridgeCacheTtlMinutes`, u `modalityBridgeCacheMaxEntries`.
 
 ### Pont tal-Vidjo (`videoBridge.ts`, `videoBridgePipeline.ts`)
 
-Jinterċetta l-partijiet tal-vidjo tal-ogħla livell fil-`messages` ta' Chat Completions u fl-`input`
-tal-API Responses qabel ma tissejjaħ mira mingħajr appoġġ nattiv magħruf għall-vidjo.
+Jinterċetta partijiet tal-vidjo tal-ogħla livell f’`messages` ta’ Chat Completions u f’`input` tal-
+API Responses qabel ma ssir sejħa lil destinazzjoni mingħajr appoġġ nattiv magħruf għall-vidjo.
 Il-forom appoġġjati huma `input_video`, `video_url`, `video_source`, URLs HTTPS,
-u URIs tad-data `data:video/*;base64,...`. Ismijiet sempliċi ta' fajls fit-test ma jiġux ittrattati
+u URIs tad-data `data:video/*;base64,...`. Ismijiet sempliċi ta’ fajls fit-test ma jitqisux
 bħala vidjo.
 
-`VideoBridgeGuardrail.preCall` (`videoBridge.ts`) jieħu ħsieb il-perkors tat-talba, il-
-verifika tal-kapaċità/politika, l-aggregazzjoni għal kull talba, u l-payload tar-rispons.
-Ix-xogħol għal kull vidjo — l-akkwist, il-cache tar-riżultat sħiħ, id-deskrizzjoni ta' sekwenza
-ta' frames (li tintegra kwalunkwe traskrizzjoni tal-awdjo ddikjarata minn min jagħmel is-sejħa), u l-
-metriċi/abort/tindif għal kull tentattiv — huwa moħbi wara `processVideoPart` f'
-`videoBridgePipeline.ts`, li jissejjaħ darba għal kull parti tal-vidjo fi ħdan il-loop ta' `preCall`.
+`VideoBridgeGuardrail.preCall` (`videoBridge.ts`) huwa responsabbli biex jgħaddi mit-talba, għall-
+verifika tal-kapaċità/tal-politika, għall-aggregazzjoni għal kull talba, u għall-kontenut tat-tweġiba.
+Ix-xogħol għal kull vidjo — il-kisba, il-cache tar-riżultat sħiħ, id-deskrizzjoni ta’ sekwenza
+ta’ frejms (li tgħaqqad kwalunkwe traskrizzjoni tal-awdjo ddikjarata minn min jagħmel is-sejħa), u l-metriċi/l-interruzzjoni/it-tindif
+għal kull tentattiv — huwa moħbi wara `processVideoPart` f’
+`videoBridgePipeline.ts`, li jissejjaħ darba għal kull parti tal-vidjo fil-loop ta’ `preCall`.
 Dak il-modulu jiddefinixxi wkoll il-konfini espliċiti tal-ports `VideoMediaBrokerPort`
-(l-akkwist tal-bytes u l-estrazzjoni ta' frames meħuda bħala kampjun), `VideoAudioTranscriptionPort`
-(l-integrazzjoni ta' traskrizzjoni tal-awdjo ddikjarata minn min jagħmel is-sejħa mal-captions tal-kampjuni), u
-`VideoDrilldownPort` (il-konfini tal-persistenza tal-analiżi dettaljata tal-frames; għadu mhux imqabbad
-ma' `processVideoPart` — illum ir-rotta separata `/api/modality-bridge/video/drilldown`
-biss tikteb entrati ta' analiżi dettaljata).
+(il-kisba tal-bytes u l-estrazzjoni ta’ frejms kampjunati), `VideoAudioTranscriptionPort`
+(it-tgħaqqid ta’ traskrizzjoni tal-awdjo ddikjarata minn min jagħmel is-sejħa mad-deskrizzjonijiet kampjunati), u
+`VideoDrilldownPort` (il-konfini tal-persistenza għall-analiżi dettaljata tal-frejms; għadu mhux imqabbad
+ma’ `processVideoPart` — bħalissa r-rotta separata `/api/modality-bridge/video/drilldown`
+biss tikteb entrati ta’ analiżi dettaljata).
 
-Il-perkors pubbliku tat-talba `/v1` qatt ma jimporta jew jinvoka sottoproċess. Vidjows remoti
-jitniżżlu taħt limitu ta' 50 MiB; vidjows base64 inline għandhom limitu konservattiv dekodifikat
-ta' 36 MiB għal kull vidjo sabiex l-involukru tal-mudell/messages/framing ikun jista' jibqa'
-fil-limitu pubbliku ta' ammissjoni tat-talbiet JSON ta' 50 MiB. It-tul inline u l-istimi
-tad-daqs dekodifikat jiġu vverifikati qabel l-allokazzjoni. HTTPS huwa meħtieġ fil-URL remot
-inizjali u f'kull ridirezzjoni, bl-użu tal-protezzjoni eżistenti għal komunikazzjoni 'l barra pubblika biss
-b'DNS pinning. Imbagħad il-bytes jaqsmu eżattament il-konfini interni tal-broker
-`POST /api/modality-bridge/video/extract`. Dik ir-rotta hija kemm
-`LOCAL_ONLY` kif ukoll `SPAWN_CAPABLE`, taċċetta biss talba awtentikata għal kull proċess
-minn loopback fdat, u qatt ma taċċetta URL, perkors tas-sistema tal-fajls, eżekutibbli,
-jew lista ta' argumenti. Il-pipeline tal-limitu tad-daqs tal-body tal-API u l-qarrej inkrementali
-tal-body tal-handler jinfurzaw indipendentement limitu ta' input tal-broker ta' 50 MiB. Il-kju
-limitat tiegħu jwettaq estrazzjoni waħda kull darba, jippermetti erba' xogħlijiet pendenti, u
-jillimita l-input pendenti għal 100 MiB.
+Il-mogħdija pubblika tat-talbiet `/v1` qatt ma timporta jew tinvoka sottoproċess. Il-vidjos remoti
+jitniżżlu b’limitu ta’ 50 MiB; il-vidjos base64 inkorporati għandhom
+limitu konservattiv ta’ 36 MiB għal kull vidjo dekodifikat sabiex il-pakkett tal-mudell/tal-messaġġi/tal-istruttura
+jkun jista’ jibqa’ fil-limitu ta’ ammissjoni tat-talbiet JSON pubbliċi ta’ 50 MiB. It-tul
+inkorporat u l-istimi tad-daqs dekodifikat jiġu vverifikati qabel l-allokazzjoni. HTTPS huwa
+meħtieġ fuq il-URL remot inizjali u fuq kull ridirezzjoni, bl-użu tal-protezzjoni eżistenti
+tat-traffiku ’l barra li tippermetti biss destinazzjonijiet pubbliċi, b’pinning tad-DNS. Il-bytes imbagħad jaqsmu l-konfini interni eżatti
+tal-broker `POST /api/modality-bridge/video/extract`. Dik ir-rotta hija kemm
+`LOCAL_ONLY` kif ukoll `SPAWN_CAPABLE`, taċċetta biss talba minn loopback fdat,
+awtentikata għal kull proċess, u qatt ma taċċetta URL, mogħdija tas-sistema tal-fajls, fajl eżegwibbli,
+jew lista ta’ argumenti. Il-pipeline tad-daqs tal-korp tal-API u l-qarrej inkrementali tal-korp
+tal-handler jinfurzaw indipendentement limitu ta’ 50 MiB għall-input tal-broker. Il-kju limitat tiegħu jwettaq
+estrazzjoni waħda kull darba, jippermetti erba’ kompiti pendenti, u jillimita l-input pendenti għal
+100 MiB.
 
-Fi ħdan il-broker, `ffprobe` jaqra fajl lokali privat; il-lista fissa ta' formati
-permessi teskludi formati ta' playlists u manifests. Għall-containers permessi tal-familja MOV,
-ir-referenzi għal data MOV esterna jibqgħu diżattivati b'mod predefinit, u l-kmand fiss
-ma jattivahomx. Kemm `ffprobe` kif ukoll `ffmpeg` jużaw il-lista ta' protokolli permessi
-`file` biss, thread wieħed, arrays fissi ta' argumenti, l-ebda shell,
-u eżekutibbli riżolti minn `PATH`. Streams ta' stampi tal-qoxra mehmuża mhumiex
-kandidati li jistgħu jintlagħbu. L-istreems kollha li jistgħu jintlagħbu jridu jissodisfaw il-limiti, u
-stream predefinit espliċitu jingħata preferenza qabel il-fallback deterministiku bl-inqas indiċi.
-Il-vidjows huma limitati għal 600 sekonda, 8,192 pixel għal kull dimensjoni, u
-33,554,432 pixel tas-sors. FFmpeg jieħu kampjun ta' 1–16-il frame JPEG mill-punti tan-nofs,
-inaqqas l-iskala tax-xifer twil għal mhux aktar minn 1,024 pixel mingħajr ma jkabbar inputs
-iżgħar, u qatt ma jirċievi URL. It-teħid ta' kampjuni huwa `uniform` b'mod predefinit. Il-politiki
-fakultattivi `scene_aware` u sperimentali `segment_aware` iwettqu pass fiss addizzjonali wieħed
-ta' FFmpeg fuq l-istess stream lokali diġà vvalidat, jagħżlu timestamps limitati tax-xeni
-`showinfo`, u jerġgħu lura b'mod deterministiku għall-istess punti tan-nofs uniformi jekk id-detector
-ifalli, jiskadi l-ħin, joħroġ output iffurmat ħażin, jew jipproduċi sett ta' kandidati vojt.
-Il-modalità konxja tas-segmenti talloka kampjuni mill-punti tan-nofs proporzjonalment għall-intervalli
-tax-xeni vvalidati; l-evidenza konxja tas-segmenti u l-imġiba tal-fallback huma
-dettaljati hawn taħt. Il-limitu strett ta' 16-il frame
-jiġi applikat wara l-għażla f'kull politika. Meta talba konxja tax-xeni jkollha baġit
-ta' frame wieħed biss, tuża l-punt tan-nofs uniformi tal-vidjo sħiħ attiv jew tat-tieqa ta' fokus
-u tirrapporta `policyEffective: uniform`: frame wieħed magħżul minn xena
-ma jistax jippreserva ż-żewġt itruf temporali. Min jagħmel is-sejħa jista' b'mod fakultattiv jipprovdi
-tieqa ta' fokus finita (`start`/`end` f'sekondi); il-limiti jiġu ristretti għad-durata tal-media,
-twieqi maqluba jew mhux finiti jiġu rrifjutati, u l-politiki kollha tat-teħid ta' kampjuni
-jitwettqu biss fi ħdan l-intervall normalizzat. It-tieqa li tirriżulta
-tiġi inkluża fil-metadata tat-teħid ta' kampjuni u fil-prefiss tad-deskrizzjoni mhux fdata
-sabiex il-mudelli downstream ikunu jistgħu jiddistingwu silta ffukata mil-linja taż-żmien sħiħa.
+Fi ħdan il-broker, `ffprobe` jaqra fajl lokali privat; il-lista fissa ta’ formati
+permessi teskludi l-formati ta’ playlists u manifests. Għall-kontenituri permessi
+tal-familja MOV, ir-referenzi esterni għad-data MOV jibqgħu diżattivati b’mod
+predefinit, u l-kmand fiss ma jattivahomx. Kemm `ffprobe` kif ukoll `ffmpeg`
+jużaw il-lista ta’ protokolli permessi limitata għal `file`, thread waħda,
+arrays fissi ta’ argumenti, ebda shell, u eżegwibbli riżolti minn `PATH`.
+Il-flussi tal-qoxra tat-tip attached-picture mhumiex kandidati li jistgħu
+jintlagħbu. Il-flussi kollha li jistgħu jintlagħbu jridu jissodisfaw il-limiti,
+u fluss espliċitament predefinit jingħata preferenza qabel l-għażla alternattiva
+deterministika bl-aktar indiċi baxx. Il-vidjows huma limitati għal 600 sekonda,
+8,192 pixel għal kull dimensjoni, u 33,554,432 pixel tas-sors. FFmpeg jieħu
+kampjuni ta’ 1–16-il frejm JPEG fil-punti tan-nofs, inaqqas it-tarf it-twil
+għal mhux aktar minn 1,024 pixel mingħajr ma jkabbar inputs iżgħar, u qatt ma
+jirċievi URL. It-teħid tal-kampjuni huwa `uniform` b’mod predefinit. Il-politiki
+fakultattiva `scene_aware` u sperimentali `segment_aware` iwettqu pass fiss
+addizzjonali wieħed ta’ FFmpeg fuq il-fluss lokali diġà vvalidat, jagħżlu marki
+tal-ħin tax-xeni `showinfo` f’limiti definiti, u jerġgħu lura b’mod
+deterministiku għall-istess punti tan-nofs uniformi jekk id-ditekter ifalli,
+jinqabeż il-ħin massimu, l-output ikun ifformattjat ħażin, jew is-sett ta’
+kandidati jkun vojt. Il-modalità konxja tas-segmenti talloka kampjuni fil-punti
+tan-nofs proporzjonalment għall-intervalli tax-xeni vvalidati; l-evidenza konxja
+tas-segmenti u l-imġiba tal-għażla alternattiva huma spjegati fid-dettall hawn
+taħt. Il-limitu assolut ta’ 16-il frejm jiġi
+applikat wara l-għażla f’kull politika. Meta talba konxja tax-xeni jkollha biss
+baġit ta’ frejm wieħed, tuża l-punt tan-nofs uniformi tat-tieqa attiva tal-vidjo
+sħiħ jew tal-fokus u tirrapporta `policyEffective: uniform`: frejm wieħed magħżul
+minn xena ma jistax jippreserva ż-żewġt itruf temporali. Min jagħmel is-sejħa
+jista’ fakultattivament jipprovdi tieqa ta’ fokus finita (`start`/`end` f’sekondi);
+il-konfini jiġu ristretti għat-tul tal-midja, twieqi b’konfini maqluba jew mhux
+finiti jiġu rrifjutati, u l-politiki kollha tat-teħid tal-kampjuni jitwettqu biss
+ġewwa l-intervall normalizzat. It-tieqa li tirriżulta tiġi inkluża fil-metadata
+tat-teħid tal-kampjuni u fil-prefiss tad-deskrizzjoni mhux affidabbli sabiex
+il-mudelli sussegwenti jkunu jistgħu jiddistingwu silta ffukata mil-linja
+taż-żmien sħiħa.
 
-Il-fokus semantiku tal-captions huwa setting separat u espliċitu. Il-modalità ta' analiżi
-predefinita `full` tippreserva l-prompt eżistenti tal-frames u qatt ma tibgħat it-test tat-talba
-lill-mudell tal-captions. Fil-modalità `focused`, il-pont jaqra biss l-aħħar
-`text`/`input_text` mhux vojt miktub mill-utent mill-istess container ta' Chat jew Responses,
-jinnormalizzah għal NFC, jiġbor flimkien il-karattri ta' kontroll u l-ispazji bojod,
-u jillimitah għal 500 punt ta' kodiċi Unicode. Riżultat vojt jerġa' juża l-
-prompt eżatt ta' `full`. Ħjiel li jista' jintuża jiġi sserjalizzat bħala JSON fi blokk apposta
-ta' kuntest tal-utent mhux fdat u jista' biss jipprijoritizza dettalji osservabbli; ma jistax
-jegħleb it-twissija separata kontra li jiġu segwiti struzzjonijiet viżibbli
-jew li jinstemgħu fil-media. Il-fokus testwali qatt ma jinferixxi `start`/`end` jew ibiddel
-il-kampjunatur temporali.
+Il-fokus semantiku tad-deskrizzjoni huwa setting separat u espliċitu.
+Il-modalità ta’ analiżi predefinita `full` tippreserva l-prompt eżistenti
+tal-frejms u qatt ma tgħaddi t-test tat-talba lill-mudell tad-deskrizzjonijiet.
+Fil-modalità `focused`, il-bridge jaqra biss l-aktar `text`/`input_text` reċenti
+mhux vojt miktub mill-utent mill-istess kontenitur Chat jew Responses,
+jinnormalizzah għal NFC, jikkollassa l-karattri ta’ kontroll u l-ispazji vojta,
+u jillimitah għal 500 punt ta’ kodiċi Unicode. Riżultat vojt jerġa’ lura
+għall-prompt eżatt ta’ `full`. Ħjiel li jista’ jintuża jiġi serjalizzat bħala JSON
+fi blokka ddedikata ta’ kuntest tal-utent mhux affidabbli u jista’ biss jagħti
+prijorità lil dettalji osservabbli; ma jistax jegħleb it-twissija separata kontra
+li jiġu segwiti struzzjonijiet viżibbli jew li jinstemgħu fil-midja. Il-fokus
+testwali qatt ma jiddeduċi `start`/`end` jew ibiddel il-mekkaniżmu temporali
+tat-teħid tal-kampjuni.
 
 #### Evidenza strutturali tas-segmenti FU-07
 
-`segment_aware` juża pass wieħed ta’ preanaliżi b’limiti fuq il-fluss tal-vidjo lokali diġà vvalidat. Il-katina fissa tal-filtri l-ewwel tiskala għal wisa’ massimu ta’ 320 pixel, tiskopri bidliet fix-xena u intervalli ffriżati, u mbagħad tieħu kampjun b’rata ta’ frame wieħed kull sekonda biex tkejjel iċ-ċajpir, il-luma medja, u l-informazzjoni spazjali/temporali. Il-pass huwa limitat għal 600 kampjun strutturali, thread wieħed ta’ FFmpeg/filtru, l-istess listi ta’ permessi għall-protokoll `file` biss u għall-kontenituri, limitu ta’ 1 MiB għall-output tal-proċess, u massimu ta’ 30 sekonda fi ħdan l-abort/skadenza kondiviża tal-broker. Qatt ma jaċċetta kmand, filtru, path, jew URL mit-talba.
+`segment_aware` juża pass wieħed limitat ta’ preanaliżi fuq il-fluss lokali
+tal-vidjo diġà vvalidat. Il-katina fissa tal-filtri l-ewwel tnaqqas il-wisa’
+għal mhux aktar minn 320 pixel, tidentifika bidliet fix-xeni u intervalli
+ffriżati, imbagħad tieħu kampjun ta’ frejm wieħed kull sekonda għal ċajpir,
+luma medja, u informazzjoni spazjali/temporali. Il-pass huwa limitat għal
+600 kampjun strutturali, thread waħda ta’ FFmpeg/filtri, l-istess listi
+ta’ protokolli u kontenituri permessi limitati għal `file`, limitu ta’ 1 MiB
+għall-output tal-proċess, u mhux aktar minn 30 sekonda fi ħdan il-mekkaniżmu
+kondiviż tal-broker għall-interruzzjoni/skadenza. Qatt ma jaċċetta kmand,
+filtru, path, jew URL mit-talba.
 
-Il-valuri strutturali huma evidenza deterministika minn kampjunar, mhux fehim semantiku tal-vidjo. Ma jiddeduċux suġġetti, azzjonijiet, captions, diskors, jew l-intenzjoni tal-utent. Il-konfini tax-xeni u tal-iffriżar jiffurmaw segmenti; il-kopertura tal-iffriżar, iċ-ċajpir, l-esponiment, id-dettall spazjali, u l-bidla temporali jinfluwenzaw biss kif jitqassam il-baġit eżistenti ta’ 1–16-il frame. Segment kompletament iffriżat huwa limitat għal frame wieħed, filwaqt li s-segmenti mhux iffriżati jikkompetu għall-baġit li jifdal. Meta l-għadd tal-konfini jaqbeż dak tal-frames, tinżamm kopertura uniformi tal-linja temporali sabiex qtugħ rapidu fil-bidu ma jkunx jista’ jaħbi segment twil fit-tarf. Il-konfini tax-xeni li jkunu fir-riżoluzzjoni ta’ analiżi ta’ sekonda minn konfini tal-iffriżar jingħaqdu.
+Il-valuri strutturali huma evidenza deterministika tat-teħid tal-kampjuni,
+mhux fehim semantiku tal-vidjo. Ma jiddeduċux suġġetti, azzjonijiet,
+deskrizzjonijiet, diskors, jew l-intenzjoni tal-utent. Il-konfini tax-xeni u
+tal-iffriżar jiffurmaw segmenti; il-kopertura tal-iffriżar, iċ-ċajpir,
+l-espożizzjoni, id-dettall spazjali, u l-bidla temporali jinfluwenzaw biss kif
+jiġi allokat il-baġit eżistenti ta’ 1–16-il frejm. Segment kompletament
+iffriżat huwa limitat għal frejm wieħed, filwaqt li segmenti mhux iffriżati
+jikkompetu għall-baġit li jifdal. Meta l-konfini jkunu aktar mill-frejms,
+tinżamm kopertura uniformi tal-linja taż-żmien sabiex qtugħ rapidu fil-bidu
+ma jkunx jista’ jaħbi segment twil fit-tmiem. Il-konfini tax-xeni li jinsabu
+fi ħdan ir-riżoluzzjoni ta’ analiżi ta’ sekonda minn konfini ta’ ffriżar
+jiġu magħquda.
 
-Filtri neqsin, evidenza malformata/vojta, żball fid-detector, jew timeout tal-preanaliżi b’limiti jfallu b’mod miftuħ għall-politika eżatta u uniformi tal-punt tan-nofs. Abort minn min jagħmel is-sejħa jew skadenza tal-broker ma jfallux b’mod miftuħ: dawn itemmu s-subproċess li jkun għaddej, jipprevjenu estrazzjoni sussegwenti tal-frames, u s-siġra temporanja privata titneħħa f’`finally`.
+Filtri neqsin, evidenza fformattjata ħażin/vojta, żball fid-ditekter, jew
+il-qbiż tal-ħin massimu tal-preanaliżi limitata jippermettu t-tkomplija billi
+jerġgħu lura għall-politika eżatta tal-punti tan-nofs uniformi. Interruzzjoni
+minn min jagħmel is-sejħa jew skadenza tal-broker ma tippermettix din
+it-tkomplija: ittemm is-subproċess li jkun għaddej, tipprevjeni estrazzjoni
+sussegwenti tal-frejms, u s-siġra temporanja privata titneħħa fi `finally`.
 
-`scripts/perf/video-bridge-fu07-eval.ts` jiġġenera fixtures reali u deterministiċi ta’ FFmpeg għall-iffrankar tas-sejħiet tal-caption wara d-deduplication, l-allokazzjoni tal-baġit għal moviment dens, l-evidenza ta’ ċajpir/esponiment/SI-TI, qtugħ rapidu b’tarf twil, u pożittivi foloz minn fade gradwali. Jirreġistra l-ħin reali tal-preanaliżi u, fejn `/usr/bin/time` ikun disponibbli, is-CPU tal-proċess wild u l-ogħla RSS. Il-kontrolli tal-kwalità tiegħu huma orakli strutturali biss. Il-kwalità tal-mudell reali tal-caption tibqa’ `HOLD` għax dan il-harness ma għandu ebda endpoint awtorizzat jew imħallef iffissat. L-iffrankar monetarju wkoll jibqa’ `HOLD` sakemm `--caption-cost-per-call-usd` ma jipprovdix stima pożittiva u espliċita għal kull sejħa; l-iskript qatt ma jiffabbrika xi wieħed minn dawn ir-riżultati.
+`scripts/perf/video-bridge-fu07-eval.ts` jiġġenera każijiet ta’ test reali u
+deterministiċi ta’ FFmpeg għall-iffrankar fis-sejħiet tad-deskrizzjoni wara
+t-tneħħija tad-duplikati, l-allokazzjoni tal-baġit għal moviment dens,
+l-evidenza taċ-ċajpir/espożizzjoni/SI-TI, qtugħ rapidu b’segment twil fit-tmiem,
+u pożittivi foloz minn sfumar gradwali. Jirreġistra l-ħin reali li tieħu
+l-preanaliżi u, fejn `/usr/bin/time` ikun disponibbli, l-użu tas-CPU
+tal-proċessi sekondarji u l-ogħla RSS. Il-kontrolli tal-kwalità tiegħu huma biss
+orakli strutturali. Il-kwalità reali tal-mudell tad-deskrizzjonijiet tibqa’
+`HOLD` għax dan il-qafas tat-testijiet m’għandux endpoint awtorizzat jew
+evalwatur fiss. L-iffrankar monetarju wkoll jibqa’ `HOLD` sakemm
+`--caption-cost-per-call-usd` ma jipprovdix stima pożittiva espliċita għal kull
+sejħa; l-iskript qatt ma jiffabbrika l-ebda wieħed miż-żewġ riżultati.
 
-Kull frame huwa limitat għal 4 MiB, il-frames mhux ipproċessati kollha flimkien għal 23 MiB, u r-risposta sserjalizzata tal-broker għal 32 MiB. Direttorju temporanju privat jitneħħa f’`finally`. OmniRoute ma jinkludix FFmpeg fil-pakkett u ma jaċċettax path personalizzat għall-eżekutibbli. Qabel ma joħloq il-captions, il-bridge japplika pass konservattiv ta’ deduplication viżiva: kull JPEG jitnaqqas għal buffer grayscale ta’ 16×16 u jitqabbel biss mal-aħħar frame miżmum. Għal baġit ta’ captions mitlub li jaqbeż frame wieħed, l-estrazzjoni tipprovdi ġabra ta’ kandidati b’limitu ta’ mhux aktar mid-doppju ta’ dak il-baġit u qatt aktar minn 16-il frame. Il-limitu mitlub jiġi applikat biss wara d-deduplication, filwaqt li l-ewwel u l-aħħar kandidati magħżula jinżammu matul it-traqqiq finali meta l-baġit ikun mill-inqas tnejn. Il-politika b’verżjoni
-`grayscale-16x16-mean-cells-v2` tuża l-akbar valur bejn id-delta tal-luma medja u l-proporzjon taċ-ċelloli tat-thumbnail li d-delta normalizzata tagħhom tkun mill-inqas 0.05. Il-limitu tad-duplikati huwa l-kostanti 0.04, magħżul għall-prevedibbiltà aktar milli espost bħala setting waqt l-eżekuzzjoni. Dan is-sinjal sekondarju
-b’kuntrast għoli jippreserva moviment żgħir u bidliet fit-test viżibbli li paragun ibbażat biss fuq il-medja jista’ jaħbi. Żbalji fil-comparator jew fid-decoder jfallu b’mod miftuħ u jżommu l-kopertura. Il-metadata tal-output tissepara l-kandidati estratti, il-frames użati b’suċċess, u d-duplikati viżivi mneħħija.
+Kull frejm huwa limitat għal 4 MiB, il-frejms mhux ipproċessati kollha flimkien għal 23 MiB, u
+r-rispons serializzat tal-broker għal 32 MiB. Direttorju temporanju privat jitneħħa
+f’`finally`. OmniRoute ma jiġix b’FFmpeg inkluż u ma jaċċettax mogħdija personalizzata
+għal fajl eżegwibbli. Qabel jiġġenera d-deskrizzjonijiet, il-bridge japplika pass konservattiv ta’
+deduplikazzjoni viżiva: kull JPEG jitnaqqas għal buffer ta’ 16×16 fuq skala ta’ griż u jitqabbel
+biss mal-aħħar frejm miżmum. Għal baġit mitlub ta’ deskrizzjonijiet
+ta’ aktar minn frejm wieħed, l-estrazzjoni tipprovdi
+ġabra limitata ta’ kandidati sa darbtejn dak il-baġit u qatt aktar minn 16-il frejm.
+Il-limitu mitlub jiġi applikat biss wara d-deduplikazzjoni, bl-ewwel u l-aħħar
+kandidati magħżula jinżammu waqt it-tnaqqis finali meta l-baġit ikun mill-inqas
+tnejn. Il-politika b’verżjoni
+`grayscale-16x16-mean-cells-v2` tuża l-akbar valur bejn id-differenza medja fil-luma u
+l-proporzjon taċ-ċelloli tal-minjatura li d-differenza normalizzata tagħhom tkun mill-inqas 0.05. Il-
+limitu għad-duplikati huwa l-kostanti 0.04, magħżul għall-prevedibbiltà minflok
+ma jiġi espost bħala setting waqt l-eżekuzzjoni. Dan is-sinjal sekondarju
+ta’ kuntrast għoli jippreserva ċaqliq żgħir u bidliet fit-test viżibbli li
+tqabbil ibbażat biss fuq il-medja jista’ jaħbi. Żbalji fil-komparatur jew fid-dekoder ma jimblukkawx l-ipproċessar u jżommu
+l-kopertura. Il-metadejta tal-output tifred il-kandidati estratti, il-frejms użati
+b’suċċess, u d-duplikati viżivi mneħħija.
 
-Parti tal-vidjo mmarkata b’mod espliċitu tista’ titlob folja ta’ kuntatt b’timestamps. Il-bridge jibni grilja JPEG ta’ mhux aktar minn 4 kolonni u 16-il frame. Kull ċellola ta’ 512-il pixel tintegra t-timestamp tas-sors tagħha f’faxxa t’isfel b’kuntrast għoli, filwaqt li l-istess timestamps jibqgħu fil-metadata testwali għall-assoċjazzjoni u l-awditjar downstream. Il-JPEG sħiħ jibqa’ limitat għal 32 MiB. Jekk `sharp` ma jkunx jista’ jiddekowdja jew jikkomponi l-grilja, il-bridge jaqa’ lura għall-frames JPEG individwali; abort mill-klijent xorta jibqa’ propagat tul l-operazzjoni tal-folja.
+Parti tal-vidjo mmarkata espliċitament tista’ titlob folja ta’ minjaturi b’marki tal-ħin. Il-
+bridge jibni gradilja JPEG b’massimu ta’ 4 kolonni u 16-il frejm. Kull ċellola ta’ 512-il pixel tinkorpora
+l-marka tal-ħin tas-sors tagħha f’faxxa ta’ kuntrast għoli fil-qiegħ, filwaqt li l-istess marki tal-ħin
+jibqgħu fil-metadejta testwali għall-assoċjazzjoni u l-awditjar sussegwenti. Il-
+JPEG sħiħ jibqa’ limitat għal 32 MiB. Jekk `sharp` ma jkunx jista’ jiddekodifika jew jikkomponi l-gradilja, il-
+bridge jerġa’ juża l-frejms JPEG individwali; abort mill-klijent xorta jiġi propagat
+matul l-operazzjoni tal-folja.
 
-L-evidenza għall-promozzjoni hija deliberatament separata mill-mikrobenchmark sintetiku tal-kompożizzjoni. `scripts/perf/video-bridge-contact-sheet-eval.ts` jiddefinixxi harness A/B b’verżjoni tal-iskema għal mudelli reali tal-viżjoni kompatibbli ma’ OpenAI. Huwa jkejjel it-tokens irrappurtati mill-fornitur, il-latenza reali minn tarf sa tarf (inkluża l-kompożizzjoni tal-folja), l-għadd ta’ sejħiet lill-mudell, u ż-żamma tal-fatti ddefiniti mill-manifest. Ir-risposti mhux ipproċessati tal-mudell ma jinkitbux fir-rapport; jinżammu biss id-digests SHA-256 u l-IDs tal-fatti mqabbla. Il-harness ma jagħmel ebda sejħa fuq in-network jew lil mudell bi ħlas sakemm ma jingħaddiex `--execute-real` u ma jkunux ikkonfigurati `--model`, `OMNIROUTE_BASE_URL`, u `OMNIROUTE_API_KEY`. Mingħajr dik l-eżekuzzjoni reali espliċita, il-verdett tiegħu li jista’ jinqara minn magna jibqa’ `HOLD`; il-kejl sintetiku tal-payload/tal-għadd ta’ sejħiet waħdu mhuwiex evidenza għall-promozzjoni.
+L-evidenza għall-promozzjoni hija deliberatament separata mill-mikrobenchmark sintetiku
+tal-kompożizzjoni. `scripts/perf/video-bridge-contact-sheet-eval.ts` jiddefinixxi
+qafas ta’ testijiet A/B bi skema b’verżjoni għal mudelli viżivi reali kompatibbli ma’ OpenAI. Dan ikejjel
+it-tokens irrappurtati mill-fornitur, il-latenza totali minn tarf sa tarf (inkluża l-kompożizzjoni tal-folja),
+l-għadd ta’ sejħiet lill-mudell, u ż-żamma tal-fatti definiti fil-manifest. Ir-risposti mhux ipproċessati tal-mudell ma
+jinkitbux fir-rapport; jinżammu biss sommarji kriptografiċi SHA-256 u l-IDs tal-fatti mqabbla. Il-
+qafas ma jagħmel ebda sejħa tan-network jew sejħa bi ħlas lil mudell sakemm ma jingħatax `--execute-real` u
+`--model`, `OMNIROUTE_BASE_URL`, u `OMNIROUTE_API_KEY` ma jkunux ikkonfigurati. Mingħajr
+dik l-eżekuzzjoni reali espliċita, il-verdett tiegħu li jista’ jinqara mill-magni jibqa’ `HOLD`; kejl sintetiku
+tal-payload u tal-għadd ta’ sejħiet waħdu mhuwiex evidenza għall-promozzjoni.
 
-Min jagħmel is-sejħa jista’ jehmeż array fakultattiv `transcript.cues` ma’ parti tal-vidjo appoġġjata meta diġà jkollu test allinjat. Kull cue għandu jkollu `text`, intervall finit `start`/`end` fi ħdan id-durata investigata, u `source` minn lista ta’ permessi (`client`, `embedded`, jew `audio-bridge`); `confidence` għandu valur default ta’ `1` u jrid jibqa’ bejn `0` u `1`. Cues eżattament duplikati jingħaqdu. OmniRoute qatt ma jibda traskrizzjoni minn din il-metadata: cues ivvalidati jiġu kkupjati fir-riżultat deskritt flimkien mas-sors, il-kunfidenza, u l-intervall, u jiġu rrappreżentati bħala osservazzjonijiet mhux fdati maġenb il-captions tal-frames. Test invalidu, barra mill-firxa, jew mingħajr provenjenza jiġi rrifjutat minflok jitħallat fil-fluss tal-captions. Iż-żewġ kanali tat-traskrizzjoni fil-body tat-talba jinnormalizzaw il-provenjenza pprovduta għal `client`, inklużi labels `embedded` jew `audio-bridge` iddikjarati mill-klijent innifsu. Adapter proprjetà tas-server biss jista’ jassenja dawk il-labels fdati permezz tal-argument `trustedSource` disponibbli biss mill-code; field JSON fit-talba ma jistax jilħaq dak l-argument. It-test tat-traskrizzjoni jibqa’ kontenut mhux fdat derivat mill-media, irrispettivament mill-provenjenza tiegħu, u qatt ma għandu jiddetermina l-awtorizzazzjoni.
+Min jagħmel is-sejħa jista’ jehmeż array fakultattiva `transcript.cues` ma’ parti tal-vidjo
+appoġġjata meta diġà jkollu test allinjat. Kull segment irid ikollu `text`,
+intervall finit `start`/`end` fi ħdan it-tul ivverifikat, u
+`source` minn lista permessa (`client`, `embedded`, jew `audio-bridge`); `confidence` għandu valur awtomatiku ta’
+`1` u jrid jibqa’ bejn `0` u `1`. Segmenti duplikati eżatti jingħaqdu f’wieħed.
+OmniRoute qatt ma jibda traskrizzjoni minn din il-metadejta: is-segmenti vvalidati
+jiġu kkupjati fir-riżultat deskritt bis-sors, il-kunfidenza, u l-intervall, u
+jiġu ppreżentati bħala osservazzjonijiet mhux fdati flimkien mad-deskrizzjonijiet tal-frejms. Test invalidu,
+barra mill-medda, jew mingħajr provenjenza jiġi rrifjutat minflok jitħallat
+mal-fluss tad-deskrizzjonijiet. Iż-żewġ kanali tat-traskrizzjoni fil-korp tat-talba jinnormalizzaw il-
+provenjenza pprovduta għal `client`, inklużi t-tikketti awtodikjarati `embedded` jew `audio-bridge`.
+Adapter biss li jkun taħt il-kontroll tas-server jista’ jassenja dawk it-tikketti fdati permezz
+tal-argument `trustedSource`, disponibbli biss fil-kodiċi; qasam JSON f’talba ma jistax jilħaq
+dak l-argument. It-test tat-traskrizzjoni jibqa’ kontenut mhux fdat derivat mill-midja,
+irrispettivament mill-provenjenza tiegħu, u qatt ma għandu jiddetermina l-awtorizzazzjoni.
 
-Min jagħmel sejħa b’mod avvanzat jista’ jipprovdi track `audioTranscript` għall-istess vidjo;
-dan jiġi ttrattat bħala test ipprovdut mill-klijent, mhux bħala prova ta’ traskrizzjoni mis-server.
-Il-punt ta’ fużjoni jmexxi l-osservazzjonijiet viżivi u tal-awdjo taħt
-skadenza waħda u sinjal wieħed ta’ abort, jordnahom fuq kronoloġija komuni, jgħaqqad
-duplikati eżatti, u jirrapporta riżultat parzjali meta jirnexxi naħa waħda biss.
+Min jagħmel sejħa avvanzata jista’ jipprovdi track `audioTranscript` għall-istess vidjo;
+din tiġi ttrattata bħala test ipprovdut mill-klijent, mhux bħala prova ta’ traskrizzjoni mis-server.
+Is-saff tal-fużjoni jipproċessa l-osservazzjonijiet viżivi u tal-awdjo taħt
+skadenza waħda u sinjal wieħed ta’ abort, jordnahom fuq linja tal-ħin komuni, jgħaqqad
+id-duplikati eżatti f’wieħed, u jirrapporta riżultat parzjali meta naħa waħda biss tirnexxi.
 `audioTranscript` invalidu jwassal għal dak ir-riżultat parzjali — id-deskrizzjoni
 viżiva tinżamm u l-fergħa tal-awdjo tirreġistra kodiċi ta’ falliment sanitizzat —
-minflok ifalli l-vidjo kollu. Id-disponibbiltà għal kull fergħa, il-bandiera parzjali,
-u l-kodiċijiet ta’ falliment sanitizzati jinżammu fir-riżultat deskritt, fil-metadata
-tal-miżuri protettivi (`audioFusionRuns`/`audioFusionPartials`/
-`audioFusionFailureCodes`), fil-metadata tal-cache tar-riżultati, u fil-counters
-tal-fużjoni tal-bridge. Il-mogħdija predefinita tal-Video Bridge ma tinvokax konverżjoni minn diskors għal test
-u lanqas ma tniżżel kopja oħra tal-midja; mingħajr dak it-track espliċitu, tibqa’
+minflok ma jfalli l-vidjo kollu. Id-disponibbiltà ta’ kull fergħa, l-indikatur parzjali,
+u l-kodiċijiet ta’ falliment sanitizzati jinżammu fir-riżultat deskritt, fil-
+metadejta tal-mekkaniżmi ta’ protezzjoni (`audioFusionRuns`/`audioFusionPartials`/
+`audioFusionFailureCodes`), fil-metadejta tal-cache tar-riżultati, u fil-counters
+tal-fużjoni tal-bridge. Il-fluss awtomatiku ta’ Video Bridge ma jinvokax il-konverżjoni mit-taħdit għat-test
+u ma jniżżilx it-tieni kopja tal-midja; mingħajr dik it-track espliċita, jibqa’
 għall-vidjo biss.
 
-**Żamma tat-traskrizzjoni (#12150 P1).** Dan japplika awtomatikament kull meta l-
-Video Bridge (li huwa nnifsu fakultattiv) jirrendi cue ta’ traskrizzjoni — ma hemm l-ebda
-bandiera separata taż-żamma. Meta talba tirrendi kwalunkwe cue ta’ traskrizzjoni (jew
-`transcript` iddikjarat minn min jagħmel is-sejħa jew `audioTranscript` magħqud), il-miżura protettiva timmarkah
-`videoBridgeObserved` u tipproduċi kopja parallela redatta tad-deskrizzjoni tal-vidjo —
-rendering identiku li fih il-korp b’test liberu ta’ kull cue jiġi sostitwit b’
-`[redacted-video-transcript]`, maħluq billi jiġi sostitwit il-qasam strutturat tal-cue
-qabel ma tiġi assemblata s-sekwenza (qatt bl-ipproċessar tat-test iċċattjat, sabiex l-ebda kontenut
-tal-cue — ostili jew ordinarju, inklużi korpi li fihom `]` bħal
-`[inaudible]`/`[music]` — ma jkun jista’ jibqa’). Il-korp tat-talba fil-ġurnal tas-sejħiet persistenti jibdel
-kull parti tat-test derivata mill-vidjo ma’ dik il-kopja parallela redatta, imqabbla permezz tal-ugwaljanza
-tal-kontenut; l-ankra `fullText` terġa’ tinqara mill-payload komplut tal-miżura protettiva ta’ qabel is-sejħa,
-sabiex it-tqabbil jibqa’ jirnexxi wara li miżuri protettivi sussegwenti fil-katina (il-maskers tal-PII u
-tal-kredenzjali, bi prijoritajiet 10/95) jerġgħu jiktbu t-test tad-deskrizzjoni fil-post u
-wara li l-injezzjoni tal-prompt tas-sistema/handoff/memorja tibdel il-forma tal-array tal-messaġġi. Il-
-korp mibgħut upstream lill-mudell ma jinbidilx. Talba osservata lanqas ma timla
-Memorja durabbli (kemm l-estrazzjoni derivata mit-talba kif ukoll dik derivata mir-risposta jiġu maqbuża),
+**Żamma tat-traskrizzjonijiet (#12150 P1).** Dan japplika awtomatikament kull meta l-
+Video Bridge (li hu stess jeħtieġ attivazzjoni espliċita) jirrendi segment ta’ traskrizzjoni — ma hemm l-ebda indikatur separat
+għaż-żamma. Meta talba tirrendi kwalunkwe segment ta’ traskrizzjoni (`transcript`
+iddikjarat minn min jagħmel is-sejħa jew `audioTranscript` amalgamat), il-mekkaniżmu ta’ protezzjoni jimmarkaha bħala
+`videoBridgeObserved` u jipproduċi kopja parallela redatta tad-deskrizzjoni tal-vidjo —
+rendering identiku li fih il-korp ta’ test liberu ta’ kull segment jinbidel ma’
+`[redacted-video-transcript]`, mibni billi jiġi sostitwit il-kamp strutturat tas-segment
+qabel ma tinġabar is-sekwenza ta’ karattri (qatt billi jiġi analizzat it-test iċċattjat, biex l-ebda kontenut
+ta’ segment — malizzjuż jew ordinarju, inklużi korpi li fihom `]` bħal
+`[inaudible]`/`[music]` — ma jkun jista’ jibqa’). Il-korp tat-talba ppersistit fir-reġistru tas-sejħiet jissostitwixxi
+kull parti ta’ test derivata mill-vidjo b’dik il-kopja parallela redatta, imqabbla skont
+l-ugwaljanza tal-kontenut; l-ankra `fullText` terġa’ tinqara mill-payload lest tal-mekkaniżmu ta’ protezzjoni
+ta’ qabel is-sejħa, sabiex it-tqabbil xorta jirnexxi wara li mekkaniżmi ta’ protezzjoni sussegwenti fil-katina (dawk li
+jaħbu l-PII u l-kredenzjali, prijoritajiet 10/95) jerġgħu jiktbu t-test tad-deskrizzjoni fl-istess post u
+wara li l-injezzjoni tal-prompt tas-sistema/tat-trasferiment/tal-memorja tibdel l-istruttura tal-array tal-messaġġi. Il-
+korp mibgħut lill-mudell upstream jibqa’ l-istess. Talba osservata lanqas ma timla
+l-ebda Memorja persistenti (jinqabżu kemm l-estrazzjoni derivata mit-talba kif ukoll dik derivata mir-rispons),
 sabiex ir-risposta tal-mudell stess ma tkunx tista’ tirrepeti t-test tat-traskrizzjoni fil-Memorja.
 
-**Oqsma mhux ipproċessati tal-vidjo (#12430).** Meta l-bridge jkun attivat u l-appoġġ nattiv għall-vidjo ma jkunx magħruf jew ikun assenti, l-oqsma definiti `transcript`/`audioTranscript` jattivaw ukoll `videoBridgeObserved`, anke wara falliment tad-deskrizzjoni jew limitu `maxVideos`. `null` u sekwenzi vojta jgħoddu; oqsma assenti u metadata li mhijiex tal-vidjo ma jgħoddux. Kopji miżmuma jirredattaw dawn l-oqsma jew iħallu barra t-talba, u l-caches/Memory jiġu maqbuża.
+**Kampi mhux ipproċessati tal-vidjo (#12430).** Meta l-bridge ikun attivat u l-appoġġ nattiv għall-vidjo ma jkunx magħruf jew ikun assenti, kampi `transcript`/`audioTranscript` definiti jattivaw ukoll `videoBridgeObserved`, anke wara falliment tad-deskrizzjoni jew limitu ta’ `maxVideos`. `null` u sekwenzi vojta jgħoddu; kampi assenti u metadata mhux relatata mal-vidjo ma jgħoddux. Kopji miżmuma jirredattu dawn il-kampi jew iħallu barra t-talba, u l-caches/il-Memorja jinqabżu.
 
-F’dawk il-mogħdijiet ta’ fallback, cues validi pprovduti minn min jagħmel is-sejħa jsiru partijiet appoġġati
-`text`/`input_text` minflok oqsma mhux standard tal-fornitur. Iż-żewġ tracks
-ipprovduti mat-talba jibqgħu osservazzjonijiet `client` mhux fdati, bi twissija espliċita li l-vidjo
-ma ġiex deskritt u li t-timestamps ma ġewx ivverifikati mal-midja. Il-limiti eżistenti ta’
-256 cue/64-KiB b’kollox u għal kull cue japplikaw għaż-żewġ tracks flimkien;
-it-timestamps iridu jidħlu fil-limitu massimu ta’ 600 sekonda tal-broker u fi kwalunkwe tieqa ta’ fokus
-ipprovduta. Tracks invalidi jintremew, mhux jintbagħtu bħala test arbitrarju; track
-aħwa validu xorta jista’ jintuża sakemm il-limitu kkombinat tagħhom ma jinqabiżx. Oqsma nulli/vojta
-ma jżidu l-ebda test. Dan il-fallback ma jżid l-ebda aċċess għall-midja jew traskrizzjoni.
-L-oqsma ta’ estensjoni tat-traskrizzjoni jitneħħew mill-carrier tal-vidjo tal-fallback u mill-oġġetti
-`video_url`/`source` tiegħu. L-allowlist tal-wire ta’ OpenAI tibqa’ stretta; carriers
-tal-vidjo b’appoġġ nattiv mhux magħruf jibqgħu disponibbli u miri magħrufa li jaċċettaw biss test iżommu markers sikuri.
-Kopji paralleli ta’ redazzjoni strutturata jipproteġu t-test tat-traskrizzjoni miżjud, filwaqt li t-
-talba oriġinali proprjetà ta’ min jagħmel is-sejħa tibqa’ ma tinbidilx. Miri b’appoġġ nattiv u
-bridges diżattivati jżommu l-imġiba eżistenti tagħhom ta’ bypass.
+F’dawk il-mogħdijiet alternattivi, segmenti validi minn min jagħmel is-sejħa jsiru partijiet `text`/`input_text`
+appoġġjati minflok kampi mhux standard tal-fornitur. Iż-żewġ binarji pprovduti fit-talba
+jibqgħu osservazzjonijiet `client` mhux fdati, bi twissija espliċita li l-vidjo
+ma ġiex deskritt u l-marki tal-ħin ma ġewx ivverifikati mal-midja. Il-limiti eżistenti
+ta’ 256 segment/64 KiB b’kollox u dawk għal kull segment japplikaw għaż-żewġ binarji flimkien;
+il-marki tal-ħin iridu joqogħdu fil-limitu massimu ta’ 600 sekonda tal-broker u fi kwalunkwe tieqa
+ta’ fokus ipprovduta. Binarji invalidi jintremew, mhux jintbagħtu bħala test arbitrarju; binarju
+assoċjat validu xorta jista’ jintuża sakemm il-limitu kkombinat tagħhom ma jinqabiżx. Kampi null/vojta
+ma jżidu l-ebda test. Din l-alternattiva ma żżid l-ebda ġbir ta’ midja jew traskrizzjoni.
+Il-kampi ta’ estensjoni tat-traskrizzjoni jitneħħew mill-kontenitur alternattiv tal-vidjo u mill-
+oġġetti `video_url`/`source` tiegħu. Il-lista ta’ elementi permessi fil-format tat-trażmissjoni ta’ OpenAI tibqa’ stretta; kontenituri
+tal-vidjo b’appoġġ nattiv mhux magħruf jibqgħu disponibbli u destinazzjonijiet magħrufa li jaċċettaw test biss iżommu markaturi sikuri.
+Kopji paralleli redatti b’mod strutturat jipproteġu t-test tat-traskrizzjoni miżjud, filwaqt li t-
+talba oriġinali proprjetà ta’ min jagħmel is-sejħa tibqa’ l-istess. Destinazzjonijiet b’appoġġ nattiv u
+bridges diżattivati jżommu l-imġiba eżistenti tagħhom li taqbeż dan l-ipproċessar.
 
 Kopji miżmuma addizzjonali jużaw l-istess sinjal ta’ talba osservata. L-istampa mhux ipproċessata
-tat-talba tal-klijent ta’ qabel il-miżura protettiva, it-talba pendenti fil-memorja, u l-ġurnal bikri
-tat-talba miċħuda jissostitwixxu strutturalment l-oqsma tat-traskrizzjoni fil-partijiet tal-vidjo;
-prompts bħala sekwenzi maħluqa mill-istadji tal-pipeline u mill-handoff tal-kuntest jiġu redatti
-fis-sink tal-korp tat-talba persistenti. Il-marker persistenti `video_content_removed`
-iġiegħel il-kontinwazzjoni `previous_response_id` tfalli b’mod sikur minflok terġa’ tibni
-test li twarrab intenzjonalment. Jekk talba osservata titlef il-kopja parallela tar-redazzjoni
-għal kull parti tagħha qabel ir-reġistrazzjoni, jew jekk saħansitra waħda minn diversi kopji paralleli tal-vidjo
-ma taqbilx wara mutazzjonijiet sussegwenti tat-talba, il-korp tat-talba miżmum
-jitħalla barra għalkollox minflok tinżamm traskrizzjoni redatta parzjalment.
+tat-talba tal-klijent qabel il-mekkaniżmu ta’ protezzjoni, it-talba pendenti fil-memorja, u r-reġistru bikri
+tat-talbiet miċħuda jissostitwixxu strutturalment il-kampi tat-traskrizzjoni fil-partijiet tal-vidjo;
+prompts f’forma ta’ sekwenzi ta’ karattri sintetizzati minn stadji tal-pipeline u mit-trasferiment tal-kuntest jiġu redatti
+fil-punt fejn jiġi ppersistit il-korp tat-talba. Il-markatur `video_content_removed` ippersistit
+iġiegħel il-kontinwazzjoni permezz ta’ `previous_response_id` tfalli b’mod sikur minflok tirrikostitwixxi
+test li jkun twarrab intenzjonalment. Jekk talba osservata titlef il-
+kopja parallela redatta għal kull parti qabel ir-reġistrazzjoni, jew jekk anke waħda minn diversi kopji paralleli tal-vidjo
+tonqos milli taqbel wara tibdiliet sussegwenti fit-talba, il-korp tat-talba miżmum
+jitħalla barra għalkollox minflok tinżamm traskrizzjoni parzjalment redatta.
 
-Għal talba osservata, risposta tal-mudell tista’ tikkwota kwalunkwe parti mit-
-traskrizzjoni mingħajr konfini strutturati tal-cue. Għalhekk, il-`responseBody` tal-ġurnal tas-sejħiet
-persistenti tagħha jiġi sostitwit b’marker ta’ ommissjoni; l-artifatt dettaljat
-tal-pipeline (li jista’ jinkludi korpi upstream/tal-klijent u chunks tal-stream)
-ma jinżammx. Il-caches semantiċi, tal-idempotenza, u tar-replay tar-raġunament jaqbżu
-l-qari u l-kitba għal dik it-talba. It-talba lill-fornitur u r-risposta viżibbli
-għall-klijent jibqgħu ma jinbidlux. Bytes bikrija ta’ keepalive jitneħħew mill-buffer temporanju
-meta l-artifatt dettaljat jitħalla barra. It-twissija ta’ Kiro dwar EventStream iffurmat ħażin
+Għal talba osservata, rispons tal-mudell jista’ jikkwota kwalunkwe parti tat-
+traskrizzjoni mingħajr konfini strutturat ta’ segment. Għalhekk, il-`responseBody`
+ippersistit tiegħu fir-reġistru tas-sejħiet jinbidel ma’ markatur ta’ ommissjoni; l-artefatt dettaljat
+tal-pipeline (li jista’ jinkludi korpi upstream/tal-klijent u biċċiet tal-fluss)
+ma jinżammx. Il-caches semantiċi, tal-idempotenza u tar-riproduzzjoni tar-raġunament jaqbżu
+l-qari u l-kitba għal dik it-talba. It-talba lill-fornitur u r-
+rispons viżibbli għall-klijent jibqgħu l-istess. Bytes bikrin ta’ keepalive jitbattlu mill-buffer
+temporanju meta l-artefatt dettaljat jitħalla barra. It-twissija ta’ Kiro dwar EventStream malformat
 tirrapporta biss l-għadd ta’ bytes tal-payload, qatt il-kontenut tiegħu jew l-iżball mhux ipproċessat
 tal-parser tal-JSON.
-Dan ma jsostnix li kull dijanjostika mhux relatata tal-fornitur/plugin ġiet
-awditjata; l-analiżi usa’ tas-sinks miżmuma hija segwita f’#11658.
+Dan ma jasserixxix li kull dijanjostika mhux relatata ta’ fornitur/plugin ġiet
+awditjata; ir-reviżjoni usa’ tal-punti ta’ żamma qed tiġi segwita f’#11658.
 
-Iċ-ċiklu tal-ħajja intern ta' `/api/modality-bridge/video/drilldown` huwa substrat separat
-tal-cache awtentikat permezz ta' loopback/token. Kull operazzjoni teħtieġ ukoll
-ID prinċipali opak u kanoniku. Qabel ma jissejjaħ minn ambjent tal-produzzjoni, dan irid
+Iċ-ċiklu tal-ħajja intern ta’ `/api/modality-bridge/video/drilldown` huwa sottostrat ta’ cache separat,
+awtentikat permezz ta’ loopback/token. Kull operazzjoni teħtieġ ukoll
+ID kanoniku u opak tal-prinċipal. Qabel ma jiġi attivat min jagħmel sejħiet f’ambjent ta’ produzzjoni, dan irid
 jidderiva dak l-ID mit-tenant awtentikat u qatt ma għandu jgħaddi
-valur magħżul mill-klijent. Iċ-ċwievet tal-cache jorbtu lil dak il-prinċipal mal-IDs kanoniċi tas-sessjoni u
-tar-referenza tal-vidjo, jaħżnu biss iċ-ċwievet derivati tagħhom b'SHA-256, u jillimitaw kemm il-qari
-kif ukoll it-tħassir għall-istess prinċipal. Il-cache taħżen mhux aktar minn 16-il frame JPEG
-derivat għal kull entrata, tiskadihom wara għaxar minuti, u tappoġġja qari limitat permezz ta'
+valur magħżul mill-klijent. Iċ-ċwievet tal-cache jorbtu dak il-prinċipal ma’ IDs kanoniċi tas-sessjoni u
+tar-referenza tal-vidjo, jaħżnu biss iċ-ċwievet tagħhom derivati minn SHA-256, u jillimitaw kemm il-qari
+kif ukoll it-tħassir għall-istess prinċipal. Il-cache jaħżen mhux aktar minn 16-il frejm JPEG derivat
+għal kull entrata, jiskadihom wara għaxar minuti, u jappoġġja qari limitat permezz ta’
 `start`/`end` jew tħassir espliċitu tas-sessjoni.
 
-Kull prinċipal huwa limitat għal 16-il entrata u 64 MiB ta' data JPEG kanonika. Dawk
-il-limiti huma indipendenti mil-limitu globali ta' 64 entrata/256 MiB: il-pressjoni tal-kwota
-tal-prinċipal tkeċċi biss l-entrati ta' dak il-prinċipal li ntużaw l-inqas reċentement qabel ma
-tiġi kkunsidrata t-tkeċċija LRU globali. L-entrati skaduti jitneħħew kemm mill-kontabbiltà tal-prinċipal kif ukoll
-minn dik globali waqt attività tal-cache, filwaqt li l-kanċellazzjoni u n-nuqqas ta' validazzjoni ma
-jikkommettux sostituzzjoni parzjali.
+Kull prinċipal huwa limitat għal 16-il entrata u 64 MiB ta’ data JPEG kanonika. Dawk
+il-limiti huma indipendenti mil-limitu massimu globali ta’ 64 entrata/256 MiB: pressjoni fuq il-kwota tal-prinċipal
+tneħħi biss l-entrati ta’ dak il-prinċipal li ilhom l-aktar ma jintużaw qabel ma tiġi kkunsidrata
+t-tneħħija globali skont LRU. Entrati skaduti jitneħħew kemm mill-kontabbiltà tal-prinċipal kif ukoll minn dik
+globali meta jkun hemm attività fil-cache, filwaqt li l-kanċellazzjoni u l-falliment tal-validazzjoni
+ma jikkonfermawx sostituzzjoni parzjali.
 
-Il-cache tirrifjuta Base64 mhux kanoniku, padding żejjed, media mhux JPEG, JPEGs difettużi jew
-maqtugħin, u JPEGs li jiġġeneraw twissija waqt dekodifikazzjoni limitata tal-immaġni sħiħa b'`sharp`.
-Hija terġa' tikkodifika kull immaġni aċċettata bħala JPEG kanoniku, tidderiva l-wisa' u l-għoli
-mill-bytes dekodifikati minflok ma tafda l-fields tal-parti li ċċempel, u tarmi kwalunkwe
-bytes polyglot żejda fl-aħħar minflok iżżommhom. Il-buffer ikkompressat kanoniku limitat biss
-jiġi addebitat liż-żewġ kwoti. Il-limitu tal-wire JSON jinkludi l-overhead ta' Base64 għal-limitu ta' 32 MiB
+Il-cache jirrifjuta Base64 mhux kanoniku, padding żejjed, midja li mhijiex JPEG, JPEGs malformati jew
+maqtugħin, u JPEGs li jipproduċu twissija waqt dekodifikazzjoni sħiħa tal-immaġni b’limiti permezz ta’ `sharp`.
+Jerġa’ jikkodifika kull immaġni aċċettata bħala JPEG kanoniku, jiddetermina l-wisa’ u l-għoli
+mill-bytes dekodifikati minflok jafda l-oqsma ta’ min jagħmel is-sejħa, u jarmi kwalunkwe bytes
+poliglotti fl-aħħar minflok iżommhom. Il-buffer ikkompressat kanoniku b’limiti biss
+jingħadd fiż-żewġ kwoti. Il-limitu tat-trażmissjoni JSON jinkludi l-piż addizzjonali ta’ Base64 għal-limitu massimu ta’ 32 MiB
 tal-input dekodifikat. Kull
-derivazzjoni maħżuna tirreġistra l-format/ir-riżoluzzjoni JPEG validati tagħha, il-politika tat-teħid tal-kampjuni,
-il-verżjoni tad-derivazzjoni, il-ħin tal-ħolqien, il-hash tal-kontenut ikkalkulat mis-server, u r-referenza parent
-bil-hash flimkien mal-hash tal-kontenut parent tal-parti fdata li ċċempel. Il-kanċellazzjoni tiġi ċċekkjata
-bejn il-fażijiet asinkroniċi ta' dekodifikazzjoni/hash qabel il-commit atomiku fil-cache.
+derivazzjoni maħżuna tirreġistra l-format/riżoluzzjoni JPEG validati tagħha, il-politika tat-teħid tal-kampjuni,
+il-verżjoni tad-derivazzjoni, il-ħin tal-ħolqien, il-hash tal-kontenut ikkalkulat mis-server, u r-referenza
+għall-ġenitur f’forma ta’ hash flimkien mal-hash tal-kontenut tal-ġenitur ipprovdut minn min jagħmel is-sejħa fdat. Il-kanċellazzjoni tiġi ċċekkjata
+bejn il-fażijiet asinkroniċi tad-dekodifikazzjoni/kalkolu tal-hash qabel il-commit atomiku fil-cache.
 
-Din il-porzjon għadha ma tqabbadx produttur tal-produzzjoni mar-route u ma
-tipprovdix għażla ta' varjanti b'riżoluzzjonijiet multipli. Għalhekk, il-path trasparenti tat-talba tal-Video Bridge
-ma jġarrab ebda xogħol addizzjonali, filwaqt li d-derivazzjoni tal-prinċipal marbuta mat-tenant u
-ċ-ċiklu tal-ħajja sħiħ b'riżoluzzjonijiet multipli ta' FU-08 jibqgħu xogħol ta' segwitu espliċitu
-minflok ma jiġu ddokumentati bħala mġiba kompluta.
+Din il-fażi għadha ma tikkonnettjax produttur tal-produzzjoni mar-rotta u ma
+tipprovdix għażla ta’ varjanti b’riżoluzzjonijiet multipli. Għaldaqstant, il-mogħdija trasparenti tat-talbiet ta’ Video Bridge
+ma ġġarrab ebda xogħol addizzjonali, filwaqt li d-derivazzjoni tal-prinċipal marbut mat-tenant u
+ċ-ċiklu tal-ħajja sħiħ ta’ FU-08 b’riżoluzzjonijiet multipli jibqgħu xogħol espliċitu ta’ segwitu minflok
+jiġu ddokumentati bħala mġiba kompluta.
 
-Il-frames jingħataw captions sekwenzjalment bil-mudell Video kkonfigurat. Override vojt ta'
-Video jiret is-setting ta' Vision; jekk it-tnejn ikunu vojta, l-auto-router ta' Vision
-jagħżel il-mudell effettiv li jappoġġja l-vision. Captions b'suċċess
+Il-frejms jingħataw deskrizzjonijiet sekwenzjalment bil-mudell Video ikkonfigurat. Override
+vojt ta’ Video jiret l-issettjar ta’ Vision; jekk it-tnejn ikunu vojta, ir-router awtomatiku
+ta’ Vision jagħżel il-mudell effettiv li kapaċi jipproċessa kontenut viżiv. Id-deskrizzjonijiet li jirnexxu
 jissostitwixxu l-parti oriġinali bi prefiss stabbli `[Video description:` li wkoll
-jimmarka t-test bħala osservazzjoni mhux fdata derivata mill-media u jgħid lill-mudelli
-downstream biex ma jsegwux struzzjonijiet misjuba fil-media. Iċ-ċwievet tal-cache tal-captions tal-frames
-jinkludu l-bytes JPEG, il-prompt, it-timestamp, u l-mudell effettiv; captions b'suċċess biss
-jinħażnu fil-cache. L-entrati tal-cache jżommu l-mudell produttur li fil-fatt irnexxa,
-inkluż mudell ta' fallback; il-bridge jirrapporta `mixed` meta frames differenti
-jkunu ġew prodotti minn mudelli differenti. Hit fil-cache jerġa' juża dik l-identità tal-produttur
-minflok jerġa' jtikkettaha bħala l-pjan ta' routing mitlub. Il-cache tar-riżultat tal-vidjo sħiħ
-huwa keyed fuq kull input li jibdel l-output — il-prompt, il-mudell effettiv,
-il-politika tat-teħid tal-kampjuni, l-għadd ta' frames, il-modalità tal-analiżi semantika, il-fingerprint SHA-256
-tal-focus hint normalizzat, il-focus window, `transcript`,
-`audioTranscript`, u l-flag tal-contact sheet — għalhekk il-bidla ta' kwalunkwe waħda minn dawk
-id-dimensjonijiet tkun cache miss, u qatt użu mill-ġdid ta' data qadima. Il-verżjoni tal-politika
-tad-deduplikazzjoni viżiva, it-threshold, u l-għadd limitat ta' candidate frames huma wkoll espliċiti fiċ-
-ċavetta u l-metadata tal-cache tar-riżultati; għalhekk, bidla fil-politika ma tistax terġa' tuża
-deskrizzjoni qadima tal-vidjo sħiħ. Il-metadata v4 tal-cache tar-riżultati żżomm il-modalità u
-l-fingerprint, u qatt il-kompitu mhux ipproċessat tal-utent. Il-metadata tal-guardrail tirrapporta kemm
+jimmarka t-test bħala osservazzjoni mhux fdata derivata mill-midja u jgħid lill-mudelli
+sussegwenti biex ma jsegwux struzzjonijiet misjuba fil-midja. Iċ-ċwievet tal-cache tad-deskrizzjonijiet tal-frejms
+jinkludu l-bytes tal-JPEG, il-prompt, il-marka tal-ħin, u l-mudell effettiv; id-deskrizzjonijiet li jirnexxu biss
+jinħażnu fil-cache. L-entrati tal-cache jżommu l-mudell produttur reali li rnexxa,
+inkluż mudell alternattiv; il-bridge jirrapporta `mixed` meta frejms differenti
+jkunu ġew prodotti minn mudelli differenti. Meta jinstab riżultat fil-cache, jerġa’ juża dik l-identità tal-produttur
+minflok jerġa’ jittikkettaha bħala l-pjan tar-routing mitlub. Il-cache tar-riżultat tal-vidjo kollu
+juża bħala ċavetta kull input li jbiddel l-output — il-prompt, il-mudell
+effettiv, il-politika tat-teħid tal-kampjuni, l-għadd ta’ frejms, il-modalità tal-analiżi semantika, il-fingerprint SHA-256
+tal-ħjiel ta’ fokus normalizzat, it-tieqa tal-fokus, `transcript`,
+`audioTranscript`, u l-flag tal-folja ta’ kuntatt — għalhekk bidla fi kwalunkwe waħda minn dawk
+id-dimensjonijiet tfisser li ma jinstabx riżultat fil-cache, u qatt ma jerġa’ jintuża riżultat skadut. Il-verżjoni tal-politika
+tat-tneħħija tad-duplikati viżivi, il-limitu, u l-għadd limitat ta’ frejms kandidati huma wkoll espliċiti
+fiċ-ċavetta u fil-metadata tal-cache tar-riżultati; għalhekk bidla fil-politika ma tistax terġa’ tuża deskrizzjoni
+skaduta tal-vidjo kollu. Il-metadata v4 tal-cache tar-riżultati żżomm il-modalità u
+l-fingerprint, qatt il-kompitu mhux ipproċessat tal-utent. Il-metadata tal-mekkaniżmu ta’ protezzjoni tirrapporta kemm
 il-modalità tal-analiżi mitluba kif ukoll dik effettiva; modalità `focused` mitluba mingħajr
-test utli tal-utent tiġi rrappurtata bħala effettivament `full`.
+test tal-utent li jista’ jintuża tiġi rrappurtata bħala effettivament `full`.
 
-Il-guardrail jiġbed kull parti tal-vidjo appoġġjata iżda ma jiddeskrivix aktar minn
-`modalityBridgeVideoMaxVideos`. Għal target li jkun ġie ppruvat li għandu
-`supportsVideo === false`, vidjows li fallew jew li qabżu l-limitu jsiru markers ta' test sikuri u espliċiti
-sabiex ebda vidjo mhux ipproċessat ma jibqa'. Meta l-kapaċità ma tkunx magħrufa, dawk il-partijiet
-iżommu l-carrier tal-vidjo tagħhom; kwalunkwe transcript ta' fallback isegwi l-konverżjoni limitata
-għal test deskritta hawn fuq. Targets b'`supportsVideo === true` jaqbżu l-bridge.
-Is-sinjal ta' abort tat-talba tal-klijent jinfirex tul id-download, il-kju tal-broker,
-is-subprocesses, u s-sejħiet tal-captions; l-aborts jieqfu bejn il-vidjows u qatt ma jfallu b'mod miftuħ
-għal media mhux ipproċessata.
+Il-mekkaniżmu ta’ protezzjoni jestratta kull parti tal-vidjo appoġġata iżda ma jiddeskrivix aktar minn
+`modalityBridgeVideoMaxVideos`. Għal mira li jkun ġie ppruvat li għandha
+`supportsVideo === false`, vidjows li jfallu jew jaqbżu l-limitu jsiru markaturi espliċiti ta’ test sigur
+sabiex ma jibqa’ ebda vidjo mhux ipproċessat. Meta l-kapaċità ma tkunx magħrufa, dawk il-partijiet
+iżommu l-kontenitur tal-vidjo tagħhom; kwalunkwe traskrizzjoni alternattiva ssegwi l-konverżjoni limitata tat-test
+imsemmija hawn fuq. Miri b’`supportsVideo === true` jaqbżu l-bridge.
+Is-sinjal tal-interruzzjoni tat-talba tal-klijent jinfirex matul it-tniżżil, il-kju tal-broker,
+is-sottoproċessi, u s-sejħiet għad-deskrizzjonijiet; l-interruzzjonijiet iwaqqfu l-ipproċessar bejn vidjo u ieħor u qatt ma jippermettu
+li tgħaddi midja mhux ipproċessata f’każ ta’ falliment.
 
-Is-settings tar-runtime huma sostnuti mid-DB u vvalidati b'Zod:
+Is-settings tar-runtime jinħażnu fid-DB u jiġu vvalidati b’Zod:
 
-| Ċavetta                             | Valur predefinit | Firxa / imġiba                                                                                                   |
-| ----------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `modalityBridgeVideoEnabled`        | `false`          | Runtime fakultattiv, attivat b’mod espliċitu                                                                     |
-| `modalityBridgeVideoAnalysisMode`   | `"full"`         | `full` iżomm captions ġeneriċi; `focused` juża kuntest limitat u mhux fdat tal-aħħar utent                       |
-| `modalityBridgeVideoModel`          | `""`             | Jiret il-mudell ta’ Vision Bridge                                                                                |
-| `modalityBridgeVideoFrameCount`     | `8`              | 1–16                                                                                                             |
-| `modalityBridgeVideoSamplingPolicy` | `"uniform"`      | `uniform`, `scene_aware`, jew `segment_aware` proporzjonali; jekk id-ditekter ifalli, jerġa’ lura għal `uniform` |
-| `modalityBridgeVideoMaxVideos`      | `1`              | 1–4                                                                                                              |
-| `modalityBridgeVideoTimeout`        | `120000`         | 1000–120000 ms                                                                                                   |
+| Ċavetta                             | Valur predefinit | Medda / imġiba                                                                                                  |
+| ----------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `modalityBridgeVideoEnabled`        | `false`          | Runtime fakultattiv, attivat b’għażla espliċita                                                                 |
+| `modalityBridgeVideoAnalysisMode`   | `"full"`         | `full` iżomm deskrizzjonijiet ġeneriċi; `focused` juża kuntest limitat u mhux fdat mill-aħħar messaġġ tal-utent |
+| `modalityBridgeVideoModel`          | `""`             | Jiret il-mudell ta’ Vision Bridge                                                                               |
+| `modalityBridgeVideoFrameCount`     | `8`              | 1–16                                                                                                            |
+| `modalityBridgeVideoSamplingPolicy` | `"uniform"`      | `uniform`, `scene_aware`, jew `segment_aware` proporzjonali; jekk id-ditekter ifalli, jintuża `uniform`         |
+| `modalityBridgeVideoMaxVideos`      | `1`              | 1–4                                                                                                             |
+| `modalityBridgeVideoTimeout`        | `120000`         | 1000–120000 ms                                                                                                  |
 
-Valuri persistiti preċedenti tat-timeout tal-Vidjo li jaqbżu l-120 sekonda jiġu limitati sal-iskadenza tal-broker; kitbiet ġodda tas-settings li jaqbżu dak il-limitu jiġu rrifjutati.
-`GET /api/modality-bridge/video/runtime` jeħtieġ lokalità loopback fdata u ttimbrata
-qabel l-awtentikazzjoni jew l-ittestjar tar-runtime, u mbagħad jeħtieġ awtentikazzjoni
-ta’ ġestjoni. Jirritorna biss `available`, verżjonijiet sanitizzati ta’ FFmpeg/ffprobe, u raġuni fissa
-meta r-runtime ma jkunx disponibbli. L-endpoint intern tal-estrazzjoni mhuwiex
+Valuri storiċi maħżuna tat-timeout ta’ Video li jaqbżu l-120 sekonda jiġu limitati
+għall-iskadenza tal-broker; kitbiet ġodda tas-settings li jaqbżu dak il-limitu jiġu rrifjutati.
+`GET /api/modality-bridge/video/runtime` jirrikjedi prova fdata u ttimbrata tal-lokalità loopback
+qabel l-awtentikazzjoni jew l-iċċekkjar tar-runtime, imbagħad jirrikjedi awtentikazzjoni
+tal-ġestjoni. Jirritorna biss `available`, verżjonijiet sanitizzati ta’ FFmpeg/ffprobe, u raġuni
+fissa meta r-runtime ma jkunx disponibbli. L-endpoint intern tal-estrazzjoni mhuwiex
 API pubblika għat-tlugħ: is-saturazzjoni tal-kju tirritorna `503` flimkien ma’ `Retry-After`, skonnessjoni
-min-naħa ta’ min jagħmel it-talba tirritorna `499`, u l-iskadenza fissa tal-broker tirritorna `504`. It-tweġibiet ikkonvertiti jżidu
+ta’ min jagħmel is-sejħa tirritorna `499`, u l-iskadenza fissa tal-broker tirritorna `504`. Ir-risposti kkonvertiti jżidu
 `video->text;model=<visionModel>;parts=<videos>` mal-header ċentrali
 `x-omniroute-modality-bridge` mingħajr ma jneħħu s-segmenti ta’ Vision jew Audio.
 
-### Maskatur tal-PII (`piiMasker.ts`)
+### Masker tal-PII (`piiMasker.ts`)
 
-Jitħaddem fiż-**żewġ** stadji.
+Jaħdem fiż-**żewġ** stadji.
 
 - **`preCall`** jikklona l-payload, jgħaddi minn `system`, `messages`, `input`, u
   `prompt` (inklużi elementi li huma strings sempliċi), u japplika `processPII()` (minn
-  `@/shared/utils/inputSanitizer`) għall-fields string `content`/`text`. Meta
-  `PII_REDACTION_ENABLED=true`, il-PII misjub jiġi redatt fil-payload
-  ħiereġ. Dan huwa indipendenti minn `INPUT_SANITIZER_MODE` (li jikkontrolla biss
-  il-politika dwar l-injezzjoni tal-prompt). Meta r-redazzjoni tkun mitfija, is-sejħa tirreġistra l-għadd
-  ta’ detezzjonijiet mingħajr ma terġa’ tikteb il-kontenut.
-- **`postCall`** jagħmel klonu profond tat-tweġiba, iħaddem `sanitizePIIResponse()` flimkien
-  mal-maskatur tal-istruttura tal-Responses API (`maskResponsesOutput` — ikopri
-  `output_text` u `output[].content[].text`). Jekk isseħħ xi redazzjoni,
-  it-tweġiba modifikata tieħu post dik oriġinali.
+  `@/shared/utils/inputSanitizer`) għall-oqsma `content`/`text` li huma strings. Meta
+  `PII_REDACTION_ENABLED=true`, il-PII identifikata tiġi mgħottija fil-payload
+  li jintbagħat. Dan huwa indipendenti minn `INPUT_SANITIZER_MODE` (li jikkontrolla biss
+  il-politika dwar l-injezzjoni ta' prompts). Meta t-tgħattija tkun diżattivata, is-sejħa tirreġistra
+  l-għadd ta' detezzjonijiet mingħajr ma tikteb il-kontenut mill-ġdid.
+- **`postCall`** jagħmel klonu profond tar-rispons, iħaddem `sanitizePIIResponse()` flimkien
+  mal-funzjoni tat-tgħattija għall-istruttura tar-Responses API (`maskResponsesOutput` — tkopri
+  `output_text` u `output[].content[].text`). Jekk isseħħ xi tgħattija,
+  ir-rispons modifikat jieħu post l-oriġinal.
 
-Il-guardrail qatt ma jimblokka; huwa biss iżid annotazzjonijiet (`meta.detections`,
-`meta.redacted`) jew jerġa’ jikteb.
+Il-mekkaniżmu ta' protezzjoni qatt ma jimblokka; iżid biss annotazzjonijiet (`meta.detections`,
+`meta.redacted`) jew jikteb il-kontenut mill-ġdid.
 
-#### Għażla skont it-tip, mudelli personalizzati u counters tad-detezzjoni
+#### Għażla skont it-tip, mudelli personalizzati u għadd ta' detezzjonijiet
 
-**Dashboard → Settings → Security → PII masking** jagħżel _x’għandu_ jiġi maskat. Dan
-ma jixgħelx il-maskjar: dan xorta jiġi kkontrollat minn `PII_REDACTION_ENABLED` (talba) u
-`PII_RESPONSE_SANITIZATION` (tweġiba + SSE), u t-tnejn huma mitfija b’mod predefinit.
+**Pannell → Settings → Sigurtà → Tgħattija tal-PII** jagħżel _x'jiġi_ mgħotti.
+Ma jattivax it-tgħattija: din għadha kkontrollata minn `PII_REDACTION_ENABLED` (talba) u
+`PII_RESPONSE_SANITIZATION` (rispons + SSE), it-tnejn diżattivati b'mod awtomatiku.
 
-- **Għażla skont it-tip** — l-IDs inkorporati huma elenkati f’
-  `src/shared/constants/piiTypes.ts` (`PII_BUILTIN_TYPES`). Jekk ma jiġix issettjat, dan ifisser kull
-  tip (l-imġiba ta’ qabel ma kien jeżisti dan is-setting). Il-mudell `ssn_us`
-  tal-engine tat-talbiet jiġi mmappjat għal `ssn`. It-templates (Minimal, Standard, Financial,
-  Brazilian, USA, Full) jimlew biss il-checkboxes fl-UI.
-- **Mudelli personalizzati** — sa 20 mudell regex jew wildcard (`*` = sa 64
-  karattru mhux whitespace, `?` = wieħed). Il-matches isiru `[CUSTOM_REDACTED]`.
+- **Għażla skont it-tip** — l-identifikaturi integrati huma elenkati f'
+  `src/shared/constants/piiTypes.ts` (`PII_BUILTIN_TYPES`). Meta ma jkun hemm xejn issettjat, jiġu inklużi
+  t-tipi kollha (l-imġiba ta' qabel ma kien jeżisti dan is-setting). Il-mudell
+  `ssn_us` tal-magna tat-talbiet jikkorrispondi għal `ssn`. Il-mudelli lesti (Minimu, Standard, Finanzjarju,
+  Brażiljan, USA, Sħiħ) jimlew biss il-kaxxi tal-għażla fl-UI.
+- **Mudelli personalizzati** — sa 20 mudell regex jew b'karattri ġeneriċi (`*` = sa 64
+  karattru li mhuwiex spazju abjad, `?` = wieħed). Il-korrispondenzi jsiru `[CUSTOM_REDACTED]`.
   Kull mudell jgħaddi minn `compilePiiCustomPattern()`
-  (`src/shared/utils/piiCustomPatterns.ts`): mhux aktar minn 500 karattru, flags limitati
-  għal `g i m s u`, irid jiġi kkompilat, irid jgħaddi minn `safe-regex` (backtracking
-  katastrofiku), u ma jistax jaqbel ma’ string vojta jew placeholder ta’ redazzjoni.
-  Mudell li jfalli jiġi rrifjutat meta jiġi ssejvjat u meta jiġi ttestjat, u ringiela maħżuna
-  li tfalli tinqabeż waqt ir-runtime minflok ma tiġi kkompilata. Il-mudelli personalizzati
-  jitħaddmu biss meta l-maskjar ikun mixgħul.
-- **Counters tad-detezzjoni** — għadd skont it-tip (qatt il-valuri mqabbla), miżmum fil-
-  memorja u rrisettjat meta s-sistema terġa’ tinbeda (`src/lib/pii/piiDetectionStats.ts`). Dan
-  jiżdied biss meta l-maskjar ikun mixgħul.
+  (`src/shared/utils/piiCustomPatterns.ts`): mhux aktar minn 500 karattru, il-flags limitati
+  għal `g i m s u`, irid jikkompila, irid jgħaddi minn `safe-regex` (għal
+  backtracking katastrofiku), u ma jridx jaqbel ma' string vojta jew placeholder tat-tgħattija.
+  Mudell li ma jgħaddix jiġi rrifjutat meta jiġi ssejvjat u meta jiġi ttestjat, u ringiela maħżuna
+  li ma tgħaddix tinqabeż waqt l-eżekuzzjoni minflok tiġi kkompilata. Il-mudelli personalizzati
+  jitħaddmu biss meta t-tgħattija tkun attivata.
+- **Għadd ta' detezzjonijiet** — għadd għal kull tip (qatt il-valuri li qablu), miżmum
+  fil-memorja u azzerat meta s-sistema terġa' tinbeda (`src/lib/pii/piiDetectionStats.ts`). Jiżdied biss
+  meta t-tgħattija tkun attivata.
 
-Is-settings jinsabu fit-tabella `key_value` (namespace `pii_settings`,
-`src/lib/db/piiSettings.ts`) u jinqraw permezz ta’ cache ta’ 1 s. API:
+Is-settings jinħażnu fit-tabella `key_value` (namespace `pii_settings`,
+`src/lib/db/piiSettings.ts`) u jinqraw permezz ta' cache ta' 1 s. API:
 
-| Metodu | Path                     | Għan                                                                             |
-| ------ | ------------------------ | -------------------------------------------------------------------------------- |
-| `GET`  | `/api/settings/pii`      | Stat tal-flag, `enabledTypes`, `customPatterns`, counters tad-detezzjoni         |
-| `PUT`  | `/api/settings/pii`      | Jissostitwixxi `enabledTypes` (`null` = kollha) u/jew `customPatterns`           |
-| `POST` | `/api/settings/pii/test` | Dry run ta’ mudell wieħed fuq kampjun ta’ mhux aktar minn 8 KB; ma jinħażen xejn |
+| Metodu | Mogħdija                 | Għan                                                                                            |
+| ------ | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/settings/pii`      | Stat tal-flags, `enabledTypes`, `customPatterns`, għadd ta' detezzjonijiet                      |
+| `PUT`  | `/api/settings/pii`      | Jissostitwixxi `enabledTypes` (`null` = kollha) u/jew `customPatterns`                          |
+| `POST` | `/api/settings/pii/test` | Jittestja mudell wieħed fuq kampjun ta' mhux aktar minn 8 KB mingħajr effetti; ma jinħażen xejn |
 
-It-tlieta kollha jeħtieġu awtentikazzjoni ta’ ġestjoni u jivvalidaw il-body b’Zod
+It-tlieta jeħtieġu awtentikazzjoni għall-ġestjoni u jivvalidaw il-body b'Zod
 (`src/shared/validation/schemas/piiSettings.ts`).
 
-### Injezzjoni tal-Prompt (`promptInjection.ts`)
+### Injezzjoni ta' Prompts (`promptInjection.ts`)
 
-Jidentifika strutturi avversarjali f’kontenut ipprovdut mill-utent u jinforza
-l-politika kkonfigurata. L-imġiba tiġi ddeterminata minn varjabbli tal-ambjent u options tal-constructor:
+Jidentifika strutturi avversarjali f'kontenut ipprovdut mill-utent u jinforza
+l-politika kkonfigurata. L-imġiba hija kkontrollata minn varjabbli tal-ambjent u għażliet
+tal-kostruttur:
 
-| Konfigurazzjoni      | Varjabbli tal-ambjent                                                                                 | Valur predefinit | Effett                                                                                                                                                                                                                                         |
-| -------------------- | ----------------------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Attivat              | `INPUT_SANITIZER_ENABLED`                                                                             | `true`           | Meta jkun `false`, il-mekkaniżmu ta' protezzjoni jieqaf minnufih.                                                                                                                                                                              |
-| Modalità             | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                       | `warn`           | Politika tal-injezzjoni: `block`, `warn`, jew `log`. (`redact` huwa aċċettat għall-kompatibbiltà retroattiva iżda **ma** jneħħix it-test tal-injezzjoni; il-kitba mill-ġdid tal-PII fit-talba hija kkontrollata minn `PII_REDACTION_ENABLED`.) |
-| Limitu tal-imblukkar | Għażla `blockThreshold` / `INPUT_SANITIZER_BLOCK_THRESHOLD` (alias `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high`           | Is-severità minima meħtieġa għall-imblukkar. B'mod predefinit, severità medja tiġi osservata biss.                                                                                                                                             |
+| Setting              | Varjabbli tal-ambjent                                                                                 | Valur awtomatiku | Effett                                                                                                                                                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Attivat              | `INPUT_SANITIZER_ENABLED`                                                                             | `true`           | Meta jkun `false`, il-mekkaniżmu ta' protezzjoni jieqaf immedjatament.                                                                                                                                                                       |
+| Modalità             | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                       | `warn`           | Politika dwar l-injezzjoni: `block`, `warn`, jew `log`. (`redact` huwa aċċettat għall-kompatibbiltà b'lura iżda **ma jneħħix** it-test tal-injezzjoni; il-kitba mill-ġdid tal-PII fit-talba hija kkontrollata minn `PII_REDACTION_ENABLED`.) |
+| Limitu tal-imblukkar | Għażla `blockThreshold` / `INPUT_SANITIZER_BLOCK_THRESHOLD` (alias `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high`           | Severità minima meħtieġa biex jiġi applikat l-imblukkar. B'mod awtomatiku, is-severità medja tiġi osservata biss.                                                                                                                            |
 
-**Preċedenza tal-modalità** (`getMode`): `options.mode` ta' min isejjaħ →
-**sovrastruttura tal-feature flag fid-DB** għal `INJECTION_GUARD_MODE` (Dashboard → Settings →
-Feature Flags) → varjabbli tal-ambjent `INJECTION_GUARD_MODE` → varjabbli tal-ambjent `INPUT_SANITIZER_MODE` →
-`warn`. Għalhekk, sovrastruttura mid-dashboard tieħu preċedenza fuq il-varjabbli
-tal-ambjent, u b'hekk l-UI ta' Feature Flags tikkontrolla l-mekkaniżmu ta'
-protezzjoni waqt li jkun qed jaħdem (mingħajr ristartjar). Il-qari mid-DB huwa
-fail-safe: jekk iseħħ żball, il-mekkaniżmu ta' protezzjoni jerġa' lura
-għall-imġiba bbażata fuq il-varjabbli tal-ambjent, u meta ma tkun issettjata
-l-ebda sovrastruttura, l-imġiba tkun identika għar-riżoluzzjoni bbażata biss
-fuq il-varjabbli tal-ambjent.
+**Preċedenza tal-modalità** (`getMode`): `options.mode` ta' min jagħmel is-sejħa →
+**valur prevalenti tal-feature flag fid-DB** għal `INJECTION_GUARD_MODE` (Pannell → Settings →
+Flags tal-Funzjonalitajiet) → varjabbli tal-ambjent `INJECTION_GUARD_MODE` → varjabbli tal-ambjent `INPUT_SANITIZER_MODE` →
+`warn`. Għalhekk valur prevalenti mill-pannell jieħu preċedenza fuq il-varjabbli tal-ambjent, u b'hekk l-UI tal-Flags
+tal-Funzjonalitajiet tikkontrolla direttament il-mekkaniżmu ta' protezzjoni li jkun qed jaħdem (mingħajr bidu mill-ġdid). Il-qari mid-DB għandu mġiba ta' riżerva sigura:
+jekk iseħħ żball, il-mekkaniżmu jerġa' juża l-imġiba bbażata fuq il-varjabbli tal-ambjent, u meta ma jkun issettjat ebda
+valur prevalenti, l-imġiba tkun identika għal dik iddeterminata biss mill-varjabbli tal-ambjent.
 
-Sorsi ta' detezzjoni:
+Sorsi tad-detezzjoni:
 
-1. `sanitizeRequest()` minn `@/shared/utils/inputSanitizer` (sett kondiviż ta'
-   rilevaturi li jintuża f'partijiet oħra tal-pipeline).
-2. `DEFAULT_GUARD_PATTERNS` integrati (attwalment `system_override_inline` u
+1. `sanitizeRequest()` minn `@/shared/utils/inputSanitizer` (sett komuni ta' detetturi
+   użat f'postijiet oħra fil-pipeline).
+2. `DEFAULT_GUARD_PATTERNS` integrati (bħalissa `system_override_inline` u
    `markdown_system_block`, it-tnejn b'severità `high`).
-3. `customPatterns` fakultattivi mgħoddija permezz tal-għażliet tal-kostruttur
-   (strings, regex, jew rekords `{ name, pattern, severity }`).
+3. `customPatterns` fakultattivi mgħoddija permezz tal-għażliet tal-kostruttur (strings, regex,
+   jew rekords `{ name, pattern, severity }`).
 
-Meta `mode === "block"` **u** mill-inqas detezzjoni waħda tilħaq il-limitu
-tas-severità, `preCall` jirritorna `{ block: true, message: "Request rejected:
-suspicious content detected" }`. Fil-modalitajiet `warn`/`log`, il-mekkaniżmu
-ta' protezzjoni jirreġistra l-avveniment iżda jippermetti s-sejħa. Il-helper
-kondiviż `evaluatePromptInjection()` huwa esportat ukoll għal min jeħtieġ
-jevalwa prompts mingħajr ma jgħaddi mir-reġistru.
+Meta `mode === "block"` **u** mill-inqas sejba waħda tilħaq il-limitu tas-severità,
+`preCall` jirritorna `{ block: true, message: "Request rejected:
+suspicious content detected" }`. Fil-modi `warn`/`log`, il-mekkaniżmu ta’ protezzjoni jirreġistra l-avveniment iżda
+jippermetti s-sejħa. Il-funzjoni awżiljarja kondiviża `evaluatePromptInjection()` hija esportata wkoll
+għal dawk li jsejħuha u li jeħtieġu jevalwaw prompts mingħajr ma jgħaddu mir-reġistru.
 
-**Limitu tal-iskannjar (v3.8.20):** ir-rilevatur jispezzjona biss l-**ewwel 16 KB**
-mit-test magħqud tal-prompt — `MAX_INJECTION_SCAN_BYTES = 16 * 1024` (16 384 bytes) f'
+**Limitu tal-iskannjar (v3.8.20):** id-ditekter jispezzjona biss l-**ewwel 16 KB** tat-test
+magħqud tal-prompts — `MAX_INJECTION_SCAN_BYTES = 16 * 1024` (16 384 byte) f’
 `src/shared/utils/inputSanitizer.ts`. Kemm `detectInjection()` kif ukoll
-`evaluatePromptInjection()` jużaw `slice(0, MAX_INJECTION_SCAN_BYTES)` qabel ma
-jħaddmu l-loop tal-patterns. Id-direttivi tal-injezzjoni jinsabu qrib il-bidu
-ta' input, għalhekk dan jillimita l-użu tas-CPU/GC mir-regex fuq payloads ta'
-diversi mijiet ta' KB mingħajr ma jdgħajjef id-detezzjoni (ara
+`evaluatePromptInjection()` japplikaw `slice(0, MAX_INJECTION_SCAN_BYTES)` qabel ma jħaddmu
+ċ-ċiklu tal-mudelli. Id-direttivi ta’ injezzjoni jinsabu qrib il-bidu ta’ input, għalhekk dan
+jillimita l-użu tas-CPU/GC mir-regex fuq payloads ta’ mijiet ta’ KB mingħajr ma jdgħajjef ir-rilevament (ara
 #3932, #4041).
 
 ### Masker tal-Kredenzjali (`credentialMasker.ts`)
 
-Jaħdem fiż-**żewġ** stadji, l-aħħar fil-katina predefinita (prijorità `95`).
-Jaħbi patterns magħrufa sew ta' API keys / tokens sigrieti mill-payload ħiereġ
-(kontenut tal-messaġġi, argumenti ta' sejħiet tal-għodod, riżultati tal-għodod)
-**u** mir-rispons tal-fornitur, sabiex kredenzjali mwaħħla fi prompt (jew
-ripetuta lura minn riżultat ta' għodda) ma tiġix żvelata lill-fornitur upstream
-jew lura lill-klijent.
+Jaħdem fiż-**żewġ** stadji, fl-aħħar tal-katina predefinita (prijorità `95`). Jaħbi
+mudelli magħrufa ta’ ċwievet API / tokens sigrieti mill-payload li jintbagħat (kontenut
+tal-messaġġi, argumenti tas-sejħiet tal-għodod, riżultati tal-għodod) **u** mir-rispons tal-fornitur, sabiex
+kredenzjal imwaħħal fi prompt (jew ripetut f’riżultat ta’ għodda) ma jiġix żvelat
+lill-fornitur upstream jew lura lill-klijent.
 
-- **B'parteċipazzjoni espliċita biss**, bl-istess konvenzjoni bħall-ħabi tal-PII
-  (qrib Hard Rule #20): ikun diżattivat sakemm
-  `settings.credentialRedactionEnabled === true` **jew**
-  `CREDENTIAL_REDACTION_ENABLED=true`. Meta jkun mitfi, il-mekkaniżmu ta'
-  protezzjoni ma jagħmel xejn — qatt ma jimblokka u qatt ma jerġa' jikteb.
-- `redactCredentials()` jgħaddi mis-siġra kollha tal-payload/rispons
-  (`walkValue()`, protett kontra prototype pollution, u protett kontra ċikli
-  permezz ta' `WeakSet`) u jissostitwixxi l-korrispondenzi bi placeholder
-  `[REDACTED:<type>]`, filwaqt li jikklona biss il-fergħat li fil-fatt inbidlu.
-- `CREDENTIAL_PATTERNS` ikopri ċ-ċwievet tal-fornituri tal-LLM (OpenAI,
-  OpenAI-proj, Anthropic, Google, Hugging Face, Replicate), tokens ta' VCS/SaaS
-  (GitHub, Slack, Linear, Notion, npm, Postman, Discord), ċwievet tal-ħlas
-  (Stripe, Square), ċwievet tal-cloud (AWS access key, Twilio, SendGrid,
-  Mailgun), private keys / JWTs, connection strings li fihom kredenzjali
-  (`mongodb://user:pass@...`, eċċ.), u pattern ġeneriku għall-valuri
-  tal-headers `Authorization`/`x-api-key`/`api-key`/`apikey`. Ċwievet fil-forma
-  ta' headers (`authorization`, `x-api-key`, `api-key`, `apikey`) jinħbew
-  strutturalment (il-valur biss, filwaqt li prefiss tal-iskema bħal
-  `Bearer `/`Basic ` jinżamm) minflok permezz tar-regex ġeneriku tat-test.
-- Il-mekkaniżmu ta' protezzjoni qatt ma jimblokka; huwa jerġa' jikteb biss
-  (`modifiedPayload` / `modifiedResponse`) u jżid annotazzjonijiet
-  (`meta.credentialsRedacted`, `meta.count`).
+- **Biss b’attivazzjoni espliċita**, bl-istess konvenzjoni bħall-ħabi tal-PII (marbut mar-Regola Stretta #20):
+  diżattivat sakemm `settings.credentialRedactionEnabled === true` **jew**
+  `CREDENTIAL_REDACTION_ENABLED=true`. Meta jkun diżattivat, il-mekkaniżmu ta’ protezzjoni ma jagħmel xejn —
+  qatt ma jimblokka u qatt ma jikteb mill-ġdid.
+- `redactCredentials()` jgħaddi mis-siġra kollha tal-payload/rispons (`walkValue()`,
+  protetta kontra t-tniġġis tal-prototip u kontra ċ-ċikli permezz ta’ `WeakSet`) u jissostitwixxi l-korrispondenzi b’
+  placeholder `[REDACTED:<type>]`, filwaqt li jikklona biss il-fergħat li fil-fatt
+  inbidlu.
+- `CREDENTIAL_PATTERNS` ikopri ċwievet ta’ fornituri tal-LLM (OpenAI, OpenAI-proj,
+  Anthropic, Google, Hugging Face, Replicate), tokens VCS/SaaS (GitHub, Slack,
+  Linear, Notion, npm, Postman, Discord), ċwievet tal-ħlasijiet (Stripe, Square), ċwievet
+  tal-cloud (ċavetta ta’ aċċess AWS, Twilio, SendGrid, Mailgun), ċwievet privati / JWTs,
+  strings ta’ konnessjoni li jġorru kredenzjali (`mongodb://user:pass@...`, eċċ.), u
+  mudell ġeneriku għall-valuri tal-headers `Authorization`/`x-api-key`/`api-key`/`apikey`.
+  Ċwievet f’forma ta’ header (`authorization`, `x-api-key`, `api-key`,
+  `apikey`) jinħbew strutturalment (il-valur biss, filwaqt li prefiss tal-iskema bħal
+  `Bearer `/`Basic ` jinżamm) minflok permezz tar-regex ġenerika tat-test.
+- Il-mekkaniżmu ta’ protezzjoni qatt ma jimblokka; jikteb mill-ġdid biss (`modifiedPayload` /
+  `modifiedResponse`) u jżid annotazzjonijiet (`meta.credentialsRedacted`, `meta.count`).
 
-Protezzjoni kontra rigressjonijiet: `tests/unit/credential-masker-guardrail.test.ts`.
+Protezzjoni kontra r-rigressjonijiet: `tests/unit/credential-masker-guardrail.test.ts`.
 
-## Kuntratt Bażiku (`base.ts`)
+## Kuntratt Bażi (`base.ts`)
 
 ```typescript
 class BaseGuardrail {
@@ -745,11 +826,11 @@ class BaseGuardrail {
 }
 
 interface GuardrailResult<TValue = unknown> {
-  block?: boolean; // true jwaqqaf il-katina immedjatament
-  message?: string; // jintwera meta jsir imblukkar
+  block?: boolean; // true twaqqaf il-katina immedjatament
+  message?: string; // jintwera meta jkun hemm imblukkar
   meta?: Record<string, unknown> | null;
-  modifiedPayload?: TValue; // jiġi rritornat minn preCall biex jerġa' jikteb it-talba
-  modifiedResponse?: TValue; // jiġi rritornat minn postCall biex jerġa' jikteb ir-rispons
+  modifiedPayload?: TValue; // irritornat minn preCall biex tinkiteb mill-ġdid it-talba
+  modifiedResponse?: TValue; // irritornat minn postCall biex tinkiteb mill-ġdid ir-risposta
 }
 
 interface GuardrailContext {
@@ -768,109 +849,184 @@ interface GuardrailContext {
 }
 ```
 
-Guardrail jindika "l-ebda bidla" billi jirritorna jew `void`, `{}`, jew
-`{ block: false }`. Ir-ritorn ta' `modifiedPayload`/`modifiedResponse` jissostitwixxi
-l-valur li jgħaddi mill-katina għall-guardrails sussegwenti.
-`signal?: AbortSignal` jittrasmetti ċ-ċiklu tal-ħajja ta' min jagħmel is-sejħa lill-guardrails. L-abort ta' talba huwa l-eċċezzjoni intenzjonata ta' fail-open: il-pontijiet tal-midja jwaqqfu x-xogħol u jagħmlu t-tindif mingħajr ma jirrestawraw il-midja mhux ipproċessata lejn mira li hu magħruf li ma tappoġġjahiex.
+Mekkaniżmu ta' protezzjoni jindika "ebda bidla" billi jirritorna jew `void`, `{}`, jew
+`{ block: false }`. Meta jirritorna `modifiedPayload`/`modifiedResponse`, jissostitwixxi
+l-valur li jgħaddi mill-katina għall-mekkaniżmi ta' protezzjoni sussegwenti.
+`signal?: AbortSignal` iwassal iċ-ċiklu tal-ħajja ta' min jagħmel is-sejħa lill-mekkaniżmi ta' protezzjoni. L-annullament ta' talba huwa l-eċċezzjoni intenzjonata li tippermetti l-passaġġ f'każ ta' falliment: il-pontijiet tal-midja jwaqqfu x-xogħol u jwettqu t-tindif mingħajr ma jirrestawraw il-midja mhux ipproċessata għal destinazzjoni li hu magħruf li ma tappoġġjahiex.
 
 ## Reġistru (`registry.ts`)
 
-Is-singleton `guardrailRegistry` jesponi:
+L-istanza unika `guardrailRegistry` tesponi:
 
-- `register(guardrail)` — iżid guardrail (jew jissostitwih skont l-isem normalizzat) u
-  jerġa' jordna skont `priority` axxendenti.
-- `clear()` / `list()` — għodod ta' għajnuna amministrattivi.
-- `runPreCallHooks(payload, context)` — jgħaddi mill-guardrails attivi, jgħaddi l-
-  payload minn `modifiedPayload`, u jieqaf mal-ewwel `block: true`.
-- `runPostCallHooks(response, context)` — l-istess fluss fuq in-naħa tar-rispons.
+- `register(guardrail)` — iżid (jew jissostitwixxi skont l-isem normalizzat) mekkaniżmu ta' protezzjoni u
+  jerġa' jordna skont `priority` f'ordni axxendenti.
+- `clear()` / `list()` — funzjonijiet awżiljarji amministrattivi.
+- `runPreCallHooks(payload, context)` — jgħaddi mill-mekkaniżmi ta' protezzjoni attivi, jgħaddi l-
+  payload minn wieħed għall-ieħor permezz ta' `modifiedPayload`, u jieqaf mal-ewwel `block: true`.
+- `runPostCallHooks(response, context)` — l-istess fluss fuq in-naħa tar-risposta.
 - `resetGuardrailsForTests({ registerDefaults })` — ineħħi l-istat u, b'mod fakultattiv,
-  jerġa' jirreġistra l-valuri predefiniti għal iżolament nadif tat-testijiet.
+  jerġa' jirreġistra l-valuri prestabbiliti għal iżolament nadif tat-testijiet.
 
-Iż-żewġ runners jirritornaw `{ blocked, payload|response, results, guardrail?, message? }`
-fejn `results` huwa array ta' rekords `GuardrailExecutionResult` li jinkludu
-l-fields `blocked`, `skipped`, `modified`, `error`, u `meta` għal kull guardrail,
+Iż-żewġ eżekuturi jirritornaw `{ blocked, payload|response, results, guardrail?, message? }`
+fejn `results` hija firxa ta' rekords `GuardrailExecutionResult` li jinkludu
+l-oqsma `blocked`, `skipped`, `modified`, `error`, u `meta` għal kull mekkaniżmu ta' protezzjoni,
 utli għat-traċċar.
 
-### Diżattivazzjoni tal-Guardrails Għal Kull Talba
+### Diżattivazzjoni tal-Mekkaniżmi ta' Protezzjoni għal Kull Talba
 
-`resolveDisabledGuardrails({ apiKeyInfo, body, headers })` jiġbor lista
-mingħajr duplikati ta' ismijiet ta' guardrails li għandhom jinqabżu għat-talba
-attwali. Is-sorsi (kollha fakultattivi, kollha magħquda) huma:
+`resolveDisabledGuardrails({ apiKeyInfo, body, headers })` jiġbor
+lista mingħajr duplikati ta' ismijiet ta' mekkaniżmi ta' protezzjoni li għandhom jinqabżu għat-talba
+attwali. Hemm ħames kanali, li jinqraw f'din l-ordni u jingħaqdu f'lista waħda
+(l-ewwel okkorrenza tieħu preċedenza meta jitneħħew id-duplikati):
 
-- `apiKeyInfo.disabledGuardrails`
-- `disabledGuardrails` fil-body tat-talba (fl-ogħla livell)
-- `metadata.disabledGuardrails` fil-body tat-talba
-- Il-header `x-omniroute-disabled-guardrails` (jew dak legat
-  `x-disabled-guardrails`)
+1. `apiKeyInfo.disabledGuardrails`
+2. `disabledGuardrails` fil-korp tat-talba (fl-ogħla livell)
+3. `metadata.disabledGuardrails` fil-korp tat-talba (biss meta `metadata` ikun oġġett)
+4. Header `x-omniroute-disabled-guardrails`
+5. Header preċedenti `x-disabled-guardrails`
 
-Il-valuri jistgħu jkunu arrays ta' strings jew string separata b'virgoli; l-ismijiet jiġu
-normalizzati għal kebab-case b'ittri żgħar (`pii_masker` → `pii-masker`). Ir-riżultat
-jgħaddi permezz ta' `context.disabledGuardrails` lir-reġistru, li jaqbeż
-il-guardrails korrispondenti (`skipped: true` f'`results`).
+Il-ħames kanali kollha jingħaqdu, inklużi ż-żewġ headers: jekk jintbagħtu kemm
+`x-omniroute-disabled-guardrails` kif ukoll `x-disabled-guardrails`, tinqabeż l-unjoni
+tal-listi tagħhom, u header modern vojt ma jibqax jaħbi dak preċedenti
+([#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412), ikkoreġut f'
+[#16805](https://github.com/diegosouzapw/OmniRoute/pull/16805)).
+
+Il-valuri jistgħu jkunu firxiet ta' strings jew string separata b'virgoli; jitneħħew l-ispazji mit-truf tal-ismijiet
+u dawn jiġu normalizzati għal kebab-case b'ittri żgħar (`pii_masker` → `pii-masker`), u l-entrati
+vojta jitneħħew. Ir-riżultat jgħaddi permezz ta' `context.disabledGuardrails`
+lir-reġistru, li jaqbeż il-mekkaniżmi ta' protezzjoni li jaqblu (`skipped: true` f'`results`).
+
+Il-lista ta' diżattivazzjoni taffettwa biss ir-**reġistru**. Il-modalità `block` għall-injezzjoni ta' prompts hija
+konfini obbligatorju: il-middleware tal-protezzjoni mill-injezzjoni
+(`src/middleware/promptInjectionGuard.ts`) isejjaħ `evaluatePromptInjection()`
+mingħajr ebda lista ta' diżattivazzjoni kkontrollata minn min jagħmel is-sejħa (is-sejħa bla effett
+`resolveDisabledGuardrails({ body })` li kien jagħmel tneħħiet f'
+[#16934](https://github.com/diegosouzapw/OmniRoute/pull/16934)), għalhekk talba
+li tiddiżattiva `prompt-injection` xorta tiġi miċħuda fil-modalità `block`. Dan huwa
+intenzjonat. Il-kanali ta' diżattivazzjoni huma kkontrollati minn min jagħmel is-sejħa (il-korp tat-talba,
+il-metadata, il-headers), u min jagħmel is-sejħa m'għandux ikun jista' jitfi kontroll
+tas-sigurtà stabbilit mill-operatur
+([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)). L-unjoni tal-headers minn
+[#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412)
+tbiddel biss liema mekkaniżmi ta' protezzjoni tar-reġistru jinqabżu; ma tippermettix lil klijent
+jevita l-middleware. Il-politiki obbligatorji tal-mekkaniżmi ta' protezzjoni għal kull ċavetta u għal kull grupp huma
+segwiti fl-RFC v4 [#16417](https://github.com/diegosouzapw/OmniRoute/issues/16417).
+Ara [Kopertura u limiti](#coverage-and-limits).
 
 ## Ordni tal-Eżekuzzjoni
 
 Għal kull talba li tgħaddi minn `src/sse/handlers/chat.ts` u
-`open-sse/handlers/chatCore.ts`:
+`open-sse/handlers/chatCore.ts` (ir-rotot tal-familja taċ-chat elenkati taħt
+[Kopertura u limiti](#coverage-and-limits)):
 
-1. `resolveDisabledGuardrails(...)` jibni l-lista ta’ elementi li għandhom jinqabżu mill-API key, mill-body,
+1. `resolveDisabledGuardrails(...)` jibni l-lista ta' dawk li għandhom jinqabżu miċ-ċavetta tal-API, mill-korp,
    u mill-headers.
-2. `guardrailRegistry.runPreCallHooks(body, ctx)` iħaddem il-guardrails f’ordni axxendenti
-   ta’ prijorità:
-   - Il-guardrails diżattivati jiġu rreġistrati bħala `skipped`.
-   - Il-`preCall` ta’ kull guardrail jista’ jerġa’ jikteb il-payload permezz ta’ `modifiedPayload`.
-   - L-ewwel `block: true` iwaqqaf il-katina immedjatament u l-handler jirritorna
-     risposta ta’ rifjut mill-guardrail.
-3. Il-payload (li potenzjalment ikun inkiteb mill-ġdid) jgħaddi għar-routing ikkombinat u
-   għad-dispatch upstream.
-4. Wara li tiġi assemblata r-risposta, `guardrailRegistry.runPostCallHooks(...)`
-   iħaddem l-istess katina fuq ir-risposta. `block: true` hawnhekk iwarrab ir-risposta
-   upstream.
+2. `guardrailRegistry.runPreCallHooks(body, ctx)` iħaddem il-mekkaniżmi ta' protezzjoni f'ordni
+   axxendenti ta' prijorità:
+   - Il-mekkaniżmi ta' protezzjoni diżattivati jiġu rreġistrati bħala `skipped`.
+   - Il-`preCall` ta' kull mekkaniżmu ta' protezzjoni jista' jikteb mill-ġdid il-payload permezz ta' `modifiedPayload`.
+   - L-ewwel `block: true` iwaqqaf il-katina minnufih u l-handler jirritorna
+     rispons ta' rifjut mill-mekkaniżmu ta' protezzjoni.
+3. Il-payload (possibbilment miktub mill-ġdid) jgħaddi għar-routing combo u jintbagħat
+   lejn is-servizz upstream.
+4. **Għal risponsi mhux bi streaming biss:** wara li r-rispons jiġi assemblat,
+   `guardrailRegistry.runPostCallHooks(...)` iħaddem l-istess katina fuq
+   ir-rispons. `block: true` hawnhekk jarmi r-rispons upstream u jirritorna HTTP 400. Ir-risponsi bi streaming jaqbżu dan il-pass għalkollox.
 
-Guardrails li joħolqu eċċezzjoni jiġu rreġistrati b’`error: <message>` u jiddaħħlu fil-log permezz ta’
-`logger.warn`, iżda l-katina tkompli — bid-disinn, f’każ ta’ falliment tippermetti li l-proċess ikompli.
+Il-mekkaniżmi ta' protezzjoni li jitfgħu eċċezzjoni jiġu rreġistrati b'`error: <message>` u l-avveniment jiġi lloggjat permezz ta'
+`logger.warn`, iżda l-katina tkompli — id-disinn jippermetti li l-ipproċessar ikompli f'każ ta' żball.
+
+## Kopertura u limiti
+
+Ir-reġistru tal-mekkaniżmi ta' protezzjoni huwa integrat fil-pipeline taċ-chat biss. Dawn il-limiti huma
+ffissati minn `tests/unit/guardrail-pipeline-wiring-characterization.test.ts` u
+`tests/unit/guardrail-pipeline-characterization.test.ts`; aġġorna dawk it-testijiet
+b'mod intenzjonat meta tinbidel l-imġiba.
+
+### Fejn jitħaddmu l-hooks
+
+| Hook / kontroll                                             | Jitħaddem fuq                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runPreCallHooks`                                           | Talbiet immaniġġjati minn `handleChat` (`src/sse/handlers/chat.ts`): `/v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/responses` (u `/v1/responses/*`), `/v1/relay/chat/completions`, `/v1/providers/{provider}/chat/completions`, `/v1/api/chat`, `/v1/antigravity`, `/v1beta/models/*`, u l-proxy taċ-chat ta' Telegram. Ukoll l-endpoint tal-ittestjar tad-dashboard `/api/guardrails/test`. Blokk qabel is-sejħa jirritorna HTTP 400. |
+| `runPostCallHooks`                                          | Risponsi taċ-chat **mhux bi streaming** biss (`open-sse/handlers/chatCore/nonStreamingResponse.ts`). Ir-risponsi bi streaming qatt ma jaslu għalih.                                                                                                                                                                                                                                                                                                      |
+| PII bi streaming                                            | `createPiiSseTransform` (`src/lib/streamingPiiTransform.ts`), imqabbad fil-pipeline f'`streamingPipeline.ts` meta `PII_RESPONSE_SANITIZATION` ikun attivat. Mhuwiex mekkaniżmu ta' protezzjoni, għalhekk il-kanali ta' diżattivazzjoni ma jaffettwawhx.                                                                                                                                                                                                  |
+| Middleware ta' protezzjoni kontra l-injezzjoni (preċedenti) | Kull rotta `/v1` li ġġorr prompt, inklużi dawk tal-familja taċ-chat (ara [kopertura tar-rotot](#injection-guard-route-coverage--red-team-phase-8--block-d)). Injezzjoni ta' prompts biss.                                                                                                                                                                                                                                                                |
+
+### X'mhuwiex kopert
+
+- **Ir-rotot tal-midja, tal-embeddings u tad-data** (`/v1/images/*`, `/v1/embeddings`,
+  `/v1/audio/*`, `/v1/videos/generations`, `/v1/music/generations`,
+  `/v1/rerank`, `/v1/search`, `/v1/moderations`) qatt ma jaslu fir-reġistru. Ebda
+  ħabi ta' PII, ħabi ta' kredenzjali jew pont bejn il-modalitajiet ma jitħaddem hemmhekk. L-unika
+  verifika tagħhom hija l-middleware preċedenti ta' protezzjoni kontra l-injezzjoni.
+- **Ir-risponsi bi streaming** ma jirċievu ebda mekkaniżmu ta' protezzjoni wara s-sejħa: ebda `pii-masker` jew
+  `credential-masker` wara s-sejħa, u ebda blokk wara s-sejħa. Tapplika biss it-trasformazzjoni tal-PII
+  bi streaming (meta `PII_RESPONSE_SANITIZATION` ikun attivat). Kredenzjal
+  ripetut lura f'rispons bi streaming ma jiġix moħbi.
+- **Il-kanali ta' diżattivazzjoni kontra l-middleware (skont id-disinn):** il-middleware jevalwa
+  l-injezzjoni ta' prompts bis-sejħa tiegħu stess lil `evaluatePromptInjection()`, mingħajr ma
+  jgħaddi xi lista ta' diżattivazzjoni kkontrollata minn min jagħmel is-sejħa. Il-modalità `block` hija
+  konfini obbligatorju li d-diżattivazzjonijiet ikkontrollati minn min jagħmel is-sejħa ma jistgħux jaqbżu, inkluż fuq ir-rotot tal-familja taċ-chat
+  ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)). Id-diżattivazzjoni ta'
+  `prompt-injection` taqbeż biss il-mekkaniżmu ta' protezzjoni tar-reġistru.
+
+### X'jara rispons qabel il-fażi ta' wara s-sejħa
+
+Fil-mogħdija mhux bi streaming l-ordni hija: estrazzjoni tal-memorja → eżekuzzjoni tal-għodod
+integrati → mekkaniżmi ta' protezzjoni wara s-sejħa → ħruġ minħabba blokk wara s-sejħa → ħażna fil-cache semantiku.
+
+- **L-estrazzjoni tal-memorja** u **l-eżekuzzjoni tal-għodod** jaraw ir-risposta qabel ma l-miżuri ta’ protezzjoni ta’ wara s-sejħa
+  jkunu jistgħu jiktbuha mill-ġdid jew jimblukkawha. Minn
+  [#16401](https://github.com/diegosouzapw/OmniRoute/pull/16401), l-estrazzjoni
+  tal-memorja tgħaddi t-test estratt minn `sanitizePII` meta
+  `PII_RESPONSE_SANITIZATION` ikun attivat (kemm bi streaming kif ukoll mingħajru), iżda
+  risposta li aktar tard tiġi mblukkata wara s-sejħa tkun xorta waħda diġà ġiet offruta lill-memorja u
+  lill-għodod.
+- **Il-cache semantika** taħżen ir-risposta wara l-ipproċessar ta’ wara s-sejħa, għalhekk taħżen
+  ir-risposta miktuba mill-ġdid, u risposta mblukkata qatt ma tinħażen fil-cache. L-entrati fil-cache huma
+  identifikati skont iċ-ċavetta tal-API.
 
 ## Konfigurazzjoni
 
-Varjabbli tal-ambjent moqrija mill-guardrails integrati:
+Varjabbli tal-ambjent li jinqraw mill-mekkaniżmi ta’ protezzjoni integrati:
 
-| Varjabbli                             | Użata minn                | Effett                                                                                                                        |
-| ------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`        | Issettja għal `false` biex tiddiżattiva kompletament id-detezzjoni.                                                           |
-| `INPUT_SANITIZER_MODE`                | `prompt-injection`        | Politika tal-injezzjoni: `warn`, `block`, jew `log`. Il-valur legacy `redact` ma jerġax jikteb it-test tal-injezzjoni.        |
-| `INJECTION_GUARD_MODE`                | `prompt-injection`        | Modalità għall-guard tal-injezzjoni; huwa wkoll feature flag fid-DB li **jissostitwixxi** l-varjabbli tal-ambjent (DB > ENV). |
-| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`        | Is-severità minima li `MODE=block` jirrifjuta: `high` (default), `medium`, jew `low`.                                         |
-| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`        | Alias legacy għal `INPUT_SANITIZER_BLOCK_THRESHOLD`.                                                                          |
-| `PII_REDACTION_ENABLED`               | `pii-masker`              | Meta jkun `true`, il-PII tat-talba jiġi redatt (indipendentement mill-modalità tal-injezzjoni).                               |
-| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (downstream) | Jikkontrolla l-imġiba tal-masker fuq in-naħa tar-risposta.                                                                    |
+| Varjabbli                             | Użata minn                           | Effett                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`                   | Issettja għal `false` biex tiddiżattiva kompletament l-identifikazzjoni.                                                                                 |
+| `INPUT_SANITIZER_MODE`                | `prompt-injection`                   | Politika tal-injezzjoni: `warn`, `block`, jew `log`. Il-valur preċedenti `redact` ma jiktebx mill-ġdid it-test tal-injezzjoni.                           |
+| `INJECTION_GUARD_MODE`                | `prompt-injection`                   | Modalità għall-protezzjoni kontra l-injezzjoni; ukoll indikatur ta’ funzjonalità fid-DB li **jieħu preċedenza fuq** il-varjabbli tal-ambjent (DB > ENV). |
+| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`                   | Is-severità minima li `MODE=block` tirrifjuta: `high` (predefinita), `medium`, jew `low`.                                                                |
+| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`                   | Isem alternattiv preċedenti għal `INPUT_SANITIZER_BLOCK_THRESHOLD`.                                                                                      |
+| `PII_REDACTION_ENABLED`               | `pii-masker`                         | Meta jkun `true`, il-PII fit-talba tiġi mgħottija (indipendentement mill-modalità tal-injezzjoni).                                                       |
+| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (fi stadju sussegwenti) | Jikkontrolla l-imġiba tal-mekkaniżmu tal-masking min-naħa tar-rispons.                                                                                   |
 
-Il-guardrails tal-Modality Bridge jaqraw il-konfigurazzjoni waqt l-eżekuzzjoni mill-ħażna tas-settings
-ibbażata fuq id-DB (`getSettings()`), mhux mill-varjabbli tal-ambjent. Il-keys primarji ta’ Vision huma
+Il-mekkaniżmi ta’ protezzjoni ta’ Modality Bridge jaqraw il-konfigurazzjoni waqt l-eżekuzzjoni mill-ħażna
+tas-settings appoġġjata minn DB (`getSettings()`), mhux mill-varjabbli tal-ambjent. Iċ-ċwievet primarji ta’ Vision huma
 `modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`,
 `modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`,
 `modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`,
 `modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`,
 `modalityBridgeCacheEnabled`, `modalityBridgeCacheTtlMinutes`, u
-`modalityBridgeCacheMaxEntries`. Il-keys legacy
-`visionBridge*` jiġu aċċettati biss bħala l-fallback dokumentat għall-qari għal ċiklu wieħed;
-il-kitbiet mid-dashboard jużaw il-keys primarji. Il-valuri default u r-resolver tal-fallback
-jinsabu f’`src/shared/constants/modalityBridgeDefaults.ts`, filwaqt li l-kostanti legacy
-jinżammu f’`src/shared/constants/visionBridgeDefaults.ts`.
+`modalityBridgeCacheMaxEntries`. Iċ-ċwievet preċedenti
+`visionBridge*` jiġu aċċettati biss bħala l-alternattiva dokumentata għall-qari
+għal ċiklu wieħed; il-kitbiet mid-dashboard jużaw iċ-ċwievet primarji. Il-valuri predefiniti u r-riżolvitur
+tal-alternattiva jinsabu f’`src/shared/constants/modalityBridgeDefaults.ts`, filwaqt li l-kostanti
+preċedenti jinżammu f’`src/shared/constants/visionBridgeDefaults.ts`.
 
 Audio juża `modalityBridgeAudioEnabled`, `modalityBridgeAudioModel`,
 `modalityBridgeAudioTimeout`, u `modalityBridgeAudioMaxClips`, flimkien mas-settings kondiviżi
-`modalityBridgeCache*`. Audio m’għandux fallback għal keys legacy minħabba li dawn
-il-keys ġew introdotti mal-iskema tal-Modality Bridge.
+`modalityBridgeCache*`. Audio m’għandux alternattiva li tuża ċwievet preċedenti għax dawn
+iċ-ċwievet ġew introdotti mal-iskema ta’ Modality Bridge.
 
 Video juża `modalityBridgeVideoEnabled`, `modalityBridgeVideoAnalysisMode`,
 `modalityBridgeVideoModel`,
 `modalityBridgeVideoFrameCount`, `modalityBridgeVideoSamplingPolicy`,
 `modalityBridgeVideoMaxVideos`, u
 `modalityBridgeVideoTimeout`, flimkien mas-settings kondiviżi `modalityBridgeCache*`.
-Huwa diżattivat b’mod default minħabba li FFmpeg/ffprobe huma dipendenzi operazzjonali
-fakultattivi u l-ħolqien ta’ captions għall-frames iżid il-latenza u l-ispiża tal-mudell.
+Huwa diżattivat b’mod predefinit għax FFmpeg/ffprobe huma dipendenzi operattivi
+fakultattivi u l-ġenerazzjoni ta’ deskrizzjonijiet għall-frejms iżżid il-latenza u l-ispiża tal-mudell.
 
-## Guardrails Personalizzati
+## Miżuri ta’ Protezzjoni Personalizzati
 
 ```typescript
 import { BaseGuardrail, guardrailRegistry } from "@/lib/guardrails";
@@ -895,9 +1051,9 @@ Passi:
 
 1. Oħloq `src/lib/guardrails/myGuardrail.ts` li jestendi `BaseGuardrail`.
 2. Implimenta `preCall` u/jew `postCall`.
-3. Jew irreġistrah waqt l-importazzjoni (żidu minn `registerDefaultGuardrails`) jew
+3. Jew irreġistra fil-ħin tal-importazzjoni (żid minn `registerDefaultGuardrails`) jew
    sejjaħ `guardrailRegistry.register(...)` waqt l-eżekuzzjoni — ir-reġistru jissostitwixxi
-   kwalunkwe guardrail preċedenti bl-istess isem normalizzat.
+   kwalunkwe miżura ta’ protezzjoni preċedenti bl-istess isem normalizzat.
 4. Żid testijiet taħt `tests/unit/` (eżempji eżistenti:
    `tests/unit/guardrails-registry.test.ts`,
    `tests/unit/prompt-injection-guard.test.ts`,
@@ -907,55 +1063,56 @@ Passi:
 
 Uża `resetGuardrailsForTests()` bejn it-testijiet biex tibda minn stat magħruf.
 Għaddi `{ registerDefaults: false }` biex tibda b’reġistru vojt u
-rreġistra biss il-guardrails li qed jiġu ttestjati. Vision Bridge jaċċetta l-injezzjoni
-tad-dipendenzi (`deps.getSettings`, `deps.callVisionModel`); Audio Bridge jesponi
-l-punti ta’ separazzjoni ekwivalenti għas-settings, il-kapaċitajiet, l-għażla tal-mudell STT, il-kontrolli
-tal-kredenzjali, u t-traskrizzjoni. Għalhekk, it-testijiet jistgħu jeżerċitaw iż-żewġ flussi mingħajr aċċess
+tirreġistra biss il-miżuri ta’ protezzjoni li qed jiġu ttestjati. Vision Bridge jaċċetta l-injezzjoni
+tad-dipendenzi (`deps.getSettings`, `deps.callVisionModel`); Audio Bridge jesponi l-punti
+ekwivalenti għall-konfigurazzjoni, il-kapaċitajiet, l-għażla tal-mudell STT, il-verifiki
+tal-kredenzjali, u t-traskrizzjoni. Għalhekk it-testijiet jistgħu jeżerċitaw iż-żewġ flussi mingħajr aċċess
 għad-DB jew għan-network.
 
 ## Ara Wkoll
 
 - `src/lib/guardrails/` — implimentazzjoni
-- `src/shared/utils/inputSanitizer.ts` — detettur kondiviż li jħaddem
-  il-protezzjoni kontra l-injezzjoni fil-prompt u l-maskra tal-PII
-- `src/shared/constants/visionBridgeDefaults.ts` — valuri predefiniti ta’ Vision Bridge u
-  lista ta’ mudelli b’bridge obbligatorju
-- `src/shared/constants/modalityBridgeDefaults.ts` — valuri predefiniti kondiviżi waqt l-eżekuzzjoni għal Vision/Audio
+- `src/shared/utils/inputSanitizer.ts` — rilevatur kondiviż li jħaddem
+  is-sejbien tal-injezzjoni fil-prompts u l-maskraġġ tal-PII
+- `src/shared/constants/visionBridgeDefaults.ts` — valuri prestabbiliti ta’ Vision Bridge u
+  lista ta’ mudelli li għalihom l-użu tal-bridge huwa obbligatorju
+- `src/shared/constants/modalityBridgeDefaults.ts` — valuri prestabbiliti kondiviżi ta’ Vision/Audio waqt l-eżekuzzjoni
 - `docs/architecture/RESILIENCE_GUIDE.md` — saff ortogonali (circuit breaker, perjodi ta’ stennija)
-- `docs/reference/ENVIRONMENT.md` — referenza sħiħa tal-varjabbli tal-ambjent
+- `docs/reference/ENVIRONMENT.md` — referenza sħiħa għall-varjabbli tal-ambjent
 
-## Kopertura tar-rotot tal-protezzjoni kontra l-injezzjoni u red-team (Fażi 8 · Blokka D)
+## Kopertura tar-rotot mill-protezzjoni kontra l-injezzjoni u ttestjar red-team (Fażi 8 · Blokk D)
 
 Il-protezzjoni kontra l-injezzjoni (`createInjectionGuard` / `withInjectionGuard`) tkopri r-rotot kollha
-li jaċċettaw prompts tal-utenti. Tirrispetta `INJECTION_GUARD_MODE` (il-valur predefinit `warn` = tirreġistra biss;
-`block` = tirritorna HTTP 400 `SECURITY_001`).
+li jaċċettaw prompts tal-utent. Hija tirrispetta `INJECTION_GUARD_MODE` (il-valur prestabbilit `warn` = reġistrazzjoni biss;
+`block` = jirritorna HTTP 400 `SECURITY_001`).
 
-| Tip              | Rotot                                                                                                                                                | Modalità predefinita |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Test (eżistenti) | `/v1/chat/completions`, `/v1/completions`, `/v1/relay/chat/completions`                                                                              | warn                 |
-| Ġenerattiv       | `/v1/messages`, `/v1/responses`, `/v1/images/generations`, `/v1/images/edits`, `/v1/videos/generations`, `/v1/music/generations`, `/v1/audio/speech` | warn                 |
-| Data             | `/v1/embeddings`, `/v1/rerank`, `/v1/search`, `/v1/moderations`                                                                                      | warn                 |
+| Tip              | Rotot                                                                                                                                                | Modalità prestabbilita |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Test (eżistenti) | `/v1/chat/completions`, `/v1/completions`, `/v1/relay/chat/completions`                                                                              | warn                   |
+| Ġenerattiv       | `/v1/messages`, `/v1/responses`, `/v1/images/generations`, `/v1/images/edits`, `/v1/videos/generations`, `/v1/music/generations`, `/v1/audio/speech` | warn                   |
+| Data             | `/v1/embeddings`, `/v1/rerank`, `/v1/search`, `/v1/moderations`                                                                                      | warn                   |
 
 L-estrazzjoni tat-test (`extractMessageContents`) tkopri `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system`.
 
-**Red-team (kull lejl, `nightly-llm-security.yml`):** promptfoo jivvalida li kull rotta timblokka
-l-korpus OWASP-LLM meta `INJECTION_GUARD_MODE=block`; garak iħaddem probes (jinqabeż mingħajr secret).
-`moderations` huwa inkluż għall-konsistenza — l-operaturi fil-modalità ta’ mblukkar jistgħu jeżentawh permezz ta’
-`resolveDisabledGuardrails`.
+**Ittestjar red-team (kull lejl, `nightly-llm-security.yml`):** promptfoo jivvalida li kull rotta timblokka
+l-korpus OWASP-LLM meta `INJECTION_GUARD_MODE=block`; garak iwettaq testijiet ta’ sondaġġ (jinqabżu jekk ma jkunx hemm sigriet).
+`moderations` huwa inkluż għall-konsistenza. Il-modalità ta’ mblukkar hija limitu obbligatorju: `evaluatePromptInjection()`
+jinjora l-lista ta’ diżattivazzjoni għal kull talba li jgħaddilu l-middleware, għalhekk `disabledGuardrails`
+**ma** jeżentax rotta minnha ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)).
 
-Il-workflow ta’ kull lejl (`.github/workflows/nightly-llm-security.yml`, cron + attivazzjoni
-manwali) għandu żewġ jobs:
+Il-fluss tax-xogħol ta’ kull lejl (`.github/workflows/nightly-llm-security.yml`, cron + attivazzjoni
+manwali) għandu żewġ kompiti:
 
-- **`promptfoo-guard` (blokkanti)** — iħaddem `promptfoo eval -c promptfooconfig.yaml`
-  b’`INJECTION_GUARD_MODE=block`. Kull każ avversarju (eż. "ignore all
-  previous instructions…", jailbreaks tal-istil DAN) jivverifika li r-risposta ġġorr
-  `error.code === "SECURITY_001"`, jiġifieri li l-protezzjoni fil-fatt irrifjutat it-talba.
+- **`promptfoo-guard` (jimblokka)** — iħaddem `promptfoo eval -c promptfooconfig.yaml`
+  b’`INJECTION_GUARD_MODE=block`. Kull każ avversarju (eż. "injora l-istruzzjonijiet
+  preċedenti kollha…", tentattivi ta’ qbiż tar-restrizzjonijiet stil DAN) jivverifika li r-rispons fih
+  `error.code === "SECURITY_001"`, jiġifieri li l-protezzjoni tassew irrifjutat it-talba.
 - **`garak` (konsultattiv)** — iħaddem garak `--probes promptinject,dan,leakreplay`
-  kontra istanza lokali ta’ OmniRoute (`http://localhost:20128/v1`). Huwa kkundizzjonat minn
-  secret tal-fornitur (`PROMPTFOO_PROVIDER_KEY`); jinqabeż mingħajr problemi u għandu s-suffiss
-  `|| true`, għalhekk jirrapporta mingħajr ma jfalli s-CI.
+  kontra istanza lokali ta’ OmniRoute (`http://localhost:20128/v1`). Jiddependi fuq
+  sigriet tal-fornitur (`PROMPTFOO_PROVIDER_KEY`); jinqabeż mingħajr żball u jiġi segwit minn
+  `|| true`, sabiex jirrapporta mingħajr ma jfalli s-CI.
 
-Il-kopertura tal-helper tal-protezzjoni (`createInjectionGuard` / `withInjectionGuard`)
-testendi għal kull rotta `/v1` li ġġorr prompt; it-test tal-prompt jittieħed minn
-`messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` minn
+Il-kopertura tal-funzjoni awżiljarja tal-protezzjoni (`createInjectionGuard` / `withInjectionGuard`)
+tinkludi kull rotta `/v1` li ġġorr prompt; it-test tal-prompt jittieħed minn
+`messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` permezz ta’
 `extractMessageContents()` f’`src/shared/utils/inputSanitizer.ts`.
