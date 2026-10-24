@@ -4,23 +4,29 @@
 
 ---
 
-> **ዋና የእውነት ምንጭ:** `src/lib/guardrails/`
-> **መጨረሻ የተዘመነው:** 2026-08-29 — v3.8.51 (የVideo Bridge ትራንስክሪፕት መነሻ በጠሪው የሚገለጽ ነው፣
-> እስካሁን በሰርቨሩ አልተረጋገጠም — በ#11661 መሠረት ግልጽ ተደርጓል)
+> **የትክክለኛ መረጃ ምንጭ:** `src/lib/guardrails/`
+> **መጨረሻ የተዘመነው:** 2026-10-17 — v3.8.52 ([ሽፋን እና ገደቦች](#coverage-and-limits) ተጨምሯል፦
+> hooks የሚደርሱባቸው መንገዶች እና የምላሽ መንገዶች፣ የተዋሃዱ የማሰናከያ headers (#16412)፣ injection
+> block mode እንደ አስገዳጅ ድንበር (#16413)፣ እና ከpost-call በፊት ምላሽን የሚመለከተው ምን እንደሆነ)
 
-Guardrails በOmniRoute እና በላይኛ ደረጃ አቅራቢዎች መካከል ባለው ወሰን ላይ
-ደኅንነትን፣ ፖሊሲን እና የይዘት ለውጦችን ያስፈጽማሉ። እያንዳንዱ guardrail
-የጥያቄ payload-ዎችን (`preCall`) እና የላይኛ ደረጃ ምላሾችን (`postCall`)
-መመርመር (እንዲሁም እንደአማራጭ ውድቅ ማድረግ፣ መለወጥ ወይም ማብራሪያ መጨመር) ይችላል።
+Guardrails በOmniRoute እና በupstream አቅራቢዎች መካከል ባለው ድንበር ላይ
+ደህንነትን፣ ፖሊሲን እና የይዘት ለውጦችን ያስፈጽማሉ። እያንዳንዱ guardrail
+የጥያቄ payloads (`preCall`) እና የupstream ምላሾችን (`postCall`)
+መመርመር (እና እንደ አማራጭ ውድቅ ማድረግ፣ መለወጥ ወይም ማብራሪያ መጨመር) ይችላል።
 
-ስርዓቱ **fail-open** ነው፦ guardrail በሚፈጸምበት ጊዜ exception ካስነሳ፣ registryው
-ጥያቄውን ከማሳካት ይልቅ ስህተቱን መዝግቦ ወደሚቀጥለው guardrail
-ይቀጥላል። ማገድ ግልጽ ውሳኔ (`block: true`) እንጂ በአጋጣሚ የሚከሰት አይደለም።
+ስርዓቱ **ስህተት ሲከሰት ክፍት ሆኖ ይቀጥላል**፦ guardrail በሚሠራበት ጊዜ ስህተት ቢያስነሳ፣ registry
+ጥያቄውን ከማስተጓጎል ይልቅ ስህተቱን ይመዘግባል እና ወደሚቀጥለው guardrail ይሄዳል።
+ማገድ ሆን ተብሎ የሚወሰን ውሳኔ ነው (`block: true`)፤ በአጋጣሚ አይከሰትም።
+ብቸኛው ልዩ ሁኔታ የተቋረጠ ጥያቄ ነው፦ የጥሪ አድራጊው `signal` ሲቋረጥ፣
+ስህተት የሚያስነሳ guardrail ከመዘለል ይልቅ የhook አፈጻጸሙን ውድቅ ያደርጋል።
 
-## አብሮገነብ ጠባቂዎች
+hooks በሁሉም መንገድ ወይም በሁሉም ምላሽ ላይ **አይሠሩም**። guardrailን እንደ
+የደህንነት መቆጣጠሪያ ከመጠቀምዎ በፊት [ሽፋን እና ገደቦች](#coverage-and-limits)ን ያንብቡ።
 
-መዝገቡ ስድስት ጠባቂዎችን በቅድሚያ ቅደም ተከተል በራስ-ሰር ይጭናል
-(ይመልከቱ `registry.ts` → `registerDefaultGuardrails()`):
+## አብረው የተካተቱ Guardrails
+
+registry ሲጫን ስድስት guardrailsን በቅድሚያ ተከተል በራስ-ሰር ይጭናል
+(`registry.ts` → `registerDefaultGuardrails()`ን ይመልከቱ)፦
 
 | ቅድሚያ | ስም                  | ደረጃ(ዎች)        | ፋይል                   |
 | ---- | ------------------- | -------------- | --------------------- |
@@ -31,75 +37,137 @@ Guardrails በOmniRoute እና በላይኛ ደረጃ አቅራቢዎች መካ�
 | `20` | `prompt-injection`  | `preCall`      | `promptInjection.ts`  |
 | `95` | `credential-masker` | `pre` + `post` | `credentialMasker.ts` |
 
-ዝቅተኛ የቅድሚያ ቁጥሮች **መጀመሪያ** ይሰራሉ።
+ዝቅተኛ የቅድሚያ ቁጥሮች **መጀመሪያ** ይሠራሉ።
 
-### ቪዥን ብሪጅ (`visionBridge.ts`) — ሞዳሊቲ ብሪጅ PR-1
+### Vision Bridge (`visionBridge.ts`) — Modality Bridge PR-1
 
-**የማይታዩ ሞዴሎችን** ያነጣጠሩ ምስል የያዙ ጥያቄዎችን ይይዛል እና ሙሉውን ጥያቄ ወደ ቪዥን-ችሎታ ላለው ሞዴል ያዞራል ወይም የምስል ክፍሎችን በሚዋቀር ቪዥን ሞዴል በተፈጠሩ የጽሑፍ መግለጫዎች ይተካል። ይህ ጽሑፍ-ብቻ አቅራቢዎች ባለብዙ-ሞዳል ጭነቶችን ግልጽ በሆነ መንገድ እንዲይዙ ያስችላቸዋል።
+የGLM 5.3 መሠረታዊ ሞዴል እና `glm-5.3-{low,high,max}` ግልጽ
+`supportsVision:false` የregistry/spec metadata አላቸው። የGLM 5.3 Flash ልዩነቶች
+በተፈጥሯቸው ምስል የሚደግፉ ሞዴሎች ሆነው ይቀጥላሉ። የClaude Code `/v1/messages` መንገድ
+ከClaude-ወደ-OpenAI ትርጉም **በፊት** ወደ የጋራ `handleChat` pre-call guardrail ሰንሰለት
+ይገባል፤ በውስጥ የተካተቱ የ`Read` tool-result ምስሎች ትርጉሙ ወደ OpenAI `image_url`
+ይዘት ከማዛወሩ በፊት መገለጽ ወይም መስተናገድ አለባቸው (#17069)።
 
-ፍሰት:
+**ምስል የማይደግፉ ሞዴሎች** ላይ የተመሩ ምስል ያካተቱ ጥያቄዎችን ይይዛል፤ ከዚያም
+ጥያቄውን በሙሉ ምስል ወደሚደግፍ ሞዴል ያዞራል ወይም ወደ upstream ጥሪ ከመሄዱ በፊት
+የምስል ክፍሎቹን በሚዋቀር የምስል ሞዴል በተፈጠሩ የጽሑፍ መግለጫዎች ይተካል።
+ይህ ጽሑፍ ብቻ የሚደግፉ አቅራቢዎች ባለብዙ የመረጃ ዓይነት payloadsን ያለ ተጨማሪ
+እርምጃ እንዲያስተናግዱ ያስችላቸዋል።
 
-1. ዒላማው ሞዴል አስቀድሞ ቪዥንን የሚደግፍ ከሆነ ዝለል (በግዳጅ-ብሪጅ ዝርዝር `isVisionBridgeForcedModel` ውስጥ ካልታየ በስተቀር)።
-2. የምስል ክፍሎችን በ `extractImageParts(messages)` (`visionBridgeHelpers.ts`) ያውጡ፣ ይህም በ `open-sse/utils/mediaParts.ts` ውስጥ ወደ **የተዋሃደ የሚዲያ መመርመሪያ** `detectMediaParts()` ያስተላልፋል — ከኮምቦ ተኳሃኝነት ማጣሪያ ጋር የሚጋራው ብቸኛው የእውነት ምንጭ። ማውጣት `replaceImageParts` ወደ ኋላ ሊያገናኘው ለሚችለው የቅርጾች ከፍተኛ ደረጃ ክፍሎች (የማውጣት↔መተካት ውል) ተፈቅዷል፡ OpenAI `image_url`፣ Anthropic base64 `source.type:"base64"`፣ Anthropic URL `source.type:"url"`፣ እና Responses API `input_image`። የተጠላለፉ ምቶች እና አመልካች-ብቻ ቅርጾች የኮምቦ-ማጣሪያ ቁሳቁስ ናቸው እና በጭራሽ አይወጡም። ምንም ካልተገኘ ዝለል።
-3. የሩጫ ጊዜ ውቅረትን በ `resolveVisionBridgeRuntimeSettings()` (`src/shared/constants/modalityBridgeDefaults.ts`) ይፍቱ፡ አዲስ `modalityBridge*` ቅንብሮች ቁልፎች ያሸንፋሉ፤ የቆዩ `visionBridge*` ቁልፎች **አንድ-ዑደት ምትኬ** (የመመለሻ መስኮት) ሆነው ይቆያሉ። ብሪጁ ሲሰናከል ከማንኛውም የሚዲያ ጉዞ በፊት ዝለል።
-4. ሁነታ መራጭ (`modalityBridgeVisionMode`፣ ከዚህ በታች ያለውን ሰንጠረዥ ይመልከቱ) ማዞርን ከማብራራት ጋር ይወስናል። ማዞር `modifiedPayload`ን በ `model` ብቻ በተለወጠው ይመልሳል፣ በተጨማሪም ሜታ `{ rerouted, fromModel, toModel, imagesKept }`።
-5. የማብራሪያ መንገድ፡ ምስሎችን በ `maxImages` ይገድቡ፣ ተግባር-ተኮር ጥያቄውን ያዘጋጁ፣ የማብራሪያ መሸጎጫውን ያማክሩ፣ የቪዥን ሞዴሉን **በተመሳሳይ ጊዜ** ይደውሉ (`Promise.allSettled`)፣ እና `[Image N]: <description>` የጽሑፍ ክፍሎችን በቦታቸው ያስገቡ። ያልተሳካ ማብራሪያ `null`ን ያስገኛል እና የመጀመሪያው የምስል ክፍል **ይጠበቃል** (#4012) — በኮምቦ ማብራሪያ መንገድ ላይ እያንዳንዱ ማብራሪያ ካልተሳካ በስተቀር፣ የተረጋገጠ የማይታይ የላይኛው ክፍል በምትኩ `(unavailable — no vision-capable provider connected)` ስተብ ያገኛል (#8430)።
-6. `modifiedPayload` + ሜታ (`imagesProcessed`፣ `descriptions`፣ `processingTimeMs`፣ `visionModel`) ይመልሱ።
+ፍሰት፦
 
-#### ሁነታ መራጭ (`modalityBridgeVisionMode`)
+1. የታለመው ሞዴል ምስልን አስቀድሞ የሚደግፍ ከሆነ ዝለል (በግድ እንዲያልፉ በተደረጉ
+   ሞዴሎች ዝርዝር `isVisionBridgeForcedModel` ውስጥ ካልተካተተ በስተቀር)።
+2. የምስል ክፍሎችን በ`extractImageParts(messages)`
+   (`visionBridgeHelpers.ts`) አውጣ፤ ይህም በ`open-sse/utils/mediaParts.ts` ውስጥ ላለው
+   **የተዋሃደ የሚዲያ መለያ** `detectMediaParts()` ሥራውን ያስተላልፋል — እሱም
+   ከcombo ተኳኋኝነት ማጣሪያ ጋር የሚጋራው ብቸኛ የትክክለኛ መረጃ ምንጭ ነው።
+   ማውጣቱ `replaceImageParts` መልሶ ሊያስገባቸው በሚችላቸው ቅርጾች ብቻ የተገደበ ነው
+   (የማውጣት↔መተካት ውል)፦ OpenAI `image_url`፣ Anthropic base64
+   `source.type:"base64"`፣ Anthropic URL `source.type:"url"` እና Responses
+   API `input_image`። በClaude Code `tool_result.content` እና Responses tool outputs
+   ውስጥ በውስጥ የተካተቱ ተዛማጅ ምስሎችም ከመጀመሪያ መገኛቸው ተወስደው በዚያው
+   ይተካሉ፤ አመልካች ብቻ የሆኑ ቅርጾች ለcombo ማጣሪያ የሚውሉ ናቸው እና አይወጡም።
+   ምንም ካልተገኘ ዝለል።
+3. በ`resolveVisionBridgeRuntimeSettings()`
+   (`src/shared/constants/modalityBridgeDefaults.ts`) የአሂድ ጊዜ ቅንብሮችን ወስን፦ አዲሶቹ
+   `modalityBridge*` የቅንብር ቁልፎች ቅድሚያ ያገኛሉ፤ የቆዩት `visionBridge*` ቁልፎች
+   **ለአንድ ዙር ብቻ የምትክ አማራጭ** ሆነው ይቀራሉ (ወደ ቀድሞ ሁኔታ የመመለሻ ጊዜ)።
+   bridge ከተሰናከለ፣ ማንኛውም የሚዲያ ፍለጋ ከመካሄዱ በፊት ዝለል።
+4. የmode መራጭ (`modalityBridgeVisionMode`፣ ከታች ያለውን ሰንጠረዥ ይመልከቱ)
+   ዳግም ማዞር ወይም መግለጽ እንደሚደረግ ይወስናል። ዳግም ማዞር `model` ብቻ
+   የተቀየረበትን `modifiedPayload` ከmeta `{ rerouted, fromModel, toModel, imagesKept }`
+   ጋር ይመልሳል።
+5. የመግለጽ መንገድ፦ ምስሎችን በ`maxImages` ገድብ፣ ለተግባሩ የሚስማማ መመሪያ አዘጋጅ፣
+   የመግለጫ cacheን ተጠቀም፣ የምስል ሞዴሉን **በትይዩ** ጥራ (`Promise.allSettled`)፣
+   እና በምስሎቹ ቦታ `[Image N]: <description>` የጽሑፍ ክፍሎችን አስገባ።
+   ያልተሳካ መግለጫ `null` ይመልሳል፦ ለማይታወቁ/ምስል የሚደግፉ ዒላማዎች
+   ያልተቀየረው ምስል ይጠበቃል (#4012)፤ ነገር ግን **ጽሑፍ ብቻ እንደሚደግፍ የተረጋገጠ
+   ቀጥተኛ ዒላማ** ወይም ምስል የማይደግፍ combo፣ በከፊል የተሳኩ ሙከራዎችን
+   እና ከመግለጫ ጥሪ ገደቡ በላይ ያሉ ምስሎችን ጨምሮ፣ ላልተገለጸ እያንዳንዱ ምስል
+   ግልጽ `(unavailable — no vision-capable provider connected)` የጽሑፍ ምትክ
+   ያገኛል (#17069)። ሁሉም መግለጫዎች ሲከሽፉ የሚጠቀመው ነባር የcombo መግለጫ
+   ምትክ አሁንም ይሠራል (#8430)።
+6. `modifiedPayload`ን ከmeta (`imagesProcessed`, `descriptions`,
+   `processingTimeMs`, `visionModel`) ጋር መልስ።
 
-| ሁነታ        | ነባሪ | ባህሪ                                                                                                                                                                           |
-| ---------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auto`     | ✔   | የቆየ ሂዩሪስቲክ፣ ያልተነካ (#6640/#7204)፡ ኮምቦ ያልሆኑ/`auto/` ሞዴሎች ወደ ምርጥ ቪዥን ሞዴል ያዞራሉ፣ የመጀመሪያው ሞዴል አስቀድሞ ጥቅም ላይ የሚውሉ ምስክርነቶች ከሌሉት በስተቀር (ከዚያ ያብራሩ)፤ የኮምቦ ዒላማዎች ሁልጊዜ ያብራራሉ።               |
-| `describe` |     | ሁልጊዜ ያብራሩ — የማዞሪያው ብሎክ ሙሉ በሙሉ ይዘለላል፤ ተጠቃሚው የመረጠው ሞዴል ሁልጊዜ ይመልሳል።                                                                                                              |
-| `reroute`  |     | ማዞርን ያስገድዱ፡ ምስክርነት ያለው ሞዴል ጠባቂ ይዘለላል። የማዞሪያ-**ዒላማ** ምስክርነት ጠባቂ አሁንም ይሠራል — ጥቅም ላይ የሚውል የቪዥን ዒላማ ከሌለ፣ ጥያቄው ወደ ማብራሪያ ይወድቃል ስለዚህ ጥሬ ምስሎች ጽሑፍ-ብቻ የኋላ-መጨረሻ ላይ በጭራሽ አይደርሱም (#8430)። |
+#### የmode መራጭ (`modalityBridgeVisionMode`)
 
-የግዳጅ ሁነታዎች የራስ-ሰር ሂዩሪስቲክ ከመሰራቱ **በፊት** አጭር-ዑደት ያደርጋሉ፤ `auto` ባህሪ ከPR-1 በፊት ከነበረው ጠባቂ ጋር ባይት-ተመሳሳይ ነው።
+| ሁነታ        | ነባሪ | ባህሪ                                                                                                                                                                                                 |
+| ---------- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`     | ✔   | የቀድሞው heuristic ሳይቀየር ይቆያል (#6640/#7204)፦ combo ያልሆኑ/`auto/` ሞዴሎች፣ የመጀመሪያው ሞዴል የሚሰሩ ማረጋገጫዎች ከሌሉት በስተቀር፣ ወደ ምርጡ የምስል ሞዴል ይመራሉ (ካሉት መግለጫ ይሰጣል)፤ combo መዳረሻዎች ሁልጊዜ መግለጫ ይሰጣሉ።                          |
+| `describe` |     | ሁልጊዜ መግለጫ ይሰጣል — የዳግም ማስተላለፍ ክፍሉ ሙሉ በሙሉ ይዘለላል፤ ተጠቃሚው የመረጠው ሞዴል ሁልጊዜ ምላሽ ይሰጣል።                                                                                                                       |
+| `reroute`  |     | ዳግም ማስተላለፍን ያስገድዳል፦ ማረጋገጫ ያለውን ሞዴል የማቆየት መከላከያ ይታለፋል። የዳግም ማስተላለፍ **መዳረሻ** ማረጋገጫ መከላከያ ግን አሁንም ይሠራል — የሚሠራ የምስል መዳረሻ ከሌለ፣ bridge መግለጫ ከመስጠት ወይም ጥሬ ምስሎችን ለጽሑፍ-ብቻ መዳረሻ ከመላክ ይልቅ ግልጽ ስህተት በመስጠት ያግዳል። |
 
-#### ተግባር-ተኮር የማብራሪያ ጥያቄ (`modalityBridgeVisionTaskAware`)
+በግድ የተመረጡ ሁነታዎች `auto` heuristic ከመሥራቱ **በፊት** ውሳኔ ያደርጋሉ፤ የ`auto` ባህሪ
+ከpre-PR-1 guardrail ጋር በባይት ደረጃ ተመሳሳይ ነው።
 
-ነባሪ **እውነት**። `composeVisionPrompt()` (`visionBridgeHelpers.ts`) የ**የመጨረሻውን የተጠቃሚ መልእክት** ጽሑፍ (እስከ 500 ቁምፊዎች የተቆረጠ) ከመሠረታዊ የማብራሪያ ጥያቄ ጋር ያያይዘዋል፣ መግለጫውን ተጠቃሚው በትክክል ወደጠየቀው ነገር (ኮዴክስ-ቪዥን-ፕሮክሲ ስርዓተ-ጥለት) ይመራል እና የቪዥን ሞዴሉን የሚታየውን ጽሑፍ እንዲገለብጥ ይጠይቃል። ባንዲራው ከጠፋ — ወይም የተጠቃሚ ጽሑፍ ከሌለ — መሠረታዊው ጥያቄ ሳይለወጥ ጥቅም ላይ ይውላል።
+#### የAPI ቁልፍ የመዳረሻ ወሰን (`visionBridgeKeyScope.ts`)
 
-የራስ-ሉፕ የራሱ OpenAI-ተኳሃኝ ጥያቄ (`callVisionModelSingle()`
-በ `visionBridgeHelpers.ts` ውስጥ) ሁልጊዜ `image_url.detail: "high"` ይጠይቃል —
-ያለ ምንም ቅድመ ሁኔታ፣ ለእያንዳንዱ ደዋይ/አቅራቢ፣ በማንኛውም የደንበኛ ምልክት ላይ ያልተገደበ።
-ዝቅተኛ-ዝርዝር ናሙና የ OCR ትክክለኛነትን በትክክል ለዚህ የጽሑፍ-ጽሑፍ ተግባር ያበላሻል
-ይህ ጥያቄ የሚጠይቀው፣ ስለዚህ የገለጻ ጥሪው ራሱ ሁልጊዜ ከፍተኛ ዝርዝር ይጠይቃል
-የመጀመሪያው ገቢ ጥያቄ የትኛውን የዝርዝር ደረጃ ቢጠቀምም ምንም ይሁን ምን። ይህ
-የውስጥ ገለጻ ጥያቄ አካልን ብቻ ነው የሚነካው፤ የደዋዩን የራሱን `image_url.detail`
-በዋናው ጥያቄ ላይ OmniRoute እንዴት እንደሚያስተላልፍ አይለውጥም —
-ያ ነባሪ ለየብቻ የሚተገበር ሲሆን፣ ለተገኙ OpenCode ደንበኞች ብቻ፣ በ
-`defaultImageDetail()` (`open-sse/handlers/chatCore/upstreamBody.ts`)። የ
-የገለጻ የራስ-ሉፕ የአንትሮፒክ ሽቦ-ቅርጸት ቅርንጫፍ `detail` መስክ የለውም
-እና በሁለቱም ነባሪዎች አይነካም።
+የጥሪው አድራጊ API ቁልፍ `allowedConnections`፣ የኮታ ስብስቦችን
+(`allowedQuotas`) ወይም ሞዴሎችን (`allowedModels` / `blockedModels` /
+`modelAccessMode: "restricted"` / `disableNonPublicModels`) የሚገድብ ከሆነ፣ bridge
+ቁልፉ ሊጠቀምባቸው የሚችላቸውን የዳግም ማስተላለፍ እና የመግለጫ ሞዴሎች ብቻ፣ ቁልፉ ሊጠቀምባቸው
+በሚችላቸው ግንኙነቶች ላይ ይመርጣል። የመግለጫ ጥሪው ከዚያ ሁልጊዜ በ
+`x-omniroute-self-loop-key-id` ራስጌ አማካኝነት በOmniRoute self-loop ውስጥ ያልፋል፤ ስለዚህ ጥያቄውን የሚቀበለው የውይይት ጥያቄ
+የቁልፉን የግንኙነት እና የሞዴል ፖሊሲ እንደገና ያስፈጽማል። `enforceApiKeyPolicy()`
+ያንን ራስጌ ከself-loop bearer ጋር አብሮ ሲቀርብ ብቻ ይቀበላል፤ ስለዚህ መዳረሻን ማጥበብ ብቻ
+ይችላል፣ እና የማይገኝ id ውድቅ ይደረጋል።
 
-#### የውጤት ገደብን ይግለጹ (`modalityBridgeVisionMaxChars`)
+ለቁልፉ የተፈቀደ የምስል ሞዴል ከሌለ፣ **ጽሑፍ-ብቻ መሆኑ የተረጋገጠ
+መዳረሻ** የምስሉን ጥያቄ ለምስል አቅም ለሌለው upstream ከመላክ ይልቅ
+በአካባቢው ግልጽ HTTP 400 በመስጠት ውድቅ ያደርገዋል (#17069)። የምስል አቅማቸው
+ያልታወቀ ወይም በተፈጥሮ የምስል አቅም ያላቸው መዳረሻዎች ላይ፣ የመግለጫ መንገዱ የቀድሞውን
+fail-open ባህሪ ይይዛል (meta `{ skipped: true, reason: "no_permitted_vision_model" }`)።
+ቁልፍ የሌላቸው ጥያቄዎች እና እነዚህ ገደቦች የሌሉባቸው ቁልፎች ልክ እንደበፊቱ
+ይሠራሉ።
+
+#### ተግባርን ያማከለ የመግለጫ prompt (`modalityBridgeVisionTaskAware`)
+
+ነባሪው **true** ነው። `composeVisionPrompt()` (`visionBridgeHelpers.ts`) የ
+**መጨረሻውን የተጠቃሚ መልዕክት** ጽሑፍ (እስከ 500 ቁምፊዎች የተገደበ) ወደ መሠረታዊው
+የመግለጫ prompt ያክላል፤ ይህም መግለጫውን ተጠቃሚው በእውነት ወደጠየቀው
+(codex-vision-proxy pattern) ይመራል እና የምስል ሞዴሉ የሚታይ ጽሑፍን እንዲገለብጥ
+ይጠይቃል። ይህ ቅንብር ሲጠፋ — ወይም የተጠቃሚ ጽሑፍ ከሌለ — መሠረታዊው prompt ሳይቀየር ጥቅም ላይ ይውላል።
+
+የመግለጫ self-loop የራሱ OpenAI-compatible ጥያቄ (`callVisionModelSingle()`
+በ`visionBridgeHelpers.ts` ውስጥ) ሁልጊዜ `image_url.detail: "high"` ይጠይቃል —
+ያለምንም ቅድመ ሁኔታ፣ ለእያንዳንዱ ጥሪ አድራጊ/አቅራቢ፣ በማንኛውም የclient ምልክት ላይ ሳይመሠረት።
+ዝቅተኛ-ዝርዝር ናሙና መውሰድ ይህ prompt በትክክል ለሚጠይቀው የጽሑፍ ግልባጭ
+ተግባር የOCR ትክክለኛነትን ያሳንሳል፤ ስለዚህ የመግለጫ ጥሪው ራሱ፣ የመጀመሪያው ገቢ ጥያቄ
+የተጠቀመው የዝርዝር ደረጃ ምንም ይሁን ምን፣ ሁልጊዜ ከፍተኛ ዝርዝር ይጠይቃል። ይህ
+የሚነካው የውስጣዊውን የመግለጫ ጥያቄ አካል ብቻ ነው፤ OmniRoute የጥሪ አድራጊውን
+`image_url.detail` በዋናው ጥያቄ ላይ እንዴት እንደሚያስተላልፍ አይቀይርም —
+ያ ነባሪ በተለየ መንገድ፣ እና የOpenCode clients ሲለዩ ብቻ፣ በ
+`defaultImageDetail()` (`open-sse/handlers/chatCore/upstreamBody.ts`) ይተገበራል። የመግለጫ self-loop የ
+Anthropic wire-format ቅርንጫፍ `detail` መስክ የለውም፣ እና በሁለቱም ነባሪዎች አይነካም።
+
+#### የመግለጫ ውጤት ገደብ (`modalityBridgeVisionMaxChars`)
 
 | ቁልፍ                            | ነባሪ | ክልል               |
 | ------------------------------ | --- | ----------------- |
 | `modalityBridgeVisionMaxChars` | `0` | `0` ወይም 100–50000 |
 
-`0` (ነባሪ) ማለት **ምንም ገደብ የለም** — በ`callVisionModel()` የተመለሰው መግለጫ
-ያለ ምንም ማሻሻያ ያልፋል፣ ያለውን ባህሪ ይጠብቃል። በ100–50000 ክልል ውስጥ ያለ ማንኛውም እሴት
-መግለጫውን በ`…` ቅጥያ ያሳጥራል ከማስገባቱ በፊት እንደ `[Image N]: <description>`
-(`VisionBridgeGuardrail.preCall()` በ `src/lib/guardrails/visionBridge.ts` ውስጥ)።
-የታችኛው ሞዴል ሙሉውን ጽሑፍ በሚፈልግበት ዝርዝር-ከባድ የ OCR ተግባራት ላይ ይህንን ከፍ ያድርጉ፤
-በተጨዋች ቪዥን ሞዴሎች ላይ የቶከን አጠቃቀምን ለመገደብ ዝቅ ያድርጉት።
-የዳሽቦርድ መስክ በቪዥን ትር የላቀ ፓነል ላይ ይገኛል
-(`modality-bridge-max-chars` በ `ModalityBridgeVisionTab.tsx` ውስጥ) እና ማንኛውንም
-ከ1 እስከ 99 ያለውን እሴት እስከ 100 ወለል ድረስ ያቆማል፣ ግልጽ የሆነ `0` ሳይነካ ይተዋል —
-`0` በራሱ ትክክለኛ የ Zod እሴት ነው
-(`z.union([z.literal(0), z.number().int().min(100).max(50000)])`)፣
-የ"ያልተዘጋጀ" ነባሪ ብቻ አይደለም።
+`0` (ነባሪ) ማለት **ገደብ የለም** ማለት ነው — በ`callVisionModel()` የተመለሰው መግለጫ
+ሳይቀየር ይተላለፋል፣ ይህም ያለውን ባህሪ ይጠብቃል። በ100–50000 ክልል ያለ ማንኛውም እሴት፣
+መግለጫው እንደ `[Image N]: <description>` ተመልሶ ከመካተቱ በፊት፣ በ
+`…` ቅጥያ ይቆረጣል
+(`VisionBridgeGuardrail.preCall()` በ`src/lib/guardrails/visionBridge.ts` ውስጥ)።
+የታችኛው ሞዴል ሙሉ ግልባጩን ለሚፈልግባቸው ዝርዝር-ተኮር OCR ተግባራት ይህን ከፍ ያድርጉት፤
+ብዙ የሚጽፉ የምስል ሞዴሎች የtoken አጠቃቀምን ለመገደብ ዝቅ ያድርጉት።
+የdashboard መስኩ በVision tab የAdvanced panel ላይ ይገኛል
+(`modality-bridge-max-chars` በ`ModalityBridgeVisionTab.tsx` ውስጥ)፣ እና በ1 እና 99 መካከል
+ያለ ማንኛውንም እሴት ወደ ዝቅተኛው 100 ያሳድጋል፣ በግልጽ የተገለጸ `0` ግን
+ሳይነካ ይቀራል — `0` በራሱ መብት ትክክለኛ የZod እሴት ነው
+(`z.union([z.literal(0), z.number().int().min(100).max(50000)])`)፣ የ«unset» ነባሪ ብቻ አይደለም።
 
-#### መሸጎጫን ይግለጹ (`modalityBridge/bridgeCache.ts`)
+#### የመግለጫ cache (`modalityBridge/bridgeCache.ts`)
 
-የገለጻ ውጤቶች የውስጥ-ማህደረ ትውስታ LRU + TTL መሸጎጫ፣ በሂደት-ሰፊ የተጋራ።
+ለመግለጫ ውጤቶች በሂደቱ በሙሉ የሚጋራ በማህደረ ትውስታ ውስጥ ያለ LRU + TTL cache።
 ቁልፍ = `sha256(imageRef + composedPrompt + configuredBridgeModel)` ከ
-ርዝመት-ቅድመ ቅጥያ ፍሬም ጋር (ምንም የመስክ-ወሰን ግጭቶች የሉም)። የሞዴል አካል
-**የተዋቀረው** ድልድይ ሞዴል ነው፣ በትክክል የመለሰው ሞዴል አይደለም —
-`callVisionModel` በውስጥ ሊወድቅ ይችላል፣ እና በእያንዳንዱ ሙከራ መክፈት
-መሸጎጫውን ይከፋፍለዋል። ያልተሳኩ ገለጻዎች በጭራሽ አይሸጎጡም። ቅንብሮች:
+length-prefix framing ጋር (በመስክ ድንበሮች ላይ ግጭት የለም)። የሞዴሉ ክፍል በእውነት ምላሽ የሰጠው ሞዴል ሳይሆን
+**የተዋቀረው** bridge ሞዴል ነው — `callVisionModel` በውስጡ ወደ አማራጭ ሊሸጋገር ይችላል፣
+እና ለእያንዳንዱ ሙከራ ቁልፍ መፍጠር cache ን ይበታትነዋል። ያልተሳኩ መግለጫዎች ፈጽሞ cache ውስጥ አይቀመጡም። ቅንብሮች፦
 
 | ቁልፍ                             | ነባሪ    | ክልል     |
 | ------------------------------- | ------ | ------- |
@@ -107,364 +175,502 @@ Guardrails በOmniRoute እና በላይኛ ደረጃ አቅራቢዎች መካ�
 | `modalityBridgeCacheTtlMinutes` | `60`   | 1–1440  |
 | `modalityBridgeCacheMaxEntries` | `200`  | 10–5000 |
 
-#### የርቀት ምስል መደበኛነት (የራስ-ሉፕ ገለጻ/base64 ማምጣት)
+#### የርቀት ምስል መደበኛ ማድረግ (self-loop describe/base64 fetch)
 
-ድልድዩ **የርቀት** ምስልን በራሱ ሲያመጣ — የአንትሮፒክ ገለጻ
-የራስ-ጥሪ እና የ claude-wire-format base64 ልወጣ
+bridge አንድ **የርቀት** ምስልን ራሱ ሲያመጣ — ለ Anthropic describe
+self-call እና ለ claude-wire-format base64 ልወጣ
 (`ensureBase64ImagesForClaudeWire`)፣ ሁለቱም በ
-`fetchRemoteImageAsDataUri()` በ `visionBridgeHelpers.ts` ውስጥ — የተገኘው የውሂብ URI
-በ`normalizeDataUri()` በኩል ያልፋል
-(`open-sse/utils/imageNormalize.ts`) በቪዥን-ሞዴል ጥያቄ ውስጥ ከመካተቱ በፊት።
-ትላልቅ ምስሎች ወደ **2048px ረጅም ጠርዝ** ይቀንሳሉ (OpenAI/Anthropic
-በአገልጋይ-በኩል አስቀድመው የሚተገብሩትን የመጠን ገደብ በማዛመድ)፣ ይህም
-የቪዥን ሞዴሉ የሚያየውን ሳይቀይር የሰቀላ ባይት/መዘግየትን ይቀንሳል። መጠኑን መቀየር
-`sharp`ን ይጠቀማል፣ በተለዋዋጭ ማስመጣት በኩል የተጫነ: ቤተኛ ሁለትዮሽ ፋይሉ
-መጫን በማይችልበት መድረክ ላይ፣ `normalizeDataUri()` **በጭራሽ አይወድቅም** —
-የመጀመሪያዎቹን ባይቶች ማለፍን ይተካዋል፣ ስለዚህ የገለጻ/base64-ልወጣ
-መንገድ ሁልጊዜ መስራቱን ይቀጥላል። ምስል ያልሆኑ ባይቶች (ሊፈታ የሚችል ምስል
-ያልመለሰ ማምጣት) እንዲሁ ሳይነኩ ያልፋሉ። ይህ መደበኛነት
-ድልድዩ ለራሱ ጥሪ በሚያመጣቸው ምስሎች ላይ ብቻ የተገደበ ነው —
-የደዋዩን ጥሬ ማለፊያ ጭነት በጭራሽ አይተገበርም፣ ከ
-የምርጫ-ብቻ ለውጥ መርህ ጋር የሚጣጣም (ጠንካራ ህግ #20)።
+`visionBridgeHelpers.ts` ውስጥ ባለው `fetchRemoteImageAsDataUri()` በኩል —
+የሚገኘው data URI በ vision-model ጥያቄ ውስጥ ከመካተቱ በፊት በ
+`normalizeDataUri()` (`open-sse/utils/imageNormalize.ts`) ይደበኛል።
+ከመጠን በላይ የሆኑ ምስሎች **ረጅሙ ጎናቸው 2048px** እንዲሆን
+ይቀነሳሉ (ይህም OpenAI/Anthropic በserver-side ላይ አስቀድመው
+ከሚተገብሩት የመጠን ገደብ ጋር ይዛመዳል)፤ ይህም vision model
+የሚያየውን ሳይቀይር የሚሰቀሉ ባይቶችንና መዘግየትን ይቀንሳል።
+መጠን መቀየር `sharp` ይጠቀማል፣ እሱም በdynamic import ይጫናል፤
+native binary-ው መጫን በማይችልበት መድረክ `normalizeDataUri()`
+**ስህተት አይጥልም** — ዋናዎቹን ባይቶች ሳይቀይር ያሳልፋል፣
+ስለዚህ የ describe/base64-conversion ሂደት ሁልጊዜ መሥራቱን
+ይቀጥላል። ምስል ያልሆኑ ባይቶች (ሊፈታ የሚችል ምስል ያልመለሰ
+fetch) እንዲሁም ሳይነኩ ይተላለፋሉ። ይህ መደበኛ ማድረግ
+bridge ለራሱ self-call በሚያመጣቸው ምስሎች ብቻ የተገደበ ነው —
+በጥሪ አድራጊው raw passthrough payload ላይ ፈጽሞ አይተገበርም፤
+ይህም ለመለወጥ በግልጽ ስምምነት ብቻ መፈቀድ ካለበት መርህ
+(Hard Rule #20) ጋር ይስማማል።
 
-#### የቅንብሮች ስኪማ + ፍልሰት
+#### የቅንብሮች schema + migration
 
-አዲሶቹ `modalityBridge*` ቁልፎች በ`updateSettingsSchema` ውስጥ በZod-የተረጋገጡ ናቸው
-(`src/shared/validation/settingsSchemas.ts`): `modalityBridgeVisionEnabled`,
-`modalityBridgeVisionMode`, `modalityBridgeVisionModel`,
-`modalityBridgeVisionTaskAware`, `modalityBridgeVisionPrompt`,
-`modalityBridgeVisionTimeout`, `modalityBridgeVisionMaxImages`,
-`modalityBridgeVisionMaxChars`, የ`modalityBridgeCache*` ሶስትዮሽ፣ እና የ
-በድምጽ ድልድይ ጥቅም ላይ የዋለው `modalityBridgeAudio*` ቡድን። ፍልሰት
-`141_modality_bridge_settings.sql` ያሉትን የቆዩ `visionBridge*` እሴቶችን
-ወደ ተዛማጅ አዲስ ቁልፎች ይገለብጣል (idempotent፣ ኦፕሬተር-የተቀመጠ `modalityBridge*`
-እሴትን በጭራሽ አይጽፍም)፤ የቆዩ ቁልፎች ለአንድ የመልቀቂያ ዑደት እንደ ንባብ መውደቅ ተቀባይነት አላቸው።
+አዲሶቹ `modalityBridge*` keys በ `updateSettingsSchema`
+(`src/shared/validation/settingsSchemas.ts`) ውስጥ በZod ይረጋገጣሉ፦
+`modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`,
+`modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`,
+`modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`,
+`modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`,
+የ `modalityBridgeCache*` ሦስት keys፣ እና Audio Bridge የሚጠቀምበት
+የ `modalityBridgeAudio*` ቡድን። Migration
+`141_modality_bridge_settings.sql` ነባር የ `visionBridge*` እሴቶችን
+ወደ ተዛማጅ አዲስ keys ይቀዳል (ደጋግሞ ቢሠራም ውጤቱ አይለወጥም፣
+በኦፕሬተር የተቀመጠ የ `modalityBridge*` እሴትንም ፈጽሞ አይተካም)፤
+ነባሮቹ keys ለአንድ የልቀት ዑደት እንደ አማራጭ የንባብ ምንጭ
+ተቀባይነታቸውን ይቀጥላሉ።
 
-#### ግልጽነት ራስጌ + ስታቲስቲክስ
+#### የግልጽነት header + ስታቲስቲክስ
 
-በገለጻ-የተለወጡ ምላሾች
+በ describe የተለወጡ ምላሾች
 `x-omniroute-modality-bridge: image->text;model=<visionModel>;parts=<n>`
-ይይዛሉ (በ`buildModalityBridgeHeader()` በ `modalityBridge/bridgeStats.ts` ውስጥ የተገነባ፣
-በ`withModalityBridgeHeader()` በ `src/sse/handlers/chatHelpers.ts` ውስጥ የታተመ)።
-የተዘዋወሩ ጥያቄዎች ራስጌ **አያገኙም** — ጭነቱ አልተነካም እና የሞዴል
-መቀያየር በምላሽ አካል `model` መስክ ውስጥ አስቀድሞ ይታያል።
+ይይዛሉ (በ `modalityBridge/bridgeStats.ts` ውስጥ ባለው
+`buildModalityBridgeHeader()` ይገነባል፣ በ
+`src/sse/handlers/chatHelpers.ts` ውስጥ ባለው
+`withModalityBridgeHeader()` ይጨመራል)። ዳግም መንገድ
+የተመሩ ጥያቄዎች **header አይይዙም** — payload-ው
+አልተነካም፣ የmodel ለውጡም በምላሹ body ውስጥ ባለው `model`
+field ላይ አስቀድሞ ይታያል።
 
-`GET /api/modality-bridge/stats` (የአስተዳደር ማረጋገጫ፣ ከ
-`GET /api/settings` ጋር ተመሳሳይ ደረጃ) የውስጥ-ማህደረ ትውስታን በሞዳሊቲ ቆጣሪዎች
+`GET /api/modality-bridge/stats` (የአስተዳደር ፈቃድ፣ ከ
+`GET /api/settings` ጋር ተመሳሳይ ደረጃ) ለ `vision`, `audio` እና
+`video` በmemory ውስጥ የሚቀመጡትን የየmodality ቆጣሪዎች
 `{ attempts, successes, bridged, cacheHits, failures, totalLatencyMs,
-latencySamples, averageLatencyMs, lastUsedAt }` ለ`vision`፣ `audio` እና
-`video` ይመልሳል። `averageLatencyMs` `latencySamples`ን ይጠቀማል፣ ሁሉንም ሙከራዎች
-አይደለም፣ እንደ መለያው፤ ያለ ጊዜ አሠራር ዜሮ-ሚሊሰከንድ ናሙና አይፈጥርም።
-`bridged` ለተሳካላቸው ልወጣዎች ወደኋላ-ተኳሃኝ ቅጽል ስም ሆኖ ይቆያል፤
-ያልተሳኩ ሙከራዎች አይጨምሩትም። ቆጣሪዎች በንድፍ በሂደት ዳግም ማስጀመር ላይ ዳግም ይጀመራሉ
-(ቴሌሜትሪ፣ ሂሳብ አይደለም)።
+latencySamples, averageLatencyMs, lastUsedAt }` ይመልሳል።
+`averageLatencyMs` በሁሉም attempts ሳይሆን በ `latencySamples`
+ይካፈላል፤ የጊዜ መለኪያ የሌለው ክዋኔ የዜሮ ሚሊሰከንድ
+ናሙና አይፈጥርም። `bridged` ለተሳኩ ልወጣዎች ከቀደሙ ስሪቶች
+ጋር ተኳሃኝ የሆነ አማራጭ ስም ሆኖ ይቀጥላል፤ ያልተሳኩ
+ሙከራዎች አያሳድጉትም። ቆጣሪዎቹ በንድፍ መሠረት process
+ዳግም ሲጀምር ዳግም ይጀምራሉ (ለtelemetry እንጂ ለሂሳብ
+አያያዝ አይደሉም)።
 
-#### የዳሽቦርድ ውቅር
+#### የDashboard ውቅር
 
-የተወሰነው የዳሽቦርድ ገጽ
-`/dashboard/settings/modality-bridge` ነው። የዩአርኤል-አድራሻ የሚችሉ `Vision`፣ `Audio`፣
-እና `Video` ትሮች `tab` እሴቱን ሲቀይሩ የጥያቄ መለኪያዎችን ይይዛሉ።
-የቪዥን ትር ማንቃት፣ ሁነታ፣ የሞዴል ምርጫ (አውቶማቲክን ጨምሮ)
-ነባሪ)፣ ተግባር-አዋቂ መጠየቅ፣ የላቀ የጊዜ ማብቂያ/ምስል/መግለጫ-ርዝመት/መሸጎጫ
-ገደቦች፣ የሩጫ ጊዜ ቆጣሪዎች እና የተጠበቀ የናሙና ጥያቄ ያሳያል። የድምጽ ትር እንዲሁ ቀጥታ ነው፡
-ማንቃት፣ STT-ብቻ ሞዴል መራጭ ከአውቶ ጋር፣ የጊዜ ማብቂያ/ከፍተኛ-ክሊፕ ገደቦች፣ የድምጽ
-ቆጣሪዎች፣ እና `input_audio` የናሙና ሙከራ ያሳያል። የቪዲዮ ትር ተግባራዊ ነው፡
-የFFmpeg/ffprobe የሩጫ ጊዜ ሁኔታን ሪፖርት ያደርጋል — ከአራት ግልጽ የUI ሁኔታዎች አንዱ (`unknown`
-ምርመራው በመካሄድ ላይ እያለ ወይም ሊጠናቀቅ ካልቻለ፣ `restricted` በ loopback ባልሆነ
-የዳሽቦርድ አስተናጋጅ ላይ ምርመራው በደንበኛ በኩል ሲዘለል፣ `unavailable` አንዴ ከተመረመረ
-እና ከጠፋ ከተረጋገጠ፣ ወይም `available` ከFFmpeg/ffprobe ስሪቶች ጋር) —
-ማንቃት/ሞዴል/ፍሬም/ቪዲዮ/የጊዜ ማብቂያ ገደቦችን ይይዛል፣ የሞዴል መራጩን ወደ ቪዥን-ችሎታ
-ሞዴሎች ያጣራል፣ እና የቪዲዮ ቆጣሪዎችን ያሳያል።
+ለዚህ የተመደበው dashboard page
+`/dashboard/settings/modality-bridge` ነው። በURL ሊጠቀሱ
+የሚችሉት `Vision`, `Audio` እና `Video` tabs የ `tab` እሴትን
+ሲቀይሩ query parameters-ን ያስጠብቃሉ። የ Vision tab
+ማንቃትን፣ mode-ን፣ model መምረጥን (ራስ-ሰር ነባሪውን
+ጨምሮ)፣ ለተግባሩ ተስማሚ prompt ማዘጋጀትን፣ የላቁ
+የtimeout/ምስል/የመግለጫ ርዝመት/cache ገደቦችን፣ በሂደት
+ላይ ያሉ ቆጣሪዎችን እና ጥበቃ ያለውን የናሙና ጥያቄ
+ያቀርባል። የ Audio tab እንዲሁ እየሠራ ነው፦ ማንቃትን፣
+Auto ያለው STT-only model picker-ን፣ የtimeout/ከፍተኛ
+የድምፅ ቅንጥብ ገደቦችን፣ የaudio ቆጣሪዎችን እና
+የ `input_audio` ናሙና ሙከራን ያቀርባል። የ Video tab
+ተግባራዊ ነው፦ የ FFmpeg/ffprobe runtime ሁኔታን ከአራት
+ግልጽ የUI ሁኔታዎች በአንዱ ያሳያል (`unknown` probe-ው
+እየተካሄደ ሳለ ወይም ሊጠናቀቅ ባልቻለ ጊዜ፣ `restricted`
+probe-ው በclient-side የሚዘለልበት non-loopback dashboard host
+ላይ፣ `unavailable` probe ከተካሄደና እንደሌለ ከተረጋገጠ
+በኋላ፣ ወይም `available` ከ FFmpeg/ffprobe versions ጋር)፤
+የማንቃት/model/frame/video/timeout ገደቦችን ያስቀምጣል፣
+model picker-ን vision-capable models ብቻ እንዲያሳይ
+ያጣራል፣ እና የvideo ቆጣሪዎችን ያቀርባል።
 
-በ AI ቅንብሮች ስር የነበረው የቪዥን ብሪጅ ካርድ ለአዲሱ ገጽ የተኳሃኝነት አገናኝ ነው።
-ከእንግዲህ የቅጹን ሁለተኛ ቅጂ አይይዝም። የሚዲያ አቅራቢዎች እንዲሁ
-የምስል-ወደ-ጽሑፍ እና የንግግር-ወደ-ጽሑፍ የስራ ፍሰቶችን ወደ ተጓዳኝ ሞዳሊቲ
-ብሪጅ ትሮች ያገናኛል ያለውን የንግግር-ወደ-ጽሑፍ መጫወቻ ቦታ ሳያስወግድ።
+ቀድሞ በ AI settings ሥር የነበረው Vision Bridge card አሁን
+ወደ አዲሱ page የሚያመራ የተኳሃኝነት link ነው፤ ሁለተኛ
+የform ቅጂ ከዚያ በኋላ አይይዝም። Media Providers ደግሞ
+ነባሩን Speech-to-Text playground ሳያስወግድ፣ Image-to-Text
+እና Speech-to-Text workflows-ን ከተዛማጅ Modality Bridge tabs
+ጋር ያገናኛል።
 
-**የራስ-ሉፕ መግቢያ ማለፊያ:** የገለጻ ጥሪ በ OmniRoute የራሱ
-`/v1` የራስ-ሉፕ (መደበኛ ያልሆነ አቅራቢ ሞዴል) ሲያልፍ፣ ንዑስ-ጥያቄው
-`x-omniroute-admission-bypass: internal` ይልካል እና በተፈታው
-የራስ-ሉፕ ምስክርነት ይረጋገጣል — በአካባቢያዊ ሁነታ የአካባቢያዊ `sk_omniroute` ጠባቂ፣ ወይም
-ኦፕሬተር-የተዋቀረው `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` env ቁልፍ (#1350) ስለዚህ
-`REQUIRE_API_KEY=true` ማሰማራቶች አሁንም የገለጻ ጥሪውን ማሄድ ይችላሉ። ማለፊያው
-ለእነዚያ ትክክለኛ ምስክርነቶች ብቻ ነው የሚከበረው፣ ስለዚህ ውጫዊ ደንበኞች
-መግቢያን ለመዝለል ራስጌውን መጠቀም አይችሉም።
+**የself-loop admission bypass:** የ describe ጥሪው በOmniRoute
+የራሱ `/v1` self-loop (non-standard provider model) በኩል
+ሲመራ፣ ንዑስ ጥያቄው `x-omniroute-admission-bypass: internal`
+ይልካል፣ እና በተፈታው የself-loop credential ይረጋገጣል —
+በlocal mode የlocal `sk_omniroute` sentinel፣ ወይም ኦፕሬተሩ
+ያዋቀረው `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` env key (#1350)።
+ይህም `REQUIRE_API_KEY=true` deployments የ describe ጥሪን
+እንዲያሄዱ ያስችላል። Bypass-ው ለእነዚህ ትክክለኛ
+credentials ብቻ ይፈቀዳል፣ ስለዚህ ውጫዊ clients header-ውን
+ተጠቅመው admission-ን ማለፍ አይችሉም።
 
-የቆዩ ነባሪዎች በ`src/shared/constants/visionBridgeDefaults.ts` ውስጥ ይገኛሉ፤
-አዲሱ ሁነታ/ተግባር-አዋቂ/መሸጎጫ ነባሪዎች እና የቅንብሮች መፍቻ በ
-`src/shared/constants/modalityBridgeDefaults.ts` ውስጥ ይገኛሉ። የጥበቃ መስመሩ
-`deps` ገንቢ አማራጭን ያሳያል ስለዚህ ሙከራዎች የውሸት `getSettings` እና
-`callVisionModel` ትግበራዎችን ማስገባት ይችላሉ።
+ነባሮቹ defaults በ `src/shared/constants/visionBridgeDefaults.ts`
+ውስጥ አሉ፤ አዲሶቹ የmode/task-aware/cache defaults እና
+የsettings resolver በ
+`src/shared/constants/modalityBridgeDefaults.ts` ውስጥ አሉ።
+guardrail ሙከራዎች አስመሳይ `getSettings` እና
+`callVisionModel` implementations ማስገባት እንዲችሉ `deps`
+constructor option ያቀርባል።
 
-### የድምጽ ድልድይ (`audioBridge.ts`) — ሞዳሊቲ ድልድይ PR-3
+### Audio Bridge (`audioBridge.ts`) — Modality Bridge PR-3
 
-የድምጽ-ተሸካሚ የውይይት ጥያቄዎችን ድምጽ ግብዓት እንደማይቀበል ወደማይታወቅ ዒላማ ከመድረሳቸው በፊት ይይዛል።
-የውይይት ጥያቄውን በጭራሽ አያዞረውም፡ የድምጽ ክፍሎች ባለው OpenAI-ተኳሃኝ ባለብዙ ክፍል መጨረሻ ነጥብ በኩል ይገለበጣሉ እና
-የተመረጠው የውይይት ሞዴል በጽሑፍ ግልባጮች ይቀጥላል።
+የaudio input እንደሚቀበል ያልታወቀ target ላይ ከመድረሳቸው
+በፊት audio ያላቸውን chat requests ይጠልፋል። የchat request-ን
+ወደ ሌላ መንገድ ፈጽሞ አይመራም፦ audio parts በነባሩ
+OpenAI-compatible multipart endpoint በኩል ወደ ጽሑፍ
+ይገለበጣሉ፣ የተመረጠው chat model-ም በጽሑፍ ቅጂዎቹ
+መሥራቱን ይቀጥላል።
 
-ፍሰት:
+ፍሰት፦
 
-1. `supportsAudio`ን በ`getResolvedModelCapabilities()` በኩል ይፍቱ። ግልጽ
-   የአቅራቢ-መዝገብ ቤት ሜታዳታ ያሸንፋል፣ ከዚያም የማይንቀሳቀስ ሞዴል ሜታዳታ፣ ከዚያም የተመሳሰለ
-   `modalities_input`። `audio` የሌለው የታወጀ የግቤት ዝርዝር `false` ነው፤
-   ምንም የችሎታ ማስረጃ `null` ሆኖ ይቆያል። ሁለቱም `false` እና `null`
-   ወግ አጥባቂውን ድልድይ ያነቃሉ፣ `true` ግን ያልፋል።
-2. `modalityBridgeAudio*` ቅንብሮችን ይፍቱ እና በጋራ
-   `detectMediaParts()` መመርመሪያ በኩል ከእያንዳንዱ መልእክት ሊሰነጠቅ የሚችል ከፍተኛ ደረጃ
-   የድምጽ ክፍሎችን ያውጡ። የሚደገፉ የሽቦ ቅርጾች OpenAI `input_audio`፣ `audio_url`፣ እና
-   `source.media_type: "audio/*"` ናቸው። የተሰበሰበ ድምጽ ለመዞር ተገኝቷል ነገር ግን
-   በስፕሊስ ዱካ አይወገድም። ስራው በ`modalityBridgeAudioMaxClips` የተገደበ ነው፤
-   የኋለኞቹ ክፍሎች ሳይነኩ ይቀራሉ።
-3. የተዋቀረ `provider/model`ን ያክብሩ፣ ወይም `selectAudioBridgeModel()`
-   `AUDIO_TRANSCRIPTION_PROVIDERS`ን በተረጋጋ የካታሎግ ቅደም ተከተል እንዲያልፍ እና
-   የመጀመሪያውን ሞዴል ከሚሰራ ንቁ አቅራቢ ምስክርነት ጋር እንዲመርጥ ይፍቀዱ።
-4. `callAudioTranscription()` base64/data-URI ድምጽን ወደ ባለብዙ ክፍል
-   `file` ይለውጣል፣ ወይም የርቀት `audio_url`ን በህዝባዊ-ብቻ ወጪ
-   ጥበቃ በዲኤንኤስ ፒኒንግ እና በ25 ሜባ ገደብ ያወርዳል። ከዚያም ፋይሉን እና የተመረጠውን
-   ሞዴል ወደ አካባቢያዊ `/v1/audio/transcriptions` የራስ-ሉፕ ይልካል፣ በ
-   `resolveSelfLoopBearer()` የተረጋገጠ። ያለው የጽሑፍ ግልባጭ መንገድ መደበኛ
-   የምስክርነት ፍለጋ፣ የማቀዝቀዝ/የፍጥነት ገደብ አያያዝ፣ እና የአቅራቢ መላክን ያከናውናል።
-5. የተሳካ ጥሪዎች ክፍሎቻቸውን በ`[Audio N]: <transcript>` ይተካሉ። ጥሪዎች
-   በ`Promise.allSettled` ይሰራሉ፡ የግለሰብ ውድቀት ያንን የመጀመሪያ
-   የድምጽ ክፍል ይይዛል (#4012 ውል)። እያንዳንዱ ጥሪ ከከሸፈ እና ዒላማው
+1. `supportsAudio`-ን በ`getResolvedModelCapabilities()` ይወስኑ። ቅድሚያ የሚሰጠው በግልጽ የተገለጸ የprovider-registry ሜታዳታ ነው፤ ከዚያ የstatic model ሜታዳታ፣ በመጨረሻም የተመሳሰለው
+   `modalities_input` ይከተላሉ። `audio` የሌለበት የተገለጸ የግቤት ዝርዝር `false` ነው፤
+   የችሎታ ማስረጃ ከሌለ `null` ይሆናል። `false` እና `null` ሁለቱም ጥንቃቄ የሚያደርገውን bridge ያነቃቃሉ፤ `true` ግን ያልፈዋል።
+2. የ`modalityBridgeAudio*` ቅንብሮችን ይወስኑ እና በጋራው `detectMediaParts()`
+   ማወቂያ ከእያንዳንዱ መልዕክት ሊቆረጡና ሊተኩ የሚችሉ ከፍተኛ-ደረጃ የድምፅ ክፍሎችን ያውጡ። የሚደገፉ የውሂብ ቅርጾች OpenAI `input_audio`፣ `audio_url` እና
+   `source.media_type: "audio/*"` ናቸው። በውስጥ የተካተተ ድምፅ ለመምራት ይለያል፣ ነገር ግን
+   በመቁረጥና በመተካት ሂደቱ አይወገድም። ሥራው በ`modalityBridgeAudioMaxClips` ይገደባል፤
+   ቀጣይ ክፍሎች ሳይነኩ ይቀራሉ።
+3. የተዋቀረ `provider/model` ካለ ይጠቀሙ፤ ካልሆነ `selectAudioBridgeModel()` በተረጋጋ የካታሎግ ቅደም ተከተል `AUDIO_TRANSCRIPTION_PROVIDERS`-ን ተከትሎ፣ ሊጠቀምበት የሚችል ንቁ የprovider ማረጋገጫ መረጃ ያለውን የመጀመሪያ ሞዴል ይምረጥ።
+4. `callAudioTranscription()` በbase64/data-URI የተቀመጠ ድምፅን ወደ multipart
+   `file` ይቀይራል፤ ወይም ርቀት ያለ `audio_url`-ን በDNS pinning እና በ25 MB ገደብ በሚሠራው፣ ለሕዝብ መዳረሻ ብቻ በተፈቀደው የወጪ ግንኙነት ጥበቃ በኩል ያወርዳል። ከዚያም ፋይሉንና የተመረጠውን
+   ሞዴል፣ በ`resolveSelfLoopBearer()` ማረጋገጫ ወደሚጠቀመው የአካባቢያዊ
+   `/v1/audio/transcriptions` self-loop በPOST ይልካል። ነባሩ የtranscription መስመር መደበኛ የማረጋገጫ መረጃ ፍለጋን፣ የcooldown/rate-limit አያያዝን እና ወደ provider ማስተላለፍን ያከናውናል።
+5. ስኬታማ ጥሪዎች ክፍሎቻቸውን በ`[Audio N]: <transcript>` ይተካሉ። ጥሪዎች
+   በ`Promise.allSettled` ይካሄዳሉ፤ የአንድ ጥሪ ውድቀት ዋናውን የድምፅ ክፍል እንዳለ ያቆያል (#4012 ውል)። ሁሉም ጥሪዎች ከከሸፉ እና የታለመው ሞዴል
    `supportsAudio === false` መሆኑ ከተረጋገጠ፣ ክፍሎቹ
    `[Audio N]: (unavailable — no STT provider connected)` ይሆናሉ (#8430 ውል)።
-   ለማይታወቅ ዒላማ (`null`)፣ ሁሉም-ውድቀት ውጤት ሳይነካ ይቀራል። የተረጋገጠ
-   ጽሑፍ-ብቻ ዒላማ ምንም የሚሰራ STT ምስክርነት ከሌለው ተመሳሳይ ግልጽ
-   ስታብ ይቀበላል የአውታረ መረብ ጥሪ ሳያወጣ።
+   የታለመው ሞዴል ችሎታ ካልታወቀ (`null`)፣ ሁሉም ጥሪዎች ቢከሽፉ ክፍሎቹ ሳይነኩ ይቀራሉ። ጽሑፍ ብቻ እንደሚደግፍ የተረጋገጠ ሞዴል ሊጠቀምበት የሚችል የSTT ማረጋገጫ መረጃ ከሌለው፣ የአውታረ መረብ ጥሪ ሳይደረግ ይህንኑ ግልጽ ተተኪ ጽሑፍ ይቀበላል።
 
-የተሳካ ግልባጮች በሂደት-ሰፊው ሞዳሊቲ ድልድይ LRU/TTL መሸጎጫ ይጠቀማሉ። ቁልፉ
-የድምጽ ማጣቀሻውን፣ የተረጋጋውን `audio-transcription` ኦፕሬሽን መለያ፣
-እና የተመረጠውን STT ሞዴል ያጣምራል፤ ውድቀቶች በጭራሽ አይሸጎጡም። የድምጽ ሙከራዎች
-የጋራ `bridged`፣ `cacheHits`፣ `failures`፣ እና `lastUsedAt` ቆጣሪዎችን ያዘምናሉ።
-የተለወጡ ምላሾች
-`x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>` ይይዛሉ፤
-ያልተነኩ ጥያቄዎች የድምጽ ድልድይ ክፍል አይቀበሉም።
+ስኬታማ የድምፅ ወደ ጽሑፍ ቅየራ ውጤቶች በሂደቱ ሁሉ የጋራ የሆነውን የModality Bridge LRU/TTL cache ይጠቀማሉ።
+ቁልፉ የድምፅ ማጣቀሻውን፣ የተረጋጋውን `audio-transcription` የክዋኔ
+መለያ እና የተመረጠውን የSTT ሞዴል ያጣምራል፤ ውድቀቶች በcache አይቀመጡም። የድምፅ ሙከራዎች
+የጋራ `bridged`፣ `cacheHits`፣ `failures` እና `lastUsedAt` ቆጣሪዎችን ያዘምናሉ።
+የተቀየሩ ምላሾች
+`x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>` ይይዛሉ፤ ያልተነኩ
+ጥያቄዎች የAudio Bridge ክፍል አይቀበሉም።
 
-የሩጫ ጊዜ ቅንብሮች በDB የተደገፉ እና በZod የተረጋገጡ ናቸው፡
+የruntime ቅንብሮች በDB የተደገፉ እና በZod የተረጋገጡ ናቸው፦
 
-| ቁልፍ                           | ነባሪ     | ክልል               |
-| ----------------------------- | ------- | ----------------- |
-| `modalityBridgeAudioEnabled`  | `true`  | —                 |
-| `modalityBridgeAudioModel`    | `""`    | አውቶ ወይም STT መታወቂያ |
-| `modalityBridgeAudioTimeout`  | `60000` | 1000–300000       |
-| `modalityBridgeAudioMaxClips` | `3`     | 1–10              |
+| ቁልፍ                           | ነባሪ     | ክልል              |
+| ----------------------------- | ------- | ---------------- |
+| `modalityBridgeAudioEnabled`  | `true`  | —                |
+| `modalityBridgeAudioModel`    | `""`    | ራስ-ሰር ወይም STT ID |
+| `modalityBridgeAudioTimeout`  | `60000` | 1000–300000      |
+| `modalityBridgeAudioMaxClips` | `3`     | 1–10             |
 
-የጋራ መሸጎጫ በ`modalityBridgeCacheEnabled`፣
-`modalityBridgeCacheTtlMinutes`፣ እና `modalityBridgeCacheMaxEntries` ቁጥጥር ስር ይቆያል።
+የጋራው cache አሁንም በ`modalityBridgeCacheEnabled`፣
+`modalityBridgeCacheTtlMinutes` እና `modalityBridgeCacheMaxEntries` ይቆጣጠራል።
 
-### የቪዲዮ ድልድይ (`videoBridge.ts`፣ `videoBridgePipeline.ts`)
+### Video Bridge (`videoBridge.ts`, `videoBridgePipeline.ts`)
 
-ከታወቀ ቤተኛ የቪዲዮ ድጋፍ በፊት በቻት ማጠናቀቂያ `messages` እና ምላሾች ኤፒአይ `input` ውስጥ ያሉ ከፍተኛ ደረጃ የቪዲዮ ክፍሎችን ይጠለፋል።
-የሚደገፉ ቅርጾች `input_video`፣ `video_url`፣ `video_source`፣ HTTPS ዩአርኤሎች፣
-እና `data:video/*;base64,...` የውሂብ ዩአርአይዎች ናቸው። በጽሁፍ ውስጥ ያሉ ተራ የፋይል ስሞች እንደ ቪዲዮ አይቆጠሩም።
+የታወቀ ቤተኛ የቪዲዮ ድጋፍ የሌለው የታለመ ሞዴል ከመጠራቱ በፊት፣ በChat Completions `messages` እና በResponses
+API `input` ውስጥ ያሉ ከፍተኛ-ደረጃ የቪዲዮ ክፍሎችን ይይዛል።
+የሚደገፉ ቅርጾች `input_video`፣ `video_url`፣ `video_source`፣ HTTPS URLs
+እና `data:video/*;base64,...` data URIs ናቸው። በጽሑፍ ውስጥ ያሉ ተራ የፋይል ስሞች
+እንደ ቪዲዮ አይቆጠሩም።
 
-`VideoBridgeGuardrail.preCall` (`videoBridge.ts`) የጥያቄ ጉዞን፣
-የአቅም/ፖሊሲ ፍተሻን፣ ለእያንዳንዱ ጥያቄ ማሰባሰብን እና የምላሽ ጭነትን ይቆጣጠራል።
-ለእያንዳንዱ ቪዲዮ የሚደረግ ስራ — ማግኛ፣ አጠቃላይ ውጤት መሸጎጫ፣ የፍሬም ቅደም ተከተል መግለጽ
-(ይህም ማንኛውንም በጠሪ የተገለጸ የድምጽ ግልባጭ ያዋህዳል) እና ለእያንዳንዱ ሙከራ መለኪያዎች/ማቋረጥ/ማጽዳት —
-በ`preCall` ዑደት ውስጥ ለእያንዳንዱ የቪዲዮ ክፍል አንድ ጊዜ በሚጠራው `videoBridgePipeline.ts` ውስጥ
-ከ`processVideoPart` በስተጀርባ ተደብቋል።
-ያ ሞጁል ግልጽ የሆኑትን የወደብ ወሰኖች `VideoMediaBrokerPort` (ባይቶችን ማግኘት እና ናሙና የተደረጉ ፍሬሞችን ማውጣት)፣
-`VideoAudioTranscriptionPort` (በጠሪ የተገለጸ የድምጽ ግልባጭን ከናሙና መግለጫዎች ጋር ማዋሃድ) እና
-`VideoDrilldownPort` (የፍሬም ድሪል-ዳውን ጽናት ወሰን፤ እስካሁን ወደ `processVideoPart` አልተገናኘም —
-ዛሬ `/api/modality-bridge/video/drilldown` መንገድ ብቻ የድሪል-ዳውን ግቤቶችን ይጽፋል) ይገልጻል።
+`VideoBridgeGuardrail.preCall` (`videoBridge.ts`) የጥያቄውን ክፍሎች ማለፍ፣
+የችሎታ/ፖሊሲ ማረጋገጫን፣ በእያንዳንዱ ጥያቄ ውጤቶችን ማሰባሰብን እና የምላሹን ይዘት ይቆጣጠራል።
+ለእያንዳንዱ ቪዲዮ የሚደረገው ሥራ — ማግኘት፣ የሙሉ ውጤቱ cache፣ የframe
+ቅደም ተከተልን መግለጽ (ይህም ጥሪውን ያደረገው አካል ያቀረበውን ማንኛውንም የድምፅ ጽሑፍ ያዋህዳል)፣ እንዲሁም ለእያንዳንዱ ሙከራ መለኪያዎች/ማቋረጥ/ማጽዳት — በ`videoBridgePipeline.ts` ውስጥ
+ባለው `processVideoPart` ተደብቋል፤ ይህም በ`preCall` ዙር ውስጥ ለእያንዳንዱ የቪዲዮ ክፍል አንድ ጊዜ ይጠራል።
+ያ ሞጁል ግልጽ የport ድንበሮቹንም ይገልጻል፦ `VideoMediaBrokerPort`
+(ባይቶችን ማግኘት እና በናሙና የተመረጡ frames-ን ማውጣት)፣ `VideoAudioTranscriptionPort`
+(ጥሪውን ያደረገው አካል ያቀረበውን የድምፅ ጽሑፍ ከበናሙና ከተመረጡት captions ጋር ማዋሃድ) እና
+`VideoDrilldownPort` (የframe drill-down ማስቀመጫ ድንበር፤ እስካሁን ከ`processVideoPart` ጋር አልተገናኘም — ዛሬ drill-down መዝገቦችን የሚጽፈው የተለየው `/api/modality-bridge/video/drilldown`
+መስመር ብቻ ነው)።
 
-የህዝብ `/v1` ጥያቄ መንገድ ንዑስ ሂደትን በጭራሽ አያስገባም ወይም አይጠራም።
-የርቀት ቪዲዮዎች ከ50 ሚቢ ገደብ በታች ይወርዳሉ፤
-የውስጥ ቤዝ64 ቪዲዮዎች ወግ አጥባቂ 36 ሚቢ ዲኮድ የተደረገ ለእያንዳንዱ ቪዲዮ ገደብ አላቸው
-ስለዚህ ሞዴሉ/መልእክቶች/ፍሬም ኤንቨሎፕ ከ50 ሚቢ የህዝብ JSON ጥያቄ የመግቢያ ገደብ ውስጥ ሊቆይ ይችላል።
-የውስጥ ርዝመት እና ዲኮድ የተደረገ መጠን ግምቶች ከመመደብ በፊት ይፈተሻሉ።
-HTTPS በመጀመሪያው የርቀት ዩአርኤል እና በእያንዳንዱ ማዞሪያ ላይ ያስፈልጋል፣
-ነባሩን የህዝብ-ብቻ ወጪ ጠባቂ ከዲኤንኤስ ፒኒንግ ጋር በመጠቀም።
-ባይቶቹ ከዚያም ትክክለኛውን የውስጥ `POST /api/modality-bridge/video/extract` ደላላ ወሰን ያቋርጣሉ።
-ያ መንገድ `LOCAL_ONLY` እና `SPAWN_CAPABLE` ሲሆን፣ ለእያንዳንዱ ሂደት የተረጋገጠ፣
-የታመነ-ሉፕባክ ጥያቄን ብቻ ይቀበላል፣ እና ዩአርኤልን፣ የፋይል ስርዓት መንገድን፣ ማስፈጸሚያን ወይም የክርክር ዝርዝርን በጭራሽ አይቀበልም።
-የኤፒአይ አካል-መጠን ቧንቧ መስመር እና የእጅ አድራጊው የጨመረው አካል አንባቢ በተናጥል 50 ሚቢ የደላላ ግብዓት ገደብ ያስፈጽማሉ።
-የተገደበው ወረፋ በአንድ ጊዜ አንድ ማውጣት ያካሂዳል፣ አራት በመጠባበቅ ላይ ያሉ ስራዎችን ይፈቅዳል፣
-እና በመጠባበቅ ላይ ያለ ግብዓትን በ100 ሚቢ ይገድባል።
+ለሕዝብ ክፍት የሆነው `/v1` የጥያቄ መስመር ንዑስ ሂደትን ፈጽሞ አያስገባም ወይም አይጠራም። ርቀት ያሉ
+ቪዲዮዎች በ50 MiB ገደብ ይወርዳሉ፤ በውስጥ የተካተቱ base64 ቪዲዮዎች ደግሞ የሞዴል/መልዕክቶች/ፍሬሚንግ ጭማሪ
+ለሕዝብ ክፍት የሆነው የJSON ጥያቄ መቀበያ 50 MiB ገደብ ውስጥ እንዲቆይ፣ ለእያንዳንዱ ቪዲዮ የ36 MiB ጥንቃቄ የሚያደርግ የdecoded መጠን ገደብ አላቸው። የinline
+ርዝመት እና የdecoded መጠን ግምቶች ማህደረ ትውስታ ከመመደቡ በፊት ይፈተሻሉ። በመጀመሪያው የርቀት URL እና በእያንዳንዱ redirect ላይ HTTPS
+ያስፈልጋል፤ ይህም DNS pinning ያለውን ነባር፣ ለሕዝብ መዳረሻ ብቻ የተፈቀደ የወጪ ግንኙነት ጥበቃ ይጠቀማል። ከዚያ ባይቶቹ በትክክለኛው ውስጣዊ
+`POST /api/modality-bridge/video/extract` የbroker ድንበር ያልፋሉ። ይህ መስመር
+`LOCAL_ONLY` እና `SPAWN_CAPABLE` ሁለቱም ነው፤ በእያንዳንዱ ሂደት የተረጋገጠ፣
+የታመነ የloopback ጥያቄ ብቻ ይቀበላል፣ URL፣ የፋይል ስርዓት ዱካ፣ ሊፈጸም የሚችል ፋይል
+ወይም የargument ዝርዝር ፈጽሞ አይቀበልም። የAPI የbody-size ሂደት እና የhandler ቀስ በቀስ የሚያነብ የbody
+አንባቢ እያንዳንዳቸው በተናጠል ለbroker ግቤት 50 MiB ገደብ ያስፈጽማሉ። ገደብ ያለው ወረፋው
+በአንድ ጊዜ አንድ ማውጣት ያካሂዳል፣ አራት ተጠባባቂ ሥራዎችን ይፈቅዳል፣ እና የተጠባባቂ ግቤትን
+በ100 MiB ይገድባል።
 
-በደላላው ውስጥ፣ `ffprobe` የግል የአካባቢ ፋይልን ያነባል፤
-የተስተካከለው ቅርጸት የፍቃድ ዝርዝር የፕሌይሊስት እና የማኒፌስት ቅርጸቶችን አያካትትም።
-ለተፈቀዱ የMOV-ቤተሰብ ኮንቴይነሮች፣ ውጫዊ የMOV ውሂብ ማጣቀሻዎች በነባሪነት ተሰናክለው ይቆያሉ፣
-እና የተስተካከለው ትዕዛዝ እነሱን አይመርጥም።
-ሁለቱም `ffprobe` እና `ffmpeg` `file`-ብቻ ፕሮቶኮል ነጭ ዝርዝርን፣ አንድ ክርን፣
-የተስተካከሉ የክርክር ድርድሮችን፣ ምንም ሼልን፣ እና ከ`PATH` የተፈቱ ማስፈጸሚያዎችን ይጠቀማሉ።
-የተያያዙ-ስዕል ሽፋን ዥረቶች ሊጫወቱ የሚችሉ እጩዎች አይደሉም።
-ሁሉም ሊጫወቱ የሚችሉ ዥረቶች ገደቦቹን ማሟላት አለባቸው፣
-እና ግልጽ የሆነ ነባሪ ዥረት ከቆራጥ ዝቅተኛ-ኢንዴክስ መውደቅ በፊት ይመረጣል።
-ቪዲዮዎች በ600 ሰከንዶች፣ በእያንዳንዱ ልኬት 8,192 ፒክሰሎች፣ እና 33,554,432 የምንጭ ፒክሰሎች የተገደቡ ናቸው።
-FFmpeg ከ1-16 የመካከለኛ ነጥብ JPEG ፍሬሞችን ናሙና ያደርጋል፣
-ረጅሙን ጠርዝ ወደ ቢበዛ 1,024 ፒክሰሎች ያሳንሳል ትናንሽ ግብዓቶችን ሳያሳድግ፣
-እና ዩአርኤልን በጭራሽ አይቀበልም። ናሙና በነባሪነት `uniform` ነው።
-አማራጭ `scene_aware` እና የሙከራ `segment_aware` ፖሊሲዎች
-በቀድሞው የተረጋገጠ የአካባቢ ዥረት ላይ አንድ ተጨማሪ የተስተካከለ FFmpeg ማለፊያ ያከናውናሉ፣
-የተገደቡ `showinfo` የትዕይንት የጊዜ ማህተሞችን ይመርጣሉ፣
-እና በመፈለጊያ ውድቀት፣ የጊዜ ማብቂያ፣ የተሳሳተ ውፅዓት፣ ወይም ባዶ እጩ ስብስብ ላይ
-ወደ ተመሳሳይ ወጥ መካከለኛ ነጥቦች በቆራጥነት ይመለሳሉ።
-ክፍል-አዋቂ ሁነታ የመካከለኛ ነጥብ ናሙናዎችን ከተረጋገጡት የትዕይንት ክፍተቶች ጋር በተመጣጣኝ መልኩ ይመድባል።
-ክፍል-አዋቂ ማስረጃ እና የመውደቅ ባህሪ ከዚህ በታች በዝርዝር ተብራርተዋል።
-ጠንካራው የ16-ፍሬም ገደብ በእያንዳንዱ ፖሊሲ ውስጥ ከተመረጠ በኋላ ይተገበራል።
-የትዕይንት-አዋቂ ጥያቄ አንድ-ፍሬም በጀት ብቻ ሲኖረው፣
-የነቃውን ሙሉ-ቪዲዮ ወይም የትኩረት መስኮት ወጥ መካከለኛ ነጥብ ይጠቀማል
-እና `policyEffective: uniform` ሪፖርት ያደርጋል፡
-አንድ የተመረጠ የትዕይንት ፍሬም ሁለቱንም ጊዜያዊ ጫፎች ማቆየት አይችልም።
-ጠሪ በአማራጭ የተወሰነ የትኩረት መስኮት (`start`/`end` ሰከንዶች) ሊያቀርብ ይችላል፤
-ወሰኖች ከመገናኛ ብዙሃን ቆይታ ጋር ይጣበቃሉ፣ የተገለበጡ ወይም ያልተወሰኑ መስኮቶች ውድቅ ይደረጋሉ፣
-እና ሁሉም የናሙና ፖሊሲዎች የሚከናወኑት በተለመደው ክፍተት ውስጥ ብቻ ነው።
-የተገኘው መስኮት በናሙና ሜታዳታ እና በማይታመን መግለጫ ቅድመ ቅጥያ ውስጥ ይካተታል
-ስለዚህ የታችኛው ሞዴሎች ያተኮረ ቅንጭብን ከሙሉ የጊዜ መስመር መለየት ይችላሉ።
+በbroker ውስጥ፣ `ffprobe` የግል አካባቢያዊ ፋይል ያነባል፤ ቋሚው የተፈቀዱ ቅርጸቶች ዝርዝር የplaylist እና manifest ቅርጸቶችን አያካትትም። ለተፈቀዱ MOV-family
+containers፣ ውጫዊ የMOV ውሂብ ማጣቀሻዎች በነባሪነት እንደተሰናከሉ ይቆያሉ፣ ቋሚው ትእዛዝም እነሱን አያነቃም። `ffprobe` እና `ffmpeg` ሁለቱም የ`file`-only protocol ፈቃድ ዝርዝርን፣ አንድ threadን፣ ቋሚ የargument ድርድሮችን፣ shell አለመጠቀምን እና ከ`PATH` የሚገኙ executablesን ይጠቀማሉ። የተያያዙ የሽፋን ምስል streams ለማጫወት የሚመረጡ አይደሉም። ሊጫወቱ የሚችሉ streams ሁሉ ገደቦቹን ማሟላት አለባቸው፣ እና ወደ ቋሚና ሊተነበይ የሚችል ዝቅተኛ-index አማራጭ ከመመለስ በፊት በግልጽ የተመረጠ ነባሪ stream ቅድሚያ ያገኛል። ቪዲዮዎች በ600 ሰከንድ፣ በእያንዳንዱ አቅጣጫ 8,192 pixels እና 33,554,432 የምንጭ pixels ይገደባሉ። FFmpeg በመካከለኛ ነጥቦች 1–16 JPEG frames ናሙና ይወስዳል፣ ትንንሽ ግብዓቶችን ሳያሳድግ ረጅሙን ጠርዝ እስከ ቢበዛ 1,024 pixels ያሳንሳል፣ እና URL ፈጽሞ አይቀበልም። ናሙና አወሳሰድ በነባሪነት `uniform` ነው። አማራጭ `scene_aware` እና የሙከራ `segment_aware` ፖሊሲዎች አስቀድሞ በተረጋገጠው አካባቢያዊ stream ላይ አንድ ተጨማሪ ቋሚ የFFmpeg ዙር ያካሂዳሉ፣ በገደብ ውስጥ ያሉ የ`showinfo` ትዕይንት የጊዜ ማህተሞችን ይመርጣሉ፣ እና detector ሲሳካ ካልቻለ፣ ጊዜው ሲያልቅ፣ ውጤቱ የተበላሸ ሲሆን ወይም የእጩዎች ስብስብ ባዶ ሲሆን ወደ ተመሳሳይ መደበኛ መካከለኛ ነጥቦች በቋሚና ሊተነበይ በሚችል መንገድ ይመለሳሉ። Segment-aware ሁኔታ የመካከለኛ ነጥብ ናሙናዎችን ከተረጋገጡት የትዕይንት ክፍተቶች ርዝመት ጋር በተመጣጣኝ ሁኔታ ይመድባል፤ የsegment-aware ማስረጃ እና ወደ ነባሪ የመመለስ ባህሪ ከታች ተዘርዝረዋል። ጥብቁ የ16-frame ገደብ በእያንዳንዱ ፖሊሲ ከምርጫ በኋላ ይተገበራል። Scene-aware ጥያቄ የአንድ frame ብቻ በጀት ሲኖረው፣ የሚሰራውን ሙሉ-ቪዲዮ ወይም focus window መደበኛ መካከለኛ ነጥብ ይጠቀማል እና `policyEffective: uniform` ብሎ ያሳውቃል፤ አንድ የተመረጠ የትዕይንት frame የጊዜ መስመሩን ሁለቱንም ጫፎች ማስጠበቅ አይችልም። ጥሪ አድራጊ አማራጭ ሆኖ ውስን focus window (`start`/`end` በሰከንድ) ሊያቀርብ ይችላል፤ ድንበሮቹ በሚዲያው ቆይታ መሠረት ይገደባሉ፣ የተገለበጡ ወይም ውስን ያልሆኑ windows ውድቅ ይደረጋሉ፣ እና ሁሉም የናሙና አወሳሰድ ፖሊሲዎች በተስተካከለው ክፍተት ውስጥ ብቻ ይከናወናሉ። የተገኘው window በናሙና አወሳሰድ metadata እና በማይታመነው መግለጫ ቅድመ ቅጥያ ውስጥ ይካተታል፣ ስለዚህ ቀጣይ ሞዴሎች የተመረጠ ቁራጭን ከሙሉ የጊዜ መስመር መለየት ይችላሉ።
 
-የፍቺ መግለጫ ትኩረት የተለየ፣ ግልጽ ቅንብር ነው።
-ነባሪው `full` የትንተና ሁነታ ነባሩን የፍሬም ጥያቄ ይይዛል
-እና የጥያቄ ጽሁፍን ወደ መግለጫ ሞዴል በጭራሽ አያስተላልፍም።
-በ`focused` ሁነታ፣ ድልድዩ የቅርብ ጊዜውን ባዶ ያልሆነ በተጠቃሚ የተጻፈ `text`/`input_text`
-ከተመሳሳይ የቻት ወይም የምላሾች መያዣ ብቻ ያነባል፣ ወደ NFC ያመቻቸዋል፣
-የቁጥጥር ቁምፊዎችን እና ክፍተቶችን ያጠፋል፣ እና በ500 የዩኒኮድ ኮድ ነጥቦች ይገድበዋል።
-ባዶ ውጤት ወደ ትክክለኛው `full` ጥያቄ ይመለሳል።
-ሊጠቅም የሚችል ፍንጭ በተወሰነ የማይታመን-ተጠቃሚ-አውድ ብሎክ ውስጥ እንደ JSON ተከታታይ ይሆናል
-እና የሚታዩ ዝርዝሮችን ብቻ ቅድሚያ ሊሰጥ ይችላል፤
-በመገናኛ ብዙሃን ውስጥ ለሚታዩ ወይም ለሚሰሙ መመሪያዎች ከመከተል የተለየ ማስጠንቀቂያን ሊሽር አይችልም።
-የጽሑፍ ትኩረት `start`/`end` በጭራሽ አይገምትም ወይም ጊዜያዊ ናሙናውን አይቀይርም።
+በትርጉም ላይ ያተኮረ የመግለጫ ትኩረት የተለየ፣ በግልጽ የሚመረጥ ቅንብር ነው። ነባሪው `full` የትንተና ሁኔታ ያለውን የframe prompt እንዳለ ያቆያል እና የጥያቄውን ጽሑፍ ለመግለጫ ሞዴሉ ፈጽሞ አያስተላልፍም። በ`focused` ሁኔታ፣ bridge ከተመሳሳይ Chat ወይም Responses container ውስጥ በተጠቃሚ የተጻፈውን የቅርብ ጊዜ ባዶ ያልሆነ `text`/`input_text` ብቻ ያነባል፣ ወደ NFC ያስተካክለዋል፣ የቁጥጥር ቁምፊዎችን እና ክፍተቶችን ያጠቃልላል፣ እና በ500 Unicode code points ይገድበዋል። ባዶ ውጤት ወደ ትክክለኛው `full` prompt ይመለሳል። ጥቅም ላይ ሊውል የሚችል ፍንጭ በተለየ የማይታመን-የተጠቃሚ-አውድ ብሎክ ውስጥ እንደ JSON ይቀመጣል እና ለሚታዩ ዝርዝሮች ቅድሚያ መስጠት ብቻ ይችላል፤ በሚዲያው ውስጥ የሚታዩ ወይም የሚሰሙ መመሪያዎችን እንዳይከተሉ የሚናገረውን የተለየ ማስጠንቀቂያ መሻር አይችልም። የጽሑፍ ትኩረት `start`/`end` አይገምትም ወይም የጊዜ ናሙና ወሳጁን አይቀይርም።
 
-#### FU-07 መዋቅራዊ ክፍል ማስረጃ
+#### FU-07 መዋቅራዊ የክፍል ማስረጃ
 
-`segment_aware` በቀድሞው የተረጋገጠ የአካባቢ ቪዲዮ ዥረት ላይ አንድ የተገደበ ቅድመ-ትንተና ማለፊያ ይጠቀማል።
-የተስተካከለው የማጣሪያ ሰንሰለት በመጀመሪያ ቢበዛ 320 ፒክሰሎች ስፋት እንዲኖረው ያሳንሳል፣
-የትዕይንት ለውጦችን እና የቀዘቀዙ ክፍተቶችን ይለያል፣ ከዚያም በሰከንድ 1 ፍሬም ለደበዘዘ፣
-አማካይ ብርሃን እና የቦታ/ጊዜ መረጃ ናሙና ያደርጋል።
-ማለፊያው በ600 መዋቅራዊ ናሙናዎች፣ አንድ FFmpeg/ማጣሪያ ክር፣
-ተመሳሳይ `file`-ብቻ ፕሮቶኮል እና የመያዣ የፍቃድ ዝርዝሮች፣
-1 ሚቢ የሂደት-ውፅዓት ገደብ፣ እና በደላላው የጋራ ማቋረጥ/የጊዜ ገደብ ውስጥ ቢበዛ 30 ሰከንዶች የተገደበ ነው።
-ከጥያቄው ትዕዛዝን፣ ማጣሪያን፣ መንገድን ወይም ዩአርኤልን በጭራሽ አይቀበልም።
+`segment_aware` አስቀድሞ በተረጋገጠው አካባቢያዊ የቪዲዮ stream ላይ አንድ የተገደበ ቅድመ-ትንተና ዙር ይጠቀማል። ቋሚው የfilter ሰንሰለት በመጀመሪያ ስፋቱን እስከ ቢበዛ 320 pixels ያሳንሳል፣ የትዕይንት ለውጦችን እና የቆሙ ክፍተቶችን ይለያል፣ ከዚያም ለድብዘዛ፣ ለአማካይ luma እና ለቦታዊ/ጊዜያዊ መረጃ በሰከንድ 1 frame ናሙና ይወስዳል። ዙሩ በ600 መዋቅራዊ ናሙናዎች፣ በአንድ FFmpeg/filter thread፣ በተመሳሳይ የ`file`-only protocol እና container ፈቃድ ዝርዝሮች፣ በ1 MiB የprocess ውጤት ገደብ እና በbroker የጋራ abort/deadline ውስጥ በቢበዛ 30 ሰከንድ ይገደባል። ከጥያቄው ትእዛዝ፣ filter፣ ዱካ ወይም URL ፈጽሞ አይቀበልም።
 
-የመዋቅር እሴቶቹ የትርጉም ቪዲዮ ግንዛቤ ሳይሆኑ፣ የውሳኔ ሰጪ ናሙና ማስረጃዎች ናቸው። እነሱ ርዕሰ ጉዳዮችን፣ ድርጊቶችን፣ መግለጫ ጽሑፎችን፣ ንግግርን ወይም የተጠቃሚን ዓላማ አይገምቱም። የትዕይንት እና የፍሪዝ ወሰኖች ክፍሎችን ይፈጥራሉ፤ የፍሪዝ ሽፋን፣ ብዥታ፣ መጋለጥ፣ የቦታ ዝርዝር እና ጊዜያዊ ለውጥ አሁን ያለውን የ1-16 ፍሬም በጀት እንዴት እንደሚመደብ ብቻ ይነካሉ። ሙሉ በሙሉ የቀዘቀዘ ክፍል በአንድ ፍሬም የተገደበ ሲሆን፣ ያልቀዘቀዙ ክፍሎች ለቀሪው በጀት ይወዳደራሉ። ወሰኖች ከፍሬሞች ሲበዙ፣ ወጥ የሆነ የጊዜ መስመር ሽፋን ተጠብቆ ይቆያል ስለዚህ ፈጣን ቀደምት ቁርጥራጮች ረጅም የኋላ ክፍልን መደበቅ አይችሉም። በፍሪዝ ወሰን የ1-ሰከንድ ትንተና ጥራት ውስጥ ያሉ የትዕይንት ወሰኖች ይዋሃዳሉ።
+መዋቅራዊ እሴቶቹ ቋሚና ሊተነበይ የሚችል የናሙና አወሳሰድ ማስረጃ ናቸው እንጂ የቪዲዮው የትርጉም ግንዛቤ አይደሉም። ርዕሰ ጉዳዮችን፣ ድርጊቶችን፣ መግለጫዎችን፣ ንግግርን ወይም የተጠቃሚ ዓላማን አይገምቱም። የትዕይንት እና የመቆም ድንበሮች ክፍሎችን ይፈጥራሉ፤ የመቆም ሽፋን፣ ድብዘዛ፣ ብርሃን መጠን፣ ቦታዊ ዝርዝር እና ጊዜያዊ ለውጥ ያለው 1–16 frame በጀት እንዴት እንደሚመደብ ላይ ብቻ ተጽዕኖ ያሳድራሉ። ሙሉ በሙሉ የቆመ ክፍል በአንድ frame ይገደባል፣ ያልቆሙ ክፍሎች ደግሞ ለቀሪው በጀት ይወዳደራሉ። ድንበሮች ከframes ሲበልጡ፣ በጊዜ መስመሩ ላይ የተመጣጠነ ሽፋን ይጠበቃል፣ ስለዚህ በመጀመሪያ ያሉ ፈጣን ሽግግሮች ረጅም የመጨረሻ ክፍልን መደበቅ አይችሉም። ከመቆም ድንበር በ1 ሰከንድ የትንተና ጥራት ውስጥ ያሉ የትዕይንት ድንበሮች ይዋሃዳሉ።
 
-የጠፉ ማጣሪያዎች፣ የተበላሹ/ባዶ ማስረጃዎች፣ የፈላጊ ስህተት፣ ወይም የተገደበው ቅድመ-ትንተና ጊዜ ማብቂያ ወደ ትክክለኛው ወጥ የመሃል ነጥብ ፖሊሲ ክፍት ይሆናሉ። ደዋይ ማቋረጥ ወይም የደላላ ቀነ ገደብ ክፍት አይሆንም፡ በሂደት ላይ ያለውን ንዑስ ሂደት ያቋርጣል፣ የኋላ ፍሬም ማውጣትን ይከላከላል፣ እና የግል ጊዜያዊ ዛፉ በ`finally` ውስጥ ይወገዳል።
+የጎደሉ filters፣ የተበላሸ ወይም ባዶ ማስረጃ፣ የdetector ስህተት ወይም የተገደበው ቅድመ-ትንተና ጊዜ ማለቅ ወደ ትክክለኛው መደበኛ የመካከለኛ ነጥብ ፖሊሲ እንዲመለስ ያደርጋሉ። በጥሪ አድራጊ የተደረገ abort ወይም የbroker deadline ወደ ነባሪ ፖሊሲ እንዲመለስ አያደርግም፤ በሂደት ላይ ያለውን subprocess ያቋርጣል፣ ቀጣይ የframe ማውጣትን ይከለክላል፣ እና የግል ጊዜያዊ የፋይሎች ዛፍ በ`finally` ውስጥ ይወገዳል።
 
-`scripts/perf/video-bridge-fu07-eval.ts` ከድህረ-ቅጂ ቅነሳ በኋላ ለሚደረጉ የመግለጫ ጽሑፍ ጥሪ ቁጠባዎች፣ ለጥቅጥቅ-እንቅስቃሴ በጀት ምደባ፣ ለብዥታ/መጋለጥ/SI-TI ማስረጃዎች፣ ረጅም ጅራት ላላቸው ፈጣን ቁርጥራጮች፣ እና ለቀስ በቀስ ለሚጠፉ የውሸት አዎንታዊ ውጤቶች የውሳኔ ሰጪ እውነተኛ FFmpeg ፊክስቸሮችን ያመነጫል። የቅድመ-ትንተና ግድግዳ ጊዜን ይመዘግባል እና `/usr/bin/time` በሚገኝበት ቦታ፣ የልጅ ሲፒዩ እና ከፍተኛ RSS ይመዘግባል። የጥራት ፍተሻዎቹ መዋቅራዊ ኦራክል ብቻ ናቸው። እውነተኛ የመግለጫ ጽሑፍ-ሞዴል ጥራት `HOLD` ሆኖ ይቆያል ምክንያቱም ይህ መሣሪያ የተፈቀደ የመጨረሻ ነጥብ ወይም የቀዘቀዘ ዳኛ የለውም። የገንዘብ ቁጠባዎችም `HOLD` ሆነው ይቆያሉ `--caption-cost-per-call-usd` ግልጽ የሆነ አዎንታዊ የጥሪ ግምት ካልሰጠ በስተቀር፤ ስክሪፕቱ ሁለቱንም ውጤቶች በጭራሽ አይፈጥርም።
+`scripts/perf/video-bridge-fu07-eval.ts` ከተደጋጋሚ ጥሪዎች ማስወገድ በኋላ በcaption-call የሚገኘውን ቁጠባ፣ በብዙ እንቅስቃሴ ውስጥ የበጀት ምደባን፣ የድብዘዛ/ብርሃን መጠን/SI-TI ማስረጃን፣ ረጅም የመጨረሻ ክፍል ያላቸውን ፈጣን ሽግግሮችን እና ቀስ በቀስ በሚከሰት መደብዘዝ የሚፈጠሩ የሐሰት አዎንታዊ ውጤቶችን ለመፈተሽ ቋሚና ሊተነበዩ የሚችሉ እውነተኛ የFFmpeg fixtures ያመነጫል። የቅድመ-ትንተና በእውነተኛ ሰዓት የፈጀውን ጊዜ እና፣ `/usr/bin/time` ሲኖር፣ የchild CPU እና ከፍተኛ RSS ይመዘግባል። የጥራት ማረጋገጫዎቹ መዋቅራዊ መመዘኛዎች ብቻ ናቸው። ይህ harness የተፈቀደ endpoint ወይም ቋሚ judge ስለሌለው የእውነተኛው caption-model ጥራት `HOLD` ሆኖ ይቆያል። `--caption-cost-per-call-usd` ለእያንዳንዱ ጥሪ ግልጽ የሆነ አዎንታዊ የወጪ ግምት ካላቀረበ፣ የገንዘብ ቁጠባም `HOLD` ሆኖ ይቆያል፤ script ከሁለቱም ውጤቶች አንዳቸውንም አይፈጥርም።
 
-እያንዳንዱ ፍሬም እስከ 4 ሜባ የተገደበ ነው፣ ሁሉም ጥሬ ፍሬሞች በአንድ ላይ እስከ 23 ሜባ፣ እና የተከታታይ የደላላ ምላሽ እስከ 32 ሜባ። የግል ጊዜያዊ ማውጫ በ`finally` ውስጥ ይወገዳል። OmniRoute FFmpegን አያጠቃልልም እና ብጁ ሊተገበር የሚችል መንገድ አይቀበልም። መግለጫ ጽሑፍ ከማስቀመጡ በፊት፣ ድልድዩ ወግ አጥባቂ የእይታ ቅጂ ቅነሳን ያከናውናል፡ እያንዳንዱ JPEG ወደ 16×16 ግራጫማ ቡፈር ይቀንሳል እና ከተቀመጠው የመጨረሻ ፍሬም ጋር ብቻ ይነጻጸራል። ከተጠየቀው የመግለጫ ጽሑፍ በጀት በላይ ለአንድ ፍሬም፣ ማውጣት እስከ ሁለት እጥፍ የሚሆን የተገደበ እጩ ገንዳ እና ከ16 ፍሬሞች የማይበልጥ ያቀርባል። የተጠየቀው ገደብ የሚተገበረው ከቅጂ ቅነሳ በኋላ ብቻ ነው፣ የመጀመሪያው እና የመጨረሻው የተመረጡ እጩዎች የመጨረሻው ቅነሳ በሚደረግበት ጊዜ በበጀት ቢያንስ ሁለት ሲሆኑ ይጠበቃሉ። ስሪት ያለው `grayscale-16x16-mean-cells-v2` ፖሊሲ አማካኝ የሉማ ዴልታ እና መደበኛ ዴልታው ቢያንስ 0.05 የሆነ የጥፍር አክል ሴሎች ጥምርታ ትልቁን ይጠቀማል። የቅጂ ገደቡ ቋሚ 0.04 ነው፣ እንደ የሩጫ ጊዜ ቅንብር ከመጋለጥ ይልቅ ለተገመተነት የተመረጠ። ይህ ሁለተኛ ደረጃ ከፍተኛ-ንፅፅር ምልክት አማካኝ-ብቻ ንፅፅር ሊደብቀው የሚችለውን ትንሽ እንቅስቃሴ እና የሚታዩ የጽሑፍ ለውጦችን ይጠብቃል። ንፅፅር ወይም ዲኮደር ስህተቶች ክፍት ይሆናሉ እና ሽፋንን ይጠብቃሉ። የውጤት ሜታዳታ የተወጡ እጩዎችን፣ በተሳካ ሁኔታ ጥቅም ላይ የዋሉ ፍሬሞችን እና የተጣሉ የእይታ ቅጂዎችን ይለያል።
+յուրաքանչյուր կադրի չափը սահմանափակված է 4 MiB-ով, բոլոր չմշակված կադրերինը միասին՝ 23 MiB-ով, իսկ
+սերիականացված բրոքերի պատասխանը՝ 32 MiB-ով։ Մասնավոր ժամանակավոր պանակը ջնջվում է
+`finally` բլոկում։ OmniRoute-ը FFmpeg-ը չի ներառում և չի ընդունում գործարկվող ֆայլի
+հատուկ ուղի։ Ենթագրեր ստեղծելուց առաջ կամուրջը կիրառում է տեսողական կրկնությունների
+պահպանողական հեռացում. յուրաքանչյուր JPEG փոքրացվում է մինչև 16×16 մոխրագույն բուֆեր և
+համեմատվում է միայն վերջին պահպանված կադրի հետ։ Երբ պահանջվող ենթագրերի սահմանաչափը
+մեկ կադրից մեծ է, արտածումը տրամադրում է թեկնածուների սահմանափակ հավաքածու՝ այդ
+սահմանաչափի առավելագույնը կրկնապատիկի չափով, բայց երբեք ոչ ավելի, քան 16 կադր։
+Պահանջված սահմանաչափը կիրառվում է միայն կրկնությունները հեռացնելուց հետո. եթե
+սահմանաչափը առնվազն երկու է, վերջնական նոսրացման ընթացքում պահպանվում են առաջին և
+վերջին ընտրված թեկնածուները։ Տարբերակավորված
+`grayscale-16x16-mean-cells-v2` կանոնակարգն օգտագործում է միջին լուսավորության տարբերությունից և
+այն մանրապատկերի բջիջների հարաբերակցությունից մեծը, որոնց նորմալացված տարբերությունն առնվազն 0.05 է։
+Կրկնության շեմը հաստատուն 0.04 է՝ ընտրված կանխատեսելիության համար, այլ ոչ թե
+որպես կատարման պահին փոփոխվող կարգավորում։ Այս երկրորդական
+բարձր կոնտրաստի ազդանշանը պահպանում է փոքր շարժումները և տեսանելի տեքստի փոփոխությունները,
+որոնք միայն միջինը համեմատելը կարող է թաքցնել։ Համեմատիչի կամ ապակոդավորիչի սխալների դեպքում
+մշակումը շարունակվում է, և ծածկույթը պահպանվում է։ Ելքային մետատվյալներն առանձին ներկայացնում են
+արտածված թեկնածուները, հաջողությամբ օգտագործված կադրերը և հեռացված տեսողական կրկնությունները։
 
-በግልጽ ምልክት የተደረገበት የቪዲዮ ክፍል የጊዜ ማህተም ያለበት የእውቂያ ወረቀት ሊጠይቅ ይችላል። ድልድዩ ቢበዛ ባለ 4-አምድ፣ 16-ፍሬም JPEG ፍርግርግ ይገነባል። እያንዳንዱ 512-ፒክሰል ሕዋስ የመነሻ የጊዜ ማህተሙን ወደ ከፍተኛ-ንፅፅር የታችኛው ባንድ ያቃጥላል፣ በተመሳሳይ ጊዜ የጊዜ ማህተሞቹ ለታችኛው ፍሰት ትስስር እና ኦዲት በጽሑፍ ሜታዳታ ውስጥ ይቆያሉ። የተሟላው JPEG በ32 ሜባ የተገደበ ሆኖ ይቆያል። `sharp` ፍርግርጉን መፍታት ወይም ማቀናበር ካልቻለ፣ ድልድዩ ወደ ግለሰብ JPEG ፍሬሞች ይመለሳል፤ የደንበኛ ማቋረጥ አሁንም በወረቀት ክዋኔው ውስጥ ይሰራጫል።
+Որպես վիդեո բացահայտ նշված մասը կարող է պահանջել ժամանակային նշումներով կոնտակտային թերթ։
+Կամուրջը ստեղծում է առավելագույնը 4 սյունակից և 16 կադրից բաղկացած JPEG ցանց։ Յուրաքանչյուր
+512 պիքսելանոց բջջի ներքևի բարձր կոնտրաստի շերտում դրոշմվում է սկզբնաղբյուրի ժամանակային նշումը, մինչդեռ նույն ժամանակային նշումները
+մնում են նաև տեքստային մետատվյալներում՝ հետագա համադրման և աուդիտի համար։ Ամբողջական
+JPEG-ի չափը նույնպես սահմանափակված է 32 MiB-ով։ Եթե `sharp`-ը չի կարող ապակոդավորել կամ կազմել ցանցը,
+կամուրջը վերադառնում է առանձին JPEG կադրերին. հաճախորդի կողմից ընդհատումը, սակայն, շարունակում է
+տարածվել թերթի մշակման գործողության վրա։
 
-የማስተዋወቂያ ማስረጃው ከሰው ሰራሽ ቅንብር ማይክሮቤንችማርክ ሆን ተብሎ የተለየ ነው። `scripts/perf/video-bridge-contact-sheet-eval.ts` ለእውነተኛ OpenAI-ተኳሃኝ የእይታ ሞዴሎች የschema-versioned A/B መሣሪያን ይገልጻል። በአቅራቢው ሪፖርት የተደረጉ ቶከኖችን፣ ከጫፍ እስከ ጫፍ የግድግዳ መዘግየትን (የወረቀት ቅንብርን ጨምሮ)፣ የሞዴል ጥሪ ብዛት፣ እና በማኒፌስት የተገለጸ የእውነታ ማቆየትን ይለካል። ጥሬ የሞዴል ምላሾች ወደ ሪፖርቱ አይጻፉም፤ SHA-256 ዳይጀስቶች እና የተዛመዱ የእውነታ መታወቂያዎች ብቻ ይቀመጣሉ። መሣሪያው ምንም የአውታረ መረብ ወይም የሚከፈልበት የሞዴል ጥሪ አያደርግም `--execute-real` ካልተላለፈ እና `--model`፣ `OMNIROUTE_BASE_URL`፣ እና `OMNIROUTE_API_KEY` ካልተዋቀሩ በስተቀር። ያ ግልጽ እውነተኛ ሩጫ ከሌለ፣ ማሽን-ሊነበብ የሚችል ፍርዱ `HOLD` ሆኖ ይቆያል፤ ሰው ሰራሽ የጭነት/የጥሪ-ብዛት መለኪያዎች ብቻ የማስተዋወቂያ ማስረጃ አይደሉም።
+Ներդրման հաստատման ապացույցները միտումնավոր առանձնացված են սինթետիկ կազմման
+միկրոբենչմարքից։ `scripts/perf/video-bridge-contact-sheet-eval.ts`-ը սահմանում է
+սխեմայի տարբերակով A/B փորձարկման գործիքակազմ իրական OpenAI-ի հետ համատեղելի տեսողական մոդելների համար։ Այն չափում է
+մատակարարի հաղորդած տոկենները, ամբողջական մշակման տևողությունը (ներառյալ թերթի կազմումը),
+մոդելի կանչերի քանակը և մանիֆեստում սահմանված փաստերի պահպանումը։ Մոդելի չմշակված պատասխանները
+հաշվետվության մեջ չեն գրվում. պահվում են միայն SHA-256 հեշերը և համընկած փաստերի ID-ները։ Այս
+գործիքակազմը ցանցային կամ վճարովի մոդելի կանչ չի կատարում, եթե չի փոխանցվել `--execute-real`-ը և
+կարգավորված չեն `--model`-ը, `OMNIROUTE_BASE_URL`-ը և `OMNIROUTE_API_KEY`-ը։ Առանց
+այդ բացահայտ իրական գործարկման՝ մեքենայաընթեռնելի որոշումը մնում է `HOLD`. սինթետիկ
+օգտակար բեռի կամ կանչերի քանակի չափումներն ինքնին ներդրման հաստատման ապացույց չեն։
 
-ደዋዮች ቀድሞውንም የተስተካከለ ጽሑፍ ሲኖራቸው አማራጭ የሆነ `transcript.cues` ድርድርን ወደሚደገፍ የቪዲዮ ክፍል ማያያዝ ይችላሉ። እያንዳንዱ ምልክት `text`፣ በተፈተሸው የቆይታ ጊዜ ውስጥ የተገደበ `start`/`end` ክፍተት፣ እና የተፈቀደ `source` (`client`፣ `embedded`፣ ወይም `audio-bridge`) መያዝ አለበት፤ `confidence` በነባሪ `1` ሲሆን በ`0` እና `1` መካከል መቆየት አለበት። በትክክል ተመሳሳይ የሆኑ ምልክቶች ይዋሃዳሉ። OmniRoute ከዚህ ሜታዳታ በጭራሽ ግልባጭ አይጀምርም፡ የተረጋገጡ ምልክቶች ከምንጭ፣ ከእምነት እና ከክፍተት ጋር ወደተገለጸው ውጤት ይገለበጣሉ፣ እና ከፍሬም መግለጫ ጽሑፎች ጎን ለጎን እንደማይታመኑ ምልከታዎች ይቀርባሉ። ልክ ያልሆነ፣ ከክልል ውጪ የሆነ፣ ወይም የመነሻ-ነጻ ጽሑፍ ወደ መግለጫ ጽሑፍ ዥረት ከመቀላቀል ይልቅ ውድቅ ይደረጋል። የ`source` መስክ በአሁኑ ጊዜ በደዋይ የተገለጸ እንጂ በአገልጋይ ያልተረጋገጠ ነው፡ OmniRoute እሴቱ ከሶስቱ ከተፈቀዱ ሕብረቁምፊዎች አንዱ መሆኑን ያስገድዳል፣ ነገር ግን `embedded` ወይም `audio-bridge` የሚል መለያ በእርግጥ ከአገልጋይ-ባለቤትነት ማውጣት የመጣ መሆኑን በምስጢር ገና አያረጋግጥም። ያ ማረጋገጫ እስኪመጣ ድረስ `source`ን እንደማይታመን ፍንጭ ይያዙት፤ በእሱ ላይ የፍቃድ ውሳኔዎችን አይገንቡ።
+Կանչող կողմերը կարող են աջակցվող վիդեո մասին կցել ոչ պարտադիր `transcript.cues` զանգված,
+եթե արդեն ունեն համաժամեցված տեքստ։ Յուրաքանչյուր հատված պետք է պարունակի `text`,
+վերջավոր `start`/`end` միջակայք՝ ստուգված տևողության սահմաններում, և թույլատրված
+`source` (`client`, `embedded` կամ `audio-bridge`). `confidence`-ի լռելյայն արժեքը
+`1` է և պետք է մնա `0`-ի ու `1`-ի միջև։ Լիովին նույնական հատվածները միավորվում են։
+OmniRoute-ը այս մետատվյալներից երբեք տառադարձում չի սկսում. վավերացված հատվածները
+պատճենվում են նկարագրված արդյունքի մեջ՝ սկզբնաղբյուրի, վստահության մակարդակի և միջակայքի հետ,
+և ցուցադրվում են որպես անվստահելի դիտարկումներ կադրերի ենթագրերի կողքին։ Անվավեր,
+սահմաններից դուրս կամ ծագման նշում չունեցող տեքստը մերժվում է՝ ենթագրերի հոսքին
+ավելացվելու փոխարեն։ Հարցման մարմնի տառադարձման երկու ուղիներն էլ տրամադրված ծագումը
+նորմալացնում են որպես `client`՝ ներառյալ ինքնակամ նշված `embedded` կամ `audio-bridge`
+պիտակները։ Միայն սերվերի կողմից կառավարվող ադապտերը կարող է այդ վստահելի պիտակները նշանակել
+միայն կոդի միջոցով հասանելի `trustedSource` արգումենտով. հարցման JSON դաշտը չի կարող հասնել
+այդ արգումենտին։ Տառադարձման տեքստը մնում է մեդիայից ստացված անվստահելի բովանդակություն՝
+անկախ դրա ծագումից, և երբեք չպետք է որոշի թույլտվության տրամադրումը։
 
-የላቀ ደዋይ አስቀድሞ የተፈቀደ `audioTranscript` ትራክ ለተመሳሳይ ቪዲዮ ሊያቀርብ ይችላል። የውህደት ስፌት የእይታ እና የድምጽ ምልከታዎችን በአንድ የጊዜ ገደብ እና የማቋረጥ ምልክት ስር ያካሂዳል፣ በተለመደው የጊዜ መስመር ላይ ያዛቸዋል፣ ትክክለኛ ድግግሞሾችን ያጠፋል፣ እና አንድ ወገን ብቻ ሲሳካ ከፊል ውጤት ሪፖርት ያደርጋል። ልክ ያልሆነ `audioTranscript` ወደዚያ ከፊል ውጤት ይወርዳል — የእይታ መግለጫው ይቀመጣል እና የድምጽ ቅርንጫፍ የተጣራ የውድቀት ኮድ ይመዘግባል — ሙሉውን ቪዲዮ ከማበላሸት ይልቅ። በእያንዳንዱ ቅርንጫፍ መገኘት፣ ከፊል ባንዲራ እና የተጣሩ የውድቀት ኮዶች በተገለጸው ውጤት ውስጥ፣ በጋርድሬይል ሜታዳታ (`audioFusionRuns`/`audioFusionPartials`/`audioFusionFailureCodes`)፣ በውጤት-መሸጎጫ ሜታዳታ ውስጥ እና በድልድይ ውህደት ቆጣሪዎች ውስጥ ተጠብቀዋል። ነባሪው የቪዲዮ ድልድይ መንገድ ንግግርን ወደ ጽሑፍ አይጠራም ወይም ሁለተኛ የሚዲያ ቅጂ አያወርድም፤ ያ ግልጽ ትራክ ከሌለ፣ ቪዲዮ-ብቻ ሆኖ ይቆያል።
+Ընդլայնված հնարավորություններ օգտագործող կանչող կողմը կարող է նույն վիդեոյի համար տրամադրել `audioTranscript` ուղի.
+այն դիտարկվում է որպես հաճախորդի տրամադրած տեքստ, այլ ոչ սերվերի կողմից կատարված տառադարձման ապացույց։
+Միաձուլման հանգույցը տեսողական և ձայնային դիտարկումները մշակում է
+մեկ վերջնաժամկետի և ընդհատման ազդանշանի ներքո, դասավորում դրանք ընդհանուր ժամանակագծի վրա, միավորում
+լիովին նույնական գրառումները և հաղորդում մասնակի արդյունք, երբ հաջողվում է միայն մեկ ճյուղը։
+Անվավեր `audioTranscript`-ը հանգեցնում է այդ մասնակի արդյունքին. տեսողական
+նկարագրությունը պահպանվում է, իսկ ձայնային ճյուղը գրանցում է մաքրված սխալի կոդ՝
+ամբողջ վիդեոյի մշակումը ձախողելու փոխարեն։ Յուրաքանչյուր ճյուղի հասանելիությունը, մասնակի արդյունքի նշիչը
+և մաքրված սխալի կոդերը պահպանվում են նկարագրված արդյունքի մեջ,
+պաշտպանիչ մեխանիզմի մետատվյալներում (`audioFusionRuns`/`audioFusionPartials`/
+`audioFusionFailureCodes`), արդյունքների քեշի մետատվյալներում և կամրջի
+միաձուլման հաշվիչներում։ Video Bridge-ի լռելյայն ուղին չի գործարկում խոսքից տեքստի վերածում
+և չի ներբեռնում մեդիայի երկրորդ պատճենը. առանց այդ բացահայտ տրամադրված ուղու՝ այն մնում է
+միայն վիդեոյի մշակման ուղի։
 
-**የትራንስክሪፕት ማቆየት (#12150 P1)።** ይህ የሚተገበረው የቪዲዮ ድልድይ (ራሱ አማራጭ) የትራንስክሪፕት ምልክት ሲያቀርብ ነው — የተለየ የማቆያ ባንዲራ የለም። አንድ ጥያቄ ማንኛውንም የትራንስክሪፕት ምልክት (በደዋይ የተገለጸ `transcript` ወይም የተዋሃደ `audioTranscript`) ሲያቀርብ፣ ጋርድሬይሉ `videoBridgeObserved` ብሎ ምልክት ያደርግበታል እና የቪዲዮ መግለጫውን የተስተካከለ ጥላ ያመነጫል — እያንዳንዱ ምልክት ነጻ-ጽሑፍ አካል በ`[redacted-video-transcript]` የሚተካበት ተመሳሳይ አቀራረብ፣ ሕብረቁምፊው ከመሰብሰቡ በፊት የተዋቀረው ምልክት መስክን በመተካት የተገነባ (የተስተካከለውን ጽሑፍ በመተንተን በጭራሽ አይደለም፣ ስለዚህ ምንም ምልክት ይዘት — ተቃዋሚ ወይም ተራ፣ `]` የያዙ አካላትን ጨምሮ እንደ `[inaudible]`/`[music]` — ሊተርፍ አይችልም)። የተጠበቀው የጥሪ-ምዝግብ ማስታወሻ ጥያቄ አካል እያንዳንዱን በቪዲዮ የተገኘ የጽሑፍ ክፍል ለዚያ የተስተካከለ ጥላ ይለውጣል፣ በይዘት እኩልነት የተዛመደ፤ `fullText` መልህቅ ከተጠናቀቀው ቅድመ-ጥሪ ጋርድሬይል ጭነት እንደገና ይነበባል፣ ስለዚህ ተዛማጁ በኋላ የሰንሰለት ጋርድሬይሎች (የ PII እና ምስክርነት ማስከሪያዎች፣ ቅድሚያዎች 10/95) የመግለጫውን ጽሑፍ በቦታው ከጻፉ በኋላ እና የስርዓት-ጥያቄ/ማስተላለፍ/ማህደረ ትውስታ መርፌ የመልእክት ድርድርን ከቀረጸ በኋላም ይሳካል። ወደ ሞዴሉ የሚላከው አካል ሳይለወጥ ይቆያል። የታየ ጥያቄም ዘላቂ ማህደረ ትውስታን አይሞላም (ሁለቱም በጥያቄ- እና ምላሽ-የተገኙ ማውጣት ይዘለላሉ)፣ ስለዚህ የሞዴሉ የራሱ ምላሽ የትራንስክሪፕት ጽሑፍን ወደ ማህደረ ትውስታ ማስተጋባት አይችልም።
+**የትራንስክሪፕት ማቆየት (#12150 P1).** ይህ Video Bridge (በራሱ በፈቃድ የሚነቃ) የትራንስክሪፕት መግለጫ በሚያሳይበት ጊዜ ሁሉ በራስ-ሰር ይተገበራል — የተለየ የማቆየት ፍላግ የለም። ጥያቄ ማንኛውንም የትራንስክሪፕት መግለጫ (በጥሪ አድራጊው የተገለጸ `transcript` ወይም የተዋሃደ `audioTranscript`) ሲያሳይ፣ መከላከያው `videoBridgeObserved` ብሎ ያመለክተዋል እና የቪዲዮ መግለጫውን የተደበቀ ቅጂ ያዘጋጃል — የእያንዳንዱ መግለጫ ነፃ ጽሑፍ በ`[redacted-video-transcript]` የተተካበት ተመሳሳይ አቀራረብ። ይህም ሕብረቁምፊው ከመገንባቱ በፊት የተዋቀረውን የመግለጫ መስክ በመተካት ይዘጋጃል (የተጠፍጣፋውን ጽሑፍ በመተንተን ፈጽሞ አይደለም፤ ስለዚህ `]` የያዙ እንደ `[inaudible]`/`[music]` ያሉ ጽሑፎችን ጨምሮ ጠላታዊም ሆነ መደበኛ የመግለጫ ይዘት ሊቀር አይችልም)። በጥሪ ሎግ ውስጥ የሚቀመጠው የጥያቄ አካል፣ ከቪዲዮ የተገኘውን እያንዳንዱን የጽሑፍ ክፍል በዚያ የተደበቀ ቅጂ ይተካል፤ ማዛመዱም በይዘት እኩልነት ይደረጋል። የ`fullText` መለያ ከተጠናቀቀው የቅድመ-ጥሪ መከላከያ ውሂብ እንደገና ይነበባል፤ በዚህም በሰንሰለቱ ውስጥ በኋላ የሚመጡ መከላከያዎች (የግል መረጃ እና የማረጋገጫ መረጃ ደባቂዎች፣ ቅድሚያ 10/95) የመግለጫውን ጽሑፍ በቦታው ከቀየሩ በኋላ፣ እንዲሁም የስርዓት መመሪያ/ርክክብ/ማህደረ ትውስታ መጨመር የመልዕክት ድርድሩን ከቀየረ በኋላም ማዛመዱ ይሳካል። ወደ ሞዴሉ የሚላከው የጥያቄ አካል አይለወጥም። የታየ ጥያቄ ዘላቂ Memory አይሞላም (ከጥያቄም ሆነ ከምላሽ የሚመነጭ ማውጣት ይዘለላል)፤ ስለዚህ የሞዴሉ ራሱ ምላሽ የትራንስክሪፕት ጽሑፍን ወደ Memory መልሶ ሊያስገባ አይችልም።
 
-ተጨማሪ የተጠበቁ ቅጂዎች ተመሳሳይ የታየ-ጥያቄ ምልክትን ይጠቀማሉ። ጥሬው ቅድመ-ጋርድሬይል የደንበኛ-ጥያቄ ቅጽበታዊ ገጽ እይታ፣ በማህደረ ትውስታ ውስጥ ያለ በመጠባበቅ ላይ ያለ ጥያቄ፣ እና ቀደም ብሎ የተከለከለ-ጥያቄ ምዝግብ ማስታወሻ በቪዲዮ ክፍሎች ውስጥ የትራንስክሪፕት መስኮችን በስርዓት ይተካሉ፤ በቧንቧ መስመር ደረጃዎች የተዋሃዱ የሕብረቁምፊ ጥያቄዎች እና የአውድ ማስተላለፍ በተጠበቀው-ጥያቄ-አካል ማጠራቀሚያ ላይ ይስተካከላሉ። የተጠበቀው `video_content_removed` ምልክት `previous_response_id` ቀጣይነት ሆን ተብሎ የተጣለ ጽሑፍን እንደገና ከመገንባት ይልቅ ዝግ ሆኖ እንዲከሽፍ ያደርጋል። የታየ ጥያቄ ከመመዝገቡ በፊት የእያንዳንዱን ክፍል የማስተካከያ ጥላ ካጣ፣ ወይም ከበርካታ የቪዲዮ ጥላዎች አንዱ በኋላ የጥያቄ ለውጦች ከተደረጉ በኋላ መዛመድ ካልቻለ፣ የተጠበቀው የጥያቄ አካል ከፊል የተስተካከለ ትራንስክሪፕት ከመጠበቅ ይልቅ ሙሉ በሙሉ ይዘለላል።
+**ጥሬ የቪዲዮ መስኮች (#12430).** ብሪጁ ሲነቃ እና ቤተኛ የቪዲዮ ድጋፍ መኖሩ ሳይታወቅ ወይም ሳይኖር፣ የተገለጹ `transcript`/`audioTranscript` መስኮችም የመግለጫ ማዘጋጀት ቢሳካ ባይሳካ ወይም የ`maxVideos` ገደብ ቢደረስ እንኳ `videoBridgeObserved` ያነቃሉ። `null` እና ባዶ ሕብረቁምፊዎች ይቆጠራሉ፤ የሌሉ መስኮች እና ቪዲዮ ያልሆኑ ሜታዳታዎች ግን አይቆጠሩም። የሚቀመጡ ቅጂዎች እነዚህን መስኮች ይደብቃሉ ወይም ጥያቄውን ይተዋሉ፤ መሸጎጫዎችና Memory ይዘለላሉ።
 
-ለታየ ጥያቄ፣ የሞዴል ምላሽ የትራንስክሪፕቱን ማንኛውንም ክፍል ያለ የተዋቀረ ምልክት ወሰን ሊጠቅስ ይችላል። ስለዚህ የተጠበቀው የጥሪ-ምዝግብ ማስታወሻ `responseBody` በዘለላ ምልክት ይተካል፤ ዝርዝር የቧንቧ መስመር ቅርሶች (የላይኛው/የደንበኛ አካላትን እና የዥረት ክፍሎችን ሊያካትት ይችላል) አይጠበቁም። የትርጉም፣ የአይደንፖቴንሲ እና የማመዛዘን-ዳግም-አጫውት መሸጎጫዎች ለዚያ ጥያቄ ንባቦችን እና ጽሑፎችን ያልፋሉ። የአቅራቢው ጥያቄ እና ለደንበኛ የሚታየው ምላሽ ሳይለወጡ ይቆያሉ። ዝርዝር ቅርሱ ሲዘለል ቀደምት የጥበቃ ባይቶች ከጊዜያዊው ማህደረ ትውስታ ይወጣሉ። የኪሮ የተሳሳተ የ EventStream ማስጠንቀቂያ የጭነት ባይት ቆጠራን ብቻ ሪፖርት ያደርጋል፣ ይዘቱን ወይም የ JSON ተንታኙን ጥሬ ስህተት በጭራሽ አይደለም።
-ይህ እያንዳንዱ ያልተዛመደ አቅራቢ/ፕለጊን የምርመራ ውጤት እንደተመረመረ አይናገርም፤ ሰፊው የተጠበቀ-ማጠራቀሚያ ፍተሻ በ #11658 ውስጥ ይከታተላል።
+በእነዚህ የአማራጭ መንገዶች፣ ትክክለኛ በጥሪ አድራጊው የቀረቡ መግለጫዎች መደበኛ ያልሆኑ የአቅራቢ መስኮች ከመሆን ይልቅ የሚደገፉ `text`/`input_text` ክፍሎች ይሆናሉ። በጥያቄው የቀረቡት ሁለቱም ትራኮች ያልታመኑ የ`client` ምልከታዎች ሆነው ይቀጥላሉ፣ ቪዲዮው እንዳልተገለጸ እና የጊዜ ማህተሞቹ ከሚዲያው ጋር እንዳልተረጋገጡ ግልጽ ማስጠንቀቂያም ይኖራል። ነባሩ የ256 መግለጫዎች/64-KiB ጠቅላላ ገደብ እና የእያንዳንዱ መግለጫ ገደብ በሁለቱ ትራኮች ላይ በጋራ ይተገበራሉ፤ የጊዜ ማህተሞች በደላላው የ600 ሰከንድ ከፍተኛ ገደብ እና በቀረበ ማንኛውም የትኩረት ጊዜ ክልል ውስጥ መሆን አለባቸው። ልክ ያልሆኑ ትራኮች እንደ የዘፈቀደ ጽሑፍ ወደ ፊት ሳይላኩ ይጣላሉ፤ የጋራ ገደባቸው ካልተሻገረ ትክክለኛ የሆነው ሌላ ትራክ አሁንም ሊጠቀም ይችላል። `null`/ባዶ መስኮች ጽሑፍ አይጨምሩም። ይህ አማራጭ መንገድ የሚዲያ ማምጣት ወይም ወደ ጽሑፍ መቀየር አይጨምርም። የትራንስክሪፕት ማስፋፊያ መስኮች ከአማራጩ የቪዲዮ ተሸካሚ እና ከ`video_url`/`source` ነገሮቹ ይወገዳሉ። የOpenAI የሽቦ ፕሮቶኮል የተፈቀዱ ነገሮች ዝርዝር ጥብቅ ሆኖ ይቀጥላል፤ ቤተኛ ድጋፋቸው ያልታወቀ የቪዲዮ ተሸካሚዎች ይገኛሉ፣ ጽሑፍ ብቻ እንደሚደግፉ የታወቁ መዳረሻዎችም ደህንነታቸው የተጠበቀ ምልክቶችን ይይዛሉ። የተዋቀሩ የተደበቁ ቅጂዎች በመጨረሻ የተያያዘውን የትራንስክሪፕት ጽሑፍ ይጠብቃሉ፣ የጥሪ አድራጊው የመጀመሪያ ጥያቄ ግን አይለወጥም። ቤተኛ ድጋፍ ያላቸው መዳረሻዎች እና የተሰናከሉ ብሪጆች ነባሩን የማለፍ ባህሪ ይጠብቃሉ።
 
-ውስጣዊው `/api/modality-bridge/video/drilldown` የህይወት ዑደት የተለየ፣ loopback/token-authenticated መሸጎጫ ንዑስ ክፍል ነው። እያንዳንዱ ክዋኔም ቀኖናዊ ግልጽ ዋና መታወቂያ ይጠይቃል። የምርት ደዋይ ከመነቃቱ በፊት፣ ያንን መታወቂያ ከተረጋገጠው ተከራይ ማግኘት አለበት እና በጭራሽ በደንበኛ የተመረጠ እሴት ማስተላለፍ የለበትም። የመሸጎጫ ቁልፎች ያንን ዋና መታወቂያ ከቀኖናዊ ክፍለ ጊዜ እና የቪዲዮ-ማጣቀሻ መታወቂያዎች ጋር ያገናኛሉ፣ የ SHA-256-የተገኙ ቁልፎቻቸውን ብቻ ያከማቻሉ፣ እና ሁለቱንም ንባቦች እና መሰረዝን ለተመሳሳይ ዋና መታወቂያ ይገድባሉ። መሸጎጫው በአንድ ግቤት ቢበዛ 16 የተገኙ JPEG ፍሬሞችን ያከማቻል፣ ከአስር ደቂቃዎች በኋላ ያጠፋቸዋል፣ እና የተገደቡ `start`/`end` ንባቦችን ወይም ግልጽ የክፍለ ጊዜ መሰረዝን ይደግፋል።
+ተጨማሪ የሚቀመጡ ቅጂዎችም ያንኑ የታየ-ጥያቄ ምልክት ይጠቀማሉ። ጥሬው የቅድመ-መከላከያ የደንበኛ ጥያቄ ቅጽበታዊ ቅጂ፣ በማህደረ ትውስታ ውስጥ ያለው በመጠባበቅ ላይ ያለ ጥያቄ፣ እና ቀድሞ የተከለከለ ጥያቄ ሎግ በቪዲዮ ክፍሎች ያሉ የትራንስክሪፕት መስኮችን በተዋቀረ መንገድ ይተካሉ፤ በፓይፕላይን ደረጃዎች እና በአውድ ርክክብ የሚፈጠሩ የሕብረቁምፊ መመሪያዎች ደግሞ በሚቀመጠው የጥያቄ አካል መድረሻ ላይ ይደበቃሉ። የሚቀመጠው `video_content_removed` ምልክት፣ `previous_response_id` ቀጣይ ጥያቄ ሆን ተብሎ የተጣለ ጽሑፍን እንደገና ከመገንባት ይልቅ በደህና እንዲከሽፍ ያደርገዋል። የታየ ጥያቄ ከመመዝገቡ በፊት የአንድ ክፍል የተደበቀ ቅጂ ከጠፋ፣ ወይም በኋላ ከሚደረጉ የጥያቄ ለውጦች በኋላ ከበርካታ የቪዲዮ ቅጂዎች አንዱ እንኳ መዛመድ ካልቻለ፣ በከፊል የተደበቀ ትራንስክሪፕት ከማቆየት ይልቅ የሚቀመጠው የጥያቄ አካል ሙሉ በሙሉ ይተዋል።
 
-እያንዳንዱ ዋና መታወቂያ በ16 ግቤቶች እና በ64 ሚቢ ቀኖናዊ የ JPEG ውሂብ የተገደበ ነው። እነዚህ ገደቦች ከዓለም አቀፉ 64-ግቤት/256 ሚቢ ጣሪያ ነጻ ናቸው፡ ዋናው ኮታ ግፊት ዓለም አቀፍ LRU መባረር ከመታሰቡ በፊት የዚያን ዋና መታወቂያ በቅርብ ጊዜ ጥቅም ላይ ያልዋሉ ግቤቶችን ብቻ ያባርራል። ጊዜ ያለፈባቸው ግቤቶች በመሸጎጫ እንቅስቃሴ ላይ ከዋናው እና ከዓለም አቀፍ የሂሳብ አያያዝ ይወገዳሉ፣ ስረዛ እና የማረጋገጫ ውድቀት ከፊል ምትክን አያረጋግጡም።
+ለታየ ጥያቄ፣ የሞዴል ምላሽ የተዋቀረ የመግለጫ ድንበር ሳይኖረው ማንኛውንም የትራንስክሪፕት ክፍል ሊጠቅስ ይችላል። ስለዚህ በጥሪ ሎግ ውስጥ የሚቀመጠው `responseBody` በመተው ምልክት ይተካል፤ ዝርዝር የፓይፕላይን ውጤት (የአቅራቢ/ደንበኛ አካላትን እና የፍሰት ቁርጥራጮችን ሊያካትት የሚችል) አይቀመጥም። የትርጉም፣ የተደጋጋሚ ጥያቄ ተመሳሳይ ውጤት፣ እና የአስተሳሰብ ዳግም-ማጫወት መሸጎጫዎች ለዚያ ጥያቄ ንባብና ጽሕፈትን ይዘላሉ። የአቅራቢው ጥያቄ እና ለደንበኛው የሚታየው ምላሽ አይለወጡም። ዝርዝር ውጤቱ ሲተው ቀደምት የግንኙነት ማቆያ ባይቶች ከጊዜያዊ ቋቱ ይወገዳሉ። የKiro የተበላሸ EventStream ማስጠንቀቂያ የውሂቡን ባይት ብዛት ብቻ ያሳውቃል፤ ይዘቱን ወይም የJSON ተንታኙን ጥሬ ስህተት ፈጽሞ አያሳውቅም።
+ይህ ሁሉም ሌሎች የአቅራቢ/ተሰኪ የምርመራ መልዕክቶች ተፈትሸዋል ማለት አይደለም፤ ሰፊው የሚቀመጡ መድረሻዎች ፍተሻ በ#11658 ይከታተላል።
 
-መሸጎጫው ቀኖናዊ ያልሆኑ Base64፣ ከመጠን በላይ መሙላት፣ JPEG ያልሆኑ ሚዲያዎች፣ የተሳሳቱ ወይም የተቆራረጡ JPEGs፣ እና በተገደበ ሙሉ-ምስል `sharp` ዲኮድ ወቅት ማስጠንቀቂያ የሚያመጡ JPEGs አይቀበልም። እያንዳንዱን ተቀባይነት ያለው ምስል እንደ ቀኖናዊ JPEG እንደገና ኢንኮድ ያደርጋል፣ ስፋት እና ቁመትን ከተፈታው ባይት ያገኛል እንጂ የደዋይ መስኮችን አይታመንም፣ እና ማንኛውንም ተከታይ ፖሊግሎት ባይቶችን ከመያዝ ይልቅ ይጥላል። የተገደበው ቀኖናዊ የተጨመቀ ማህደረ ትውስታ ብቻ ለሁለቱም ኮታዎች ይከፈላል። የ JSON ሽቦ ገደብ ለ 32 ሚቢ የተፈታ-ግቤት ጣሪያ የ Base64 ወጪን ያካትታል። እያንዳንዱ የተከማቸ ማውጣት የተረጋገጠውን የ JPEG ቅርጸት/ጥራት፣ የናሙና ፖሊሲ፣ የማውጣት ስሪት፣ የተፈጠረበት ጊዜ፣ በአገልጋይ የተሰላ የይዘት ሃሽ፣ እና ሃሽ የተደረገ የወላጅ ማጣቀሻ እንዲሁም የታመነውን ደዋይ የወላጅ-ይዘት ሃሽ ይመዘግባል። ስረዛ በአቶሚክ መሸጎጫ ቁርጠኝነት በፊት ባሉ ያልተመሳሰሉ ዲኮድ/ሃሽ ደረጃዎች መካከል ይፈተሻል።
+ውስጣዊው `/api/modality-bridge/video/drilldown` የሕይወት ዑደት፣ በloopback/token የተረጋገጠ የተለየ የመሸጎጫ መሠረት ነው። እያንዳንዱ ክዋኔ መደበኛ የሆነ ግልጽ ያልሆነ የባለቤት መለያም ይፈልጋል። የምርት ጥሪ አድራጊ ከመንቃቱ በፊት ያን መለያ ከተረጋገጠው ተከራይ ማመንጨት አለበት፣ እና በደንበኛ የተመረጠ እሴትን ፈጽሞ ማስተላለፍ የለበትም። የመሸጎጫ ቁልፎች ያን ባለቤት ከመደበኛ የክፍለ ጊዜ እና የቪዲዮ ማጣቀሻ መለያዎች ጋር ያያይዛሉ፣ ከSHA-256 የተመነጩ ቁልፎቻቸውን ብቻ ያከማቻሉ፣ ንባብንም ሆነ ስረዛን በዚያው ባለቤት ወሰን ውስጥ ያደርጋሉ። መሸጎጫው በአንድ ግቤት ቢበዛ 16 የተመነጩ JPEG ፍሬሞችን ያከማቻል፣ ከአሥር ደቂቃ በኋላ ጊዜያቸውን ያሳልፋል፣ እና በገደብ ውስጥ ያሉ `start`/`end` ንባቦችን ወይም ግልጽ የክፍለ ጊዜ ስረዛን ይደግፋል።
 
-ይህ ትራንች እስካሁን የምርት አምራች ከመንገዱ ጋር አያገናኝም እና ባለብዙ-ጥራት ልዩነት ምርጫን አይሰጥም። ስለዚህ ግልጽ የሆነው የቪዲዮ ድልድይ ጥያቄ መንገድ ምንም ተጨማሪ ስራ አያስከትልም፣ የኪራይ ሰብሳቢነት ዋና መነሻ እና ሙሉው FU-08 ባለብዙ-ጥራት የህይወት ዑደት እንደ ተጠናቀቀ ባህሪ ከመመዝገብ ይልቅ ግልጽ የክትትል ስራ ሆነው ይቀራሉ።
+እያንዳንዱ ባለቤት በ16 ግቤቶች እና በ64 MiB መደበኛ JPEG ውሂብ ይገደባል። እነዚህ ገደቦች ከዓለም አቀፉ የ64 ግቤቶች/256 MiB ከፍተኛ ገደብ ነጻ ናቸው፤ የባለቤት ኮታ ጫና፣ ዓለም አቀፍ LRU ማስወገድ ከመታሰቡ በፊት፣ የዚያን ባለቤት ብቻ በቅርቡ ያልተጠቀሙባቸውን ግቤቶች ያስወግዳል። ጊዜያቸው ያለፈ ግቤቶች በመሸጎጫ እንቅስቃሴ ጊዜ ከባለቤትም ሆነ ከዓለም አቀፍ ሂሳብ ይጠረጋሉ፣ ስረዛ እና የማረጋገጫ ውድቀት ደግሞ ከፊል ምትክን አያጸድቁም።
 
-ክፈፎች በተዋቀረው የቪዲዮ ሞዴል በቅደም ተከተል ተሰይመዋል። ባዶ የቪዲዮ መሻር የራዕይ ቅንብርን ይወርሳል፤ ሁለቱም ባዶ ከሆኑ፣ የራዕይ ራስ-ራውተር ውጤታማውን የራዕይ-ችሎታ ሞዴል ይመርጣል። የተሳካ መግለጫዎች የመጀመሪያውን ክፍል በተረጋጋ `[Video description:` ቅድመ ቅጥያ ይተካሉ ይህም ጽሑፉን እንደ ታማኝ ያልሆነ የሚዲያ-የተገኘ ምልከታ ምልክት ያደርጋል እና የታችኛው ሞዴሎች በመገናኛ ብዙሃን ውስጥ የተገኙ መመሪያዎችን እንዳይከተሉ ይነግራቸዋል። የፍሬም-መግለጫ መሸጎጫ ቁልፎች የJPEG ባይቶችን፣ መጠየቂያውን፣ የጊዜ ማህተሙን እና ውጤታማውን ሞዴል ያካትታሉ፤ የተሳካ መግለጫዎች ብቻ ነው የሚሸጎጡት። የመሸጎጫ ግቤቶች ትክክለኛውን የተሳካ አምራች ሞዴል ይይዛሉ፣ የመጠባበቂያ ሞዴልን ጨምሮ፤ ድልድዩ የተለያዩ ክፈፎች በተለያዩ ሞዴሎች ሲመረቱ `mixed` ብሎ ሪፖርት ያደርጋል። የመሸጎጫ ምት ያንን አምራች ማንነት እንደገና ይጠቀማል እንጂ እንደተጠየቀው የማዞሪያ እቅድ እንደገና አይሰይመውም። አጠቃላይ-ቪዲዮ ውጤት መሸጎጫው ውጤቱን በሚቀይሩት እያንዳንዱ ግብዓት ላይ የተመሰረተ ነው — መጠየቂያ፣ ውጤታማ ሞዴል፣ የናሙና ፖሊሲ፣ የፍሬም ብዛት፣ የትርጉም ትንተና ሁነታ፣ የተስተካከለ የትኩረት ፍንጭ SHA-256 አሻራ፣ የትኩረት መስኮት፣ `transcript`፣ `audioTranscript` እና የእውቂያ-ሉህ ባንዲራ — ስለዚህ ከእነዚህ ልኬቶች ውስጥ አንዱን መቀየር የመሸጎጫ ስህተት ነው፣ በጭራሽ ጊዜ ያለፈበት ዳግም መጠቀም አይደለም። የእይታ ቅነሳ ፖሊሲ ስሪት፣ ገደብ እና የታሰረ እጩ-ፍሬም ብዛት በውጤት-መሸጎጫ ቁልፍ እና ሜታዳታ ውስጥም ግልጽ ናቸው፤ ስለዚህ የፖሊሲ ለውጥ ጊዜ ያለፈበት አጠቃላይ-ቪዲዮ መግለጫን እንደገና መጠቀም አይችልም። የውጤት-መሸጎጫ v4 ሜታዳታ ሁነታውን እና አሻራውን ይይዛል፣ ጥሬውን የተጠቃሚ ተግባር በጭራሽ አይይዝም። የጥበቃ ሜታዳታ የተጠየቁትን እና ውጤታማ የትንተና ሁነታዎችን ሁለቱንም ሪፖርት ያደርጋል፤ ጥቅም ላይ ሊውል የሚችል የተጠቃሚ ጽሑፍ የሌለው የተጠየቀ `focused` ሁነታ ውጤታማ በሆነ መልኩ `full` ተብሎ ሪፖርት ይደረጋል።
+ካሹ መደበኛ ያልሆነ Base64፣ ከሚያስፈልገው በላይ የሆነ padding፣ JPEG ያልሆነ ሚዲያ፣ ቅርጸታቸው የተበላሸ ወይም
+የተቆረጡ JPEG ፋይሎችን፣ እና በተገደበ ሙሉ-ምስል `sharp`
+decode ወቅት ማስጠንቀቂያ የሚያመነጩ JPEG ፋይሎችን አይቀበልም። የተቀበለውን እያንዳንዱን ምስል እንደ መደበኛ JPEG እንደገና ኢንኮድ ያደርጋል፣ በጥሪ አድራጊው የቀረቡ መስኮችን ከማመን ይልቅ ስፋትንና ቁመትን
+ከተዲኮዱት ባይቶች ያወጣል፣ እና በመጨረሻ የተጨመሩ
+polyglot ባይቶችን ከማስቀመጥ ይልቅ ይጥላል። በሁለቱም ኮታዎች ላይ የሚቆጠረው የተገደበው መደበኛ የተጨመቀ ቋት ብቻ ነው። የJSON የመተላለፊያ ገደብ ለ32 MiB
+የተዲኮደ ግቤት ጣሪያ የBase64 ተጨማሪ መጠንን ያካትታል። እያንዳንዱ
+የተከማቸ የተዋረደ ውጤት የተረጋገጠውን የJPEG ቅርጸት/ጥራት፣ የናሙና መውሰድ ፖሊሲ፣
+የውጤቱን ስሪት፣ የተፈጠረበትን ጊዜ፣ በሰርቨሩ የተሰላውን የይዘት ሃሽ፣ እና በሃሽ የተወከለውን የወላጅ
+ማጣቀሻ ከታመነው ጥሪ አድራጊ የወላጅ-ይዘት ሃሽ ጋር ይመዘግባል። ስረዛ ከአቶሚክ የካሽ ማስቀመጥ በፊት
+በአሲንክሮናዊ decode/hash ደረጃዎች መካከል ይፈተሻል።
 
-የጥበቃ ስርዓቱ ሁሉንም የሚደገፉ የቪዲዮ ክፍሎችን ያወጣል ነገር ግን ከ`modalityBridgeVideoMaxVideos` በላይ አይገልጽም። `supportsVideo === false` እንዳለው ለተረጋገጠ ኢላማ፣ ያልተሳኩ እና ከገደብ በላይ የሆኑ ቪዲዮዎች ግልጽ የሆኑ አስተማማኝ የጽሑፍ ምልክቶች ይሆናሉ ስለዚህ ምንም ጥሬ ቪዲዮ አይተርፍም። ችሎታው የማይታወቅ ከሆነ፣ እነዚያ ክፍሎች ሳይነኩ ይቀራሉ። `supportsVideo === true` ያላቸው ኢላማዎች ድልድዩን ያልፋሉ። የደንበኛው ጥያቄ የማቋረጥ ምልክት በማውረድ፣ በደላላ ወረፋ፣ በንዑስ ሂደቶች እና በመግለጫ ጥሪዎች ውስጥ ይሰራጫል፤ ማቋረጦች በቪዲዮዎች መካከል ይቆማሉ እና በጭራሽ ወደ ጥሬ ሚዲያ ክፍት አይሆኑም።
+ይህ ዙር እስካሁን የምርት አመንጪን ከመንገዱ ጋር አያገናኝም፣ እና
+ባለብዙ-ጥራት ልዩነቶችን መምረጥም አያቀርብም። ስለዚህ ግልጽ የVideo Bridge ጥያቄ
+መንገድ ተጨማሪ ሥራ አያስከትልም፤ ከtenant ጋር የተያያዘ የprincipal መወሰን እና
+ሙሉ የFU-08 ባለብዙ-ጥራት የሕይወት ዑደት የተጠናቀቀ ባህሪ ተብለው ሳይመዘገቡ
+በግልጽ የቀጣይ ሥራ ይሆናሉ።
 
-የሩጫ ጊዜ ቅንብሮች በDB የተደገፉ እና በZod የተረጋገጡ ናቸው፡
+ፍሬሞች በተዋቀረው የVideo ሞዴል በቅደም ተከተል መግለጫ ያገኛሉ። ባዶ
+የVideo ተኪ ቅንብር የVision ቅንብሩን ይወርሳል፤ ሁለቱም ባዶ ከሆኑ፣ የVision
+አውቶማቲክ ራውተር ውጤታማውን ምስል ማስተናገድ የሚችል ሞዴል ይመርጣል። የተሳኩ መግለጫዎች
+ዋናውን ክፍል በቋሚ `[Video description:` ቅድመ ቅጥያ ይተካሉ፤ ይህም
+ጽሑፉ ከማይታመን ሚዲያ የተገኘ ምልከታ መሆኑን ያመለክታል እና ተከታይ
+ሞዴሎች በሚዲያው ውስጥ ያሉ መመሪያዎችን እንዳይከተሉ ያሳውቃል። የፍሬም መግለጫ ካሽ ቁልፎች
+የJPEG ባይቶችን፣ ፕሮምፕቱን፣ የጊዜ ማህተሙን እና ውጤታማውን ሞዴል ያካትታሉ፤ የሚካሹት የተሳኩ
+መግለጫዎች ብቻ ናቸው። የካሽ ግቤቶች ተለዋጭ ሞዴልን ጨምሮ መግለጫውን በእርግጥ ያመነጨውን ሞዴል
+ያስቀምጣሉ፤ የተለያዩ ፍሬሞች በተለያዩ ሞዴሎች
+ሲመነጩ ብሪጁ `mixed` ብሎ ሪፖርት ያደርጋል። ከካሽ ሲገኝ የጠየቀው የመምራት ዕቅድ ተብሎ እንደገና ከመሰየም ይልቅ የአመንጪው ማንነት እንዳለ ይጠቀማል። የሙሉ-ቪዲዮ ውጤት
+ካሽ ቁልፍ ውጤቱን በሚቀይሩ ሁሉም ግቤቶች ላይ ይመሠረታል — ፕሮምፕት፣ ውጤታማ
+ሞዴል፣ የናሙና መውሰድ ፖሊሲ፣ የፍሬም ብዛት፣ የትርጉም ትንተና ሁነታ፣ መደበኛ የተደረገው የትኩረት ፍንጭ SHA-256
+አሻራ፣ የትኩረት ጊዜ ክልል፣ `transcript`፣
+`audioTranscript`፣ እና የcontact-sheet ምልክት — ስለዚህ ከእነዚህ መጠኖች ማንኛውም ለውጥ
+የካሽ አለመገኘትን ያስከትላል፣ ያረጀ ውጤት እንደገና አይጠቀምም። የምስላዊ ድግግሞሽ ማስወገድ ፖሊሲ
+ስሪት፣ ጣራ እና የተገደበ የእጩ ፍሬሞች ብዛትም በውጤት-ካሽ ቁልፍ እና በዲበ ውሂብ ውስጥ በግልጽ ይካተታሉ፤ ስለዚህ የፖሊሲ ለውጥ ያረጀ
+የሙሉ-ቪዲዮ መግለጫን እንደገና መጠቀም አይችልም። የውጤት-ካሽ v4 ዲበ ውሂብ ሁነታውን እና
+አሻራውን ያስቀምጣል፣ ጥሬውን የተጠቃሚ ተግባር ግን አያስቀምጥም። የጥበቃ ደንብ ዲበ ውሂብ የተጠየቀውንም ሆነ
+ውጤታማውን የትንተና ሁነታ ያሳውቃል፤ ጥቅም ላይ የሚውል የተጠቃሚ ጽሑፍ ሳይኖር የተጠየቀ `focused` ሁነታ
+በውጤታማነት `full` ተብሎ ይሪፖርታል።
 
-| ቁልፍ                                 | ነባሪ         | ክልል / ባህሪ                                                                         |
-| :---------------------------------- | :---------- | :-------------------------------------------------------------------------------- |
-| `modalityBridgeVideoEnabled`        | `false`     | አማራጭ የሩጫ ጊዜ፣ መርጦ መግባት                                                             |
-| `modalityBridgeVideoAnalysisMode`   | `"full"`    | `full` አጠቃላይ መግለጫዎችን ይይዛል፤ `focused` የታሰረ፣ ታማኝ ያልሆነ የቅርብ ጊዜ የተጠቃሚ አውድ ይጠቀማል       |
-| `modalityBridgeVideoModel`          | `""`        | የራዕይ ድልድይ ሞዴልን ይወርሳል                                                              |
-| `modalityBridgeVideoFrameCount`     | `8`         | 1–16                                                                              |
-| `modalityBridgeVideoSamplingPolicy` | `"uniform"` | `uniform`፣ `scene_aware`፣ ወይም ተመጣጣኝ `segment_aware`፤ መርማሪው ሲሳካ ወደ `uniform` ይመለሳል |
-| `modalityBridgeVideoMaxVideos`      | `1`         | 1–4                                                                               |
-| `modalityBridgeVideoTimeout`        | `120000`    | 1000–120000 ms                                                                    |
+የጥበቃ ደንቡ ሁሉንም የሚደገፉ የቪዲዮ ክፍሎች ያወጣል፣ ነገር ግን ከ
+`modalityBridgeVideoMaxVideos` በላይ አይገልጽም።
+`supportsVideo === false` መሆኑ ለተረጋገጠ ዒላማ፣ ያልተሳኩ እና ገደቡን ያለፉ ቪዲዮዎች ጥሬ
+ቪዲዮ እንዳይቀር ግልጽ ደህንነቱ የተጠበቀ የጽሑፍ ምልክቶች ይሆናሉ። አቅሙ በማይታወቅበት ጊዜ እነዚያ ክፍሎች
+የቪዲዮ መያዣቸውን ይይዛሉ፤ ማንኛውም ተለዋጭ ትራንስክሪፕት ከላይ ያለውን የተገደበ የጽሑፍ
+ልወጣ ይከተላል። `supportsVideo === true` ያላቸው ዒላማዎች ብሪጁን ያልፋሉ።
+የደንበኛው ጥያቄ የማቋረጥ ምልክት ወደ ማውረድ፣ የደላላ ወረፋ፣
+ንዑስ ሂደቶች እና የመግለጫ ጥሪዎች ይተላለፋል፤ ማቋረጦች በቪዲዮዎች መካከል ያቆማሉ እና ጥሬ ሚዲያን እንዲያልፍ ፈጽሞ አይፈቅዱም።
 
-ከ120 ሰከንድ በላይ የቆዩ የቪዲዮ ጊዜ ማብቂያ እሴቶች ወደ ደላላው የጊዜ ገደብ ይገደባሉ፤ ከዚህ ገደብ በላይ የሆኑ አዲስ የቅንብሮች ጽሑፎች ውድቅ ይደረጋሉ። `GET /api/modality-bridge/video/runtime` ከማረጋገጫ ወይም ከሩጫ ጊዜ ምርመራ በፊት የታመነ የታተመ loopback አካባቢን ይጠይቃል፣ ከዚያም የአስተዳደር ማረጋገጫን ይጠይቃል። `available`፣ የተጣሩ የFFmpeg/ffprobe ስሪቶችን ብቻ ይመልሳል፣ እና የሩጫ ጊዜው በማይገኝበት ጊዜ ቋሚ ምክንያት። የውስጥ የማውጣት የመጨረሻ ነጥብ የህዝብ ሰቀላ ኤፒአይ አይደለም፡ የወረፋ ሙሌት `503` እና `Retry-After` ይመልሳል፣ የደዋይ ግንኙነት መቋረጥ `499` ይመልሳል፣ እና ቋሚው የደላላ የጊዜ ገደብ `504` ይመልሳል። የተለወጡ ምላሾች `video->text;model=<visionModel>;parts=<videos>` ወደ ማዕከላዊው `x-omniroute-modality-bridge` ራስጌ ያክላሉ የራዕይ ወይም የድምጽ ክፍሎችን ሳያስወግዱ።
+የአሂድ ጊዜ ቅንብሮች በDB የተደገፉ እና በZod የተረጋገጡ ናቸው፦
 
-### PII Masker (`piiMasker.ts`)
+| ቁልፍ                                 | ነባሪ         | ክልል / ባህሪ                                                                             |
+| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------- |
+| `modalityBridgeVideoEnabled`        | `false`     | አማራጭ የአሂድ ጊዜ ባህሪ፣ በግልጽ ፈቃድ የሚነቃ                                                       |
+| `modalityBridgeVideoAnalysisMode`   | `"full"`    | `full` አጠቃላይ መግለጫዎችን ያስጠብቃል፤ `focused` የተገደበ፣ የማይታመን የቅርብ ጊዜ የተጠቃሚ አውድ ይጠቀማል          |
+| `modalityBridgeVideoModel`          | `""`        | የVision Bridge ሞዴልን ይወርሳል                                                             |
+| `modalityBridgeVideoFrameCount`     | `8`         | 1–16                                                                                  |
+| `modalityBridgeVideoSamplingPolicy` | `"uniform"` | `uniform`፣ `scene_aware` ወይም በመጠን ተመጣጣኝ `segment_aware`፤ መለያው ካልሰራ ወደ `uniform` ይመለሳል |
+| `modalityBridgeVideoMaxVideos`      | `1`         | 1–4                                                                                   |
+| `modalityBridgeVideoTimeout`        | `120000`    | 1000–120000 ms                                                                        |
+
+ከ120 ሰከንድ በላይ የሆኑ የድሮ የተከማቹ የVideo ጊዜ ገደብ እሴቶች በደላላው የመጨረሻ ጊዜ ላይ ይገደባሉ፤
+ከዚያ ገደብ በላይ የሆኑ አዲስ የቅንብር ጽሑፎች ይከለከላሉ።
+`GET /api/modality-bridge/video/runtime` ከማረጋገጥ ወይም የአሂድ ጊዜ ሁኔታን ከመፈተሽ በፊት
+በታመነ ምልክት የተረጋገጠ የloopback አካባቢያዊነትን ይጠይቃል፣ ከዚያም የአስተዳደር
+ማረጋገጥን ይጠይቃል። የሚመልሰው `available`ን፣ የተጣሩ የFFmpeg/ffprobe ስሪቶችን እና አሂድ ጊዜው በማይገኝበት ጊዜ ቋሚ
+ምክንያትን ብቻ ነው። ውስጣዊው የማውጣት መጨረሻ ነጥብ ይፋዊ የሰቀላ API አይደለም፦ የወረፋ
+መሙላት `503` ከ `Retry-After` ጋር ይመልሳል፣ የጥሪ አድራጊ ግንኙነት መቋረጥ
+`499` ይመልሳል፣ እና የደላላው ቋሚ የመጨረሻ ጊዜ `504` ይመልሳል። የተለወጡ ምላሾች
+`video->text;model=<visionModel>;parts=<videos>`ን የVision ወይም Audio ክፍሎችን ሳያስወግዱ ወደ ማዕከላዊው
+`x-omniroute-modality-bridge` ራስጌ ይጨምራሉ።
+
+### የPII መደበቂያ (`piiMasker.ts`)
 
 በ**ሁለቱም** ደረጃዎች ላይ ይሰራል።
 
-- **`preCall`** ፔይሎዱን ይገለብጣል፣ `system`፣ `messages`፣ `input` እና `prompt` (ቀላል የሕብረቁምፊ ንጥሎችን ጨምሮ) ይቃኛል፣ እና `processPII()` (ከ`@/shared/utils/inputSanitizer`) ወደ ሕብረቁምፊ `content`/`text` መስኮች ይተገብራል። `PII_REDACTION_ENABLED=true` ሲሆን፣ የተገኙ PIIዎች በሚወጣው ፔይሎድ ውስጥ ይደመሰሳሉ። ይህ ከ`INPUT_SANITIZER_MODE` (የመጠየቂያ-መወጋት ፖሊሲን ብቻ የሚቆጣጠረው) ነጻ ነው። መደመሰስ ሲጠፋ፣ ጥሪው ይዘቱን ሳይጽፍ የመለየት ብዛቶችን ይመዘግባል።
-- **`postCall`** ምላሹን በጥልቀት ይገለብጣል፣ `sanitizePIIResponse()` እና የResponses-API-ቅርጽ ማስክን (`maskResponsesOutput` — `output_text` እና `output[].content[].text`ን ይሸፍናል) ያካሂዳል። ማንኛውም መደመሰስ ከተከሰተ፣ የተሻሻለው ምላሽ የመጀመሪያውን ይተካል።
+- **`preCall`** payload-ን ይቀዳል፣ `system`፣ `messages`፣ `input` እና
+  `prompt`-ን (ተራ የሕብረቁምፊ ንጥሎችን ጨምሮ) ይመረምራል፣ እና በሕብረቁምፊ `content`/`text`
+  መስኮች ላይ `processPII()`-ን (ከ
+  `@/shared/utils/inputSanitizer`) ይተገብራል።
+  `PII_REDACTION_ENABLED=true` ሲሆን፣ የተገኘ PII ከሚላከው
+  payload ይደበቃል። ይህ ከ`INPUT_SANITIZER_MODE` ነጻ ነው (ይህም
+  የprompt injection ፖሊሲን ብቻ ይቆጣጠራል)። መደበቅ ሲጠፋ፣ ጥሪው ይዘቱን
+  ሳይቀይር የተገኙ ነገሮችን ብዛት ይመዘግባል።
+- **`postCall`** ምላሹን ሙሉ በሙሉ ይቀዳል፣ `sanitizePIIResponse()`-ን እና
+  የResponses API ቅርጽ የመደበቅ ሂደትን (`maskResponsesOutput` —
+  `output_text` እና `output[].content[].text`-ን ይሸፍናል) ያስኬዳል። ማንኛውም
+  መደበቅ ከተከናወነ፣ የተሻሻለው ምላሽ ዋናውን ይተካል።
 
-የጥበቃ ስርዓቱ በጭራሽ አያግድም፤ የሚያደርገው ማብራራት (`meta.detections`፣ `meta.redacted`) ወይም እንደገና መጻፍ ብቻ ነው።
+ይህ guardrail ፈጽሞ አያግድም፤ መረጃ ብቻ ይጨምራል (`meta.detections`፣
+`meta.redacted`) ወይም ይዘቱን እንደገና ይጽፋል።
+
+#### በአይነት መምረጥ፣ ብጁ ፓተርኖች እና የተገኙ ነገሮች ቆጣሪዎች
+
+**Dashboard → Settings → Security → PII masking** _ምን_ እንደሚደበቅ ይመርጣል።
+መደበቅን ግን አያበራም፤ ይህ አሁንም በ`PII_REDACTION_ENABLED` (ጥያቄ) እና
+በ`PII_RESPONSE_SANITIZATION` (ምላሽ + SSE) ይቆጣጠራል፣ ሁለቱም በነባሪ ጠፍተዋል።
+
+- **በአይነት መምረጥ** — አብሮ የተካተቱት id-ዎች በ
+  `src/shared/constants/piiTypes.ts` (`PII_BUILTIN_TYPES`) ተዘርዝረዋል። ምንም
+  ካልተዋቀረ ሁሉም አይነቶች ማለት ነው (ይህ ቅንብር ከመኖሩ በፊት የነበረው ባህሪ)።
+  የጥያቄ ሞተሩ `ssn_us` ፓተርን ወደ `ssn` ያዛምዳል። አብነቶች (Minimal, Standard, Financial,
+  Brazilian, USA, Full) በUI ውስጥ ያሉትን የምርጫ ሳጥኖች ብቻ ይሞላሉ።
+- **ብጁ ፓተርኖች** — እስከ 20 regex ወይም wildcard ፓተርኖች (`*` = እስከ 64
+  ክፍተት ያልሆኑ ቁምፊዎች፣ `?` = አንድ ቁምፊ)። የሚዛመዱ ክፍሎች `[CUSTOM_REDACTED]` ይሆናሉ።
+  እያንዳንዱ ፓተርን በ`compilePiiCustomPattern()`
+  (`src/shared/utils/piiCustomPatterns.ts`) ውስጥ ያልፋል፦ ከ500 ቁምፊዎች መብለጥ
+  የለበትም፣ የሚፈቀዱት flags `g i m s u` ብቻ ናቸው፣ ሊcompile መደረግ አለበት፣
+  የ`safe-regex` ፈተናን (catastrophic backtracking) ማለፍ አለበት፣ እና
+  ከባዶ ሕብረቁምፊ ወይም ከመደበቂያ placeholder ጋር መዛመድ የለበትም።
+  ያልተሳካ ፓተርን ሲቀመጥም ሆነ ሲፈተን ውድቅ ይደረጋል፤ ያልተሳካ የተቀመጠ
+  ረድፍ ደግሞ በአሂድ ጊዜ compile ከመደረግ ይልቅ ይዘለላል። ብጁ ፓተርኖች
+  የሚሰሩት መደበቅ ሲበራ ብቻ ነው።
+- **የተገኙ ነገሮች ቆጣሪዎች** — በአይነት የተከፋፈሉ ቆጠራዎች (የተዛመዱ
+  እሴቶች ፈጽሞ አይመዘገቡም) በማህደረ ትውስታ ይቀመጣሉ እና እንደገና ሲጀመር
+  ይጸዳሉ (`src/lib/pii/piiDetectionStats.ts`)። የሚጨምሩት መደበቅ ሲበራ ብቻ ነው።
+
+ቅንብሮቹ በ`key_value` ሰንጠረዥ (namespace `pii_settings`፣
+`src/lib/db/piiSettings.ts`) ውስጥ ይቀመጣሉ እና በ1 s cache በኩል ይነበባሉ። API፦
+
+| ዘዴ     | መንገድ                     | ዓላማ                                                          |
+| ------ | ------------------------ | ------------------------------------------------------------ |
+| `GET`  | `/api/settings/pii`      | የflag ሁኔታ፣ `enabledTypes`፣ `customPatterns`፣ የተገኙ ነገሮች ቆጣሪዎች |
+| `PUT`  | `/api/settings/pii`      | `enabledTypes` (`null` = ሁሉም) እና/ወይም `customPatterns`-ን መተካት |
+| `POST` | `/api/settings/pii/test` | አንድ ፓተርንን ከፍተኛው 8 KB በሆነ ናሙና ላይ ያለ ማስቀመጥ መፈተን፤ ምንም አይቀመጥም    |
+
+ሦስቱም የአስተዳደር ማረጋገጫ ይፈልጋሉ እና body-ን በZod
+(`src/shared/validation/schemas/piiSettings.ts`) ያረጋግጣሉ።
 
 ### Prompt Injection (`promptInjection.ts`)
 
-በተጠቃሚ-በቀረበ ይዘት ውስጥ ጠላት የሆኑ አወቃቀሮችን ይለያል እና የተዋቀረውን ፖሊሲ ያስፈጽማል። ባህሪው በአካባቢ ተለዋዋጮች እና በገንቢ አማራጮች የሚመራ ነው፡
+በተጠቃሚ በቀረበ ይዘት ውስጥ ያሉ ጎጂ አወቃቀሮችን ይለያል እና የተዋቀረውን
+ፖሊሲ ያስፈጽማል። ባህሪው በአካባቢ ተለዋዋጮች እና በconstructor
+አማራጮች ይመራል፦
 
-| Setting         | Env var                                                                                               | Default | Effect                                                                                                                                                 |
-| --------------- | ----------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Enabled         | `INPUT_SANITIZER_ENABLED`                                                                             | `true`  | ሐሰት ሲሆን፣ የጥበቃ መስመሩ ይቋረጣል።                                                                                                                              |
-| Mode            | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                       | `warn`  | የመወጋት ፖሊሲ: `block`፣ `warn`፣ ወይም `log`። (`redact` ለኋላ ተኳሃኝነት ተቀባይነት አለው ነገር ግን የመወጋት ጽሑፍን አያስወግድም፤ የPII ዳግም መጻፍ በ`PII_REDACTION_ENABLED` ቁጥጥር ይደረግበታል።) |
-| Block threshold | `blockThreshold` option / `INPUT_SANITIZER_BLOCK_THRESHOLD` (alias `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high`  | ለማገድ የሚያስፈልገው ዝቅተኛው የጥብቅነት ደረጃ። መካከለኛ በነባሪነት ለመመልከት ብቻ ነው።                                                                                             |
+| ቅንብር     | የአካባቢ ተለዋዋጭ                                                                                           | ነባሪ    | ውጤት                                                                                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| መብራት     | `INPUT_SANITIZER_ENABLED`                                                                             | `true` | `false` ሲሆን፣ guardrail ቀጥታ ይመለሳል።                                                                                                                             |
+| ሁነታ      | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                       | `warn` | የinjection ፖሊሲ፦ `block`፣ `warn` ወይም `log`። (`redact` ለኋላ ተኳኋኝነት ይቀበላል፣ ነገር ግን የinjection ጽሑፍን **አያስወግድም**፤ የጥያቄ PII ዳግም ጽሑፍ በ`PII_REDACTION_ENABLED` ይቆጣጠራል።) |
+| የማገድ ገደብ | `blockThreshold` አማራጭ / `INPUT_SANITIZER_BLOCK_THRESHOLD` (ተለዋጭ ስም `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high` | ለማገድ የሚያስፈልገው ዝቅተኛው የክብደት ደረጃ። Medium በነባሪ ምልከታ ብቻ ነው።                                                                                                        |
 
-**የሁኔታ ቅድሚያ** (`getMode`): የጠሪ `options.mode` →
-`INJECTION_GUARD_MODE` **የዳታቤዝ ባህሪ-ባንዲራ መሻር** (ዳሽቦርድ → ቅንብሮች →
-የባህሪ ባንዲራዎች) → `INJECTION_GUARD_MODE` አካባቢ → `INPUT_SANITIZER_MODE` አካባቢ →
-`warn`። ስለዚህ የዳሽቦርድ መሻር በአካባቢ ተለዋዋጮች ላይ ያሸንፋል፣ ስለዚህ የባህሪ
-ባንዲራዎች የተጠቃሚ በይነገጽ የሚሰራውን ጥበቃ በቀጥታ ይቆጣጠራል (ዳግም ማስጀመር
-አያስፈልግም)። የዳታቤዝ ንባብ ስህተት የማይፈጥር ነው፡ ስህተት ከፈጠረ፣ ጥበቃው
-በአካባቢ-ተኮር ባህሪ ላይ ይመሰረታል፣ እና ምንም መሻር ካልተዘጋጀ ባህሪው ከአካባቢ-ብቻ
-መፍትሄ ጋር ተመሳሳይ ይሆናል።
+**የሁነታ ቅድሚያ** (`getMode`)፦ የጠሪው `options.mode` →
+`INJECTION_GUARD_MODE` **የDB feature-flag ቅድሚያ ሰጥቶ መተካት** (Dashboard → Settings →
+Feature Flags) → `INJECTION_GUARD_MODE` env → `INPUT_SANITIZER_MODE` env →
+`warn`። ስለዚህ በdashboard የተደረገ ቅድሚያ ሰጥቶ መተካት ከenv ተለዋዋጮች
+ይቀድማል፤ የFeature Flags UI በሥራ ላይ ያለውን guard ያለ እንደገና ማስጀመር
+ይቆጣጠራል። የDB ንባቡ ችግር ቢያጋጥመው ደህንነቱን በጠበቀ መንገድ ይሠራል፦
+ስህተት ከተፈጠረ guard-ው ወደ env-መሠረት ባህሪ ይመለሳል፣ እና ቅድሚያ
+ሰጥቶ መተካት ካልተዋቀረ ባህሪው በenv ብቻ ከሚወሰነው ጋር ተመሳሳይ ነው።
 
-የማወቂያ ምንጮች:
+የማወቂያ ምንጮች፦
 
-1.  `sanitizeRequest()` ከ`@/shared/utils/inputSanitizer` (በሌላ ቦታ በፓይፕላይኑ ውስጥ ጥቅም ላይ የሚውል የጋራ ማወቂያ ስብስብ)።
-2.  አብሮገነብ `DEFAULT_GUARD_PATTERNS` (በአሁኑ ጊዜ `system_override_inline` እና
-    `markdown_system_block`፣ ሁለቱም ከፍተኛ ጥብቅነት ያላቸው)።
-3.  በገንቢ አማራጮች በኩል የሚተላለፉ አማራጭ `customPatterns` (ሕብረቁምፊዎች፣ ሬጀክስ፣
-    ወይም `{ name, pattern, severity }` መዝገቦች)።
+1. `sanitizeRequest()` ከ`@/shared/utils/inputSanitizer` (በpipeline ውስጥ
+   በሌሎች ቦታዎችም የሚጠቀሙበት የጋራ የማወቂያ ስብስብ)።
+2. አብረው የተካተቱ `DEFAULT_GUARD_PATTERNS` (በአሁኑ ጊዜ `system_override_inline` እና
+   `markdown_system_block`፣ ሁለቱም `high` የክብደት ደረጃ አላቸው)።
+3. በconstructor አማራጮች የሚተላለፉ አማራጭ `customPatterns` (ሕብረቁምፊዎች፣ regex፣
+   ወይም `{ name, pattern, severity }` መዝገቦች)።
 
-`mode === "block"` **እና** ቢያንስ አንድ ማወቂያ የጥብቅነት ገደቡን ሲያሟላ፣
-`preCall` `{ block: true, message: "Request rejected: suspicious content detected" }`
-ይመልሳል። በ`warn`/`log` ሁነታዎች የጥበቃ መስመሩ ይመዘግባል ነገር ግን ጥሪውን ይፈቅዳል።
-የጋራ ረዳት `evaluatePromptInjection()` እንዲሁ መዝገቡን ሳያልፉ ጥያቄዎችን መገምገም
-ለሚያስፈልጋቸው ጠሪዎች ይላካል።
+`mode === "block"` **ሲሆን** እና ቢያንስ አንድ የተገኘ ነገር የክብደት ደረጃውን
+ካሟላ፣ `preCall` `{ block: true, message: "Request rejected:
+suspicious content detected" }` ይመልሳል። በ`warn`/`log` ሁነታዎች የጥበቃ ስርዓቱ መዝገብ ይይዛል፣ ግን
+ጥሪውን ይፈቅዳል። በሬጅስትሪው በኩል ሳያልፉ ጥያቄዎችን መገምገም ለሚፈልጉ
+ጠሪዎች፣ የጋራ አጋዥ ፋንክሽኑ `evaluatePromptInjection()` ወደ ውጭ ይላካል።
 
-**የፍተሻ ወሰን (v3.8.20):** ማወቂያው የሚፈትሸው የተዋሃደ የጥያቄ ጽሑፍን
-**የመጀመሪያዎቹን 16 ኪባ** ብቻ ነው — `MAX_INJECTION_SCAN_BYTES = 16 * 1024`
-(16 384 ባይት) በ`src/shared/utils/inputSanitizer.ts` ውስጥ። ሁለቱም
-`detectInjection()` እና `evaluatePromptInjection()` የጥለት ዑደቱን ከማስኬዳቸው
-በፊት `slice(0, MAX_INJECTION_SCAN_BYTES)` ያደርጋሉ። የመወጋት መመሪያዎች ከግብዓት
-አናት አጠገብ ይቀመጣሉ፣ ስለዚህ ይህ በመቶዎች የሚቆጠሩ ኪባ በሚመዝኑ ጭነቶች ላይ
-የሬጀክስ ሲፒዩ/ጂሲን ይገድባል ማወቂያን ሳያዳክም (ይመልከቱ #3932, #4041)።
+**የቅኝት ገደብ (v3.8.20):** መመርመሪያው የሚፈትሸው ከተቀላቀለው የጥያቄ ጽሑፍ
+**የመጀመሪያውን 16 KB** ብቻ ነው — በ`src/shared/utils/inputSanitizer.ts` ውስጥ
+`MAX_INJECTION_SCAN_BYTES = 16 * 1024` (16 384 ባይት)። `detectInjection()` እና
+`evaluatePromptInjection()` ሁለቱም የስርዓተ ንድፍ ዑደቱን ከማስኬዳቸው በፊት
+`slice(0, MAX_INJECTION_SCAN_BYTES)` ይጠቀማሉ። የማስገባት መመሪያዎች ከግቤቱ መጀመሪያ
+አቅራቢያ ስለሚገኙ፣ ይህ የመለየት ብቃትን ሳያዳክም በብዙ መቶ KB ጭነቶች ላይ
+የregex CPU/GC አጠቃቀምን ይገድባል (cf. #3932, #4041)።
 
-### ምስክርነት መሸፈኛ (`credentialMasker.ts`)
+### የማረጋገጫ መረጃ መሸፈኛ (`credentialMasker.ts`)
 
-በ**ሁለቱም** ደረጃዎች ላይ ይሰራል፣ በነባሪ ሰንሰለት ውስጥ የመጨረሻው ነው (ቅድሚያ `95`)።
-የሚታወቁ የኤፒአይ-ቁልፍ / ሚስጥራዊ-ቶከን ቅጦችን ከወጪ ጭነት (የመልዕክት ይዘት፣
-የመሳሪያ-ጥሪ ክርክሮች፣ የመሳሪያ ውጤቶች) **እና** ከአቅራቢው ምላሽ ይደብቃል፣ ስለዚህ
-ወደ ጥያቄ የተለጠፈ ምስክርነት (ወይም በመሳሪያ ውጤት የተመለሰ) ወደ ላይኛው አቅራቢ
-ወይም ወደ ደንበኛው አይፈስም።
+በ**ሁለቱም** ደረጃዎች ይሰራል፣ በነባሪው ሰንሰለት መጨረሻ ላይ ይገኛል (ቅድሚያ `95`)።
+ከወደ ውጭ በሚላከው ጭነት (የመልዕክት ይዘት፣ የመሣሪያ ጥሪ ግቤቶች፣ የመሣሪያ ውጤቶች)
+**እና** ከአቅራቢው ምላሽ ውስጥ የታወቁ የAPI ቁልፍ / የሚስጥር ቶከን ስርዓተ ንድፎችን
+ይሸፍናል፤ በዚህም በጥያቄ ውስጥ የተለጠፈ (ወይም በመሣሪያ ውጤት ተመልሶ የታየ)
+የማረጋገጫ መረጃ ለከፍተኛ ደረጃው አቅራቢ ወይም ለደንበኛው እንዳይጋለጥ ያደርጋል።
 
-- **በፈቃደኝነት ብቻ**፣ ከPII መደበቅ ጋር ተመሳሳይ ስምምነት (ጠንካራ ህግ #20-አጠገብ):
+- **በግልጽ ምርጫ ብቻ ይነቃል**፣ ከPII መሸፈን ጋር ተመሳሳይ አሠራር ነው (ከHard Rule #20 ጋር የተያያዘ)፦
   `settings.credentialRedactionEnabled === true` **ወይም**
-  `CREDENTIAL_REDACTION_ENABLED=true` ካልሆነ በስተቀር ይሰናከላል። ሲጠፋ፣ የጥበቃ
-  መስመሩ ምንም አይሰራም — በጭራሽ አያግድም እና በጭራሽ አይጽፍም።
-- `redactCredentials()` ሙሉውን የጭነት/ምላሽ ዛፍ ይቃኛል (`walkValue()`፣
-  ፕሮቶታይፕ-ብክለት-የማይፈጥር፣ በ`WeakSet` በኩል ዑደት-የማይፈጥር) እና ተዛማጆችን
-  በ`[REDACTED:<type>]` መያዣ ይተካል፣ በእርግጥ የተቀየሩትን ቅርንጫፎች ብቻ ይገለብጣል።
-- `CREDENTIAL_PATTERNS` የLLM አቅራቢ ቁልፎችን (OpenAI, OpenAI-proj, Anthropic,
-  Google, Hugging Face, Replicate), የVCS/SaaS ቶከኖችን (GitHub, Slack, Linear,
-  Notion, npm, Postman, Discord), የክፍያ ቁልፎችን (Stripe, Square), የደመና
-  ቁልፎችን (AWS access key, Twilio, SendGrid, Mailgun), የግል ቁልፎችን / JWTs,
-  ምስክርነት የያዙ የግንኙነት ሕብረቁምፊዎችን (`mongodb://user:pass@...`, ወዘተ),
-  እና አጠቃላይ `Authorization`/`x-api-key`/`api-key`/`apikey` ራስጌ-እሴት
-  ጥለትን ይሸፍናል። ራስጌ-ቅርጽ ያላቸው ቁልፎች (`authorization`, `x-api-key`,
-  `api-key`, `apikey`) በዘርፍ ይደበቃሉ (እሴት ብቻ፣ `Bearer `/`Basic ` የመሰለ
-  የዕቅድ ቅድመ ቅጥያ ተጠብቆ) እንጂ በአጠቃላይ የጽሑፍ ሬጀክስ አይደለም።
-- የጥበቃ መስመሩ በጭራሽ አያግድም፤ የሚጽፈው (`modifiedPayload` / `modifiedResponse`)
-  እና የሚያብራራው (`meta.credentialsRedacted`, `meta.count`) ብቻ ነው።
+  `CREDENTIAL_REDACTION_ENABLED=true` ካልሆነ ተሰናክሏል። ሲጠፋ የጥበቃ ስርዓቱ ምንም እርምጃ
+  አይወስድም — ፈጽሞ አያግድም ወይም እንደገና አይጽፍም።
+- `redactCredentials()` ሙሉውን የጭነት/ምላሽ ዛፍ በ`walkValue()` ይቃኛል
+  (ከፕሮቶታይፕ ብክለት የተጠበቀ፣ በ`WeakSet` አማካኝነት ከዑደቶች የተጠበቀ)፣ እና የተመሳሰሉ
+  ክፍሎችን በ`[REDACTED:<type>]` ምትክ ይተካል፤ የሚቀዳውም በእውነት የተለወጡትን ቅርንጫፎች
+  ብቻ ነው።
+- `CREDENTIAL_PATTERNS` የLLM አቅራቢ ቁልፎችን (OpenAI, OpenAI-proj,
+  Anthropic, Google, Hugging Face, Replicate)፣ የVCS/SaaS ቶከኖችን (GitHub, Slack,
+  Linear, Notion, npm, Postman, Discord)፣ የክፍያ ቁልፎችን (Stripe, Square)፣ የደመና
+  ቁልፎችን (AWS መዳረሻ ቁልፍ, Twilio, SendGrid, Mailgun)፣ የግል ቁልፎችን / JWTsን፣
+  የማረጋገጫ መረጃ የያዙ የግንኙነት ሕብረቁምፊዎችን (`mongodb://user:pass@...`፣ ወዘተ)፣ እና
+  አጠቃላይ የ`Authorization`/`x-api-key`/`api-key`/`apikey` የራስጌ እሴት
+  ስርዓተ ንድፍን ይሸፍናል። የራስጌ ቅርጽ ያላቸው ቁልፎች (`authorization`, `x-api-key`, `api-key`,
+  `apikey`) በአጠቃላይ የጽሑፍ regex ሳይሆን በመዋቅር ደረጃ ይሸፈናሉ (እሴቱ ብቻ፤ እንደ
+  `Bearer `/`Basic ` ያለ የመርሐግብር ቅድመ ቅጥያ ይጠበቃል)።
+- የጥበቃ ስርዓቱ ፈጽሞ አያግድም፤ እንደገና ይጽፋል (`modifiedPayload` /
+  `modifiedResponse`) እና ማብራሪያ ያክላል (`meta.credentialsRedacted`, `meta.count`) ብቻ።
 
-የመመለሻ ጥበቃ: `tests/unit/credential-masker-guardrail.test.ts`።
+የድጋሚ ችግር መከላከያ፦ `tests/unit/credential-masker-guardrail.test.ts`።
 
 ## መሠረታዊ ውል (`base.ts`)
 
@@ -482,11 +688,11 @@ class BaseGuardrail {
 }
 
 interface GuardrailResult<TValue = unknown> {
-  block?: boolean; // true ሰንሰለቱን ወዲያውኑ ያቋርጣል
+  block?: boolean; // true ሲሆን ሰንሰለቱን ወዲያውኑ ያቋርጣል
   message?: string; // ሲታገድ ይታያል
   meta?: Record<string, unknown> | null;
-  modifiedPayload?: TValue; // ጥያቄውን እንደገና ለመጻፍ በ-preCall ይመለሳል
-  modifiedResponse?: TValue; // ምላሹን እንደገና ለመጻፍ በ-postCall ይመለሳል
+  modifiedPayload?: TValue; // ጥያቄውን እንደገና ለመጻፍ በ preCall ይመለሳል
+  modifiedResponse?: TValue; // ምላሹን እንደገና ለመጻፍ በ postCall ይመለሳል
 }
 
 interface GuardrailContext {
@@ -505,96 +711,137 @@ interface GuardrailContext {
 }
 ```
 
-አንድ guardrail `void`፣ `{}` ወይም `{ block: false }` በመመለስ "ለውጥ የለም" የሚል ምልክት ይሰጣል። `modifiedPayload`/`modifiedResponse` መመለስ በሰንሰለቱ ውስጥ ወደ ታችኛዎቹ guardrails የሚተላለፈውን እሴት ይተካል።
-`signal?: AbortSignal` የጠሪውን የሕይወት ዑደት ወደ guardrails ያስተላልፋል። የጥያቄ ማቋረጥ ሆን ተብሎ የተደረገው ክፍት-በመተው የሚሳካ ልዩ ሁኔታ ነው፦ የሚዲያ ማገናኛዎች ሥራቸውን ያቆማሉ እና ያጸዳሉ፤ ጥሬ ሚዲያን እንደማይደግፈው ወደሚታወቅ ዒላማ ግን አይመልሱም።
+መከላከያ መስፈርት `void`፣ `{}` ወይም `{ block: false }` በመመለስ «ምንም ለውጥ የለም» የሚለውን ያመለክታል። `modifiedPayload`/`modifiedResponse` መመለስ በሰንሰለቱ ውስጥ ወደ ቀጣዮቹ መከላከያ መስፈርቶች የሚተላለፈውን እሴት ይተካል። `signal?: AbortSignal` የጥሪ አድራጊውን የሕይወት ዑደት ወደ መከላከያ መስፈርቶቹ ያስተላልፋል። የጥያቄ መቋረጥ ሆን ተብሎ የተቀመጠ ክፍት-ውድቀት ልዩ ሁኔታ ነው፦ የሚዲያ ድልድዮች ጥሬ ሚዲያን እንደማይደግፈው ወደሚታወቅ መዳረሻ መልሰው ሳያስገቡ፣ ሥራቸውን ያቆማሉ እና ማጽዳት ያከናውናሉ።
 
 ## መዝገብ (`registry.ts`)
 
 ብቸኛው `guardrailRegistry` የሚከተሉትን ያቀርባል፦
 
-- `register(guardrail)` — guardrail ያክላል (ወይም በመደበኛ የስም ቅርጹ መሠረት ይተካል)፣ ከዚያም በ`priority` ከዝቅተኛ ወደ ከፍተኛ እንደገና ይደረድራል።
-- `clear()` / `list()` — የአስተዳደር ረዳት መሣሪያዎች።
-- `runPreCallHooks(payload, context)` — ንቁ guardrailsን በየተራ ያካሂዳል፣ payloadን በ`modifiedPayload` በኩል ያስተላልፋል፣ እና በመጀመሪያው `block: true` ላይ ያቆማል።
-- `runPostCallHooks(response, context)` — በምላሹ በኩል ተመሳሳይ ፍሰትን ይከተላል።
-- `resetGuardrailsForTests({ registerDefaults })` — ለንጹሕ የሙከራ ማግለል ሁኔታውን ያጸዳል፣ እና እንደ አማራጭ ነባሪዎቹን እንደገና ይመዘግባል።
+- `register(guardrail)` — መከላከያ መስፈርትን ያክላል (ወይም በመደበኛ ቅርጽ በተዋቀረ ስም ይተካል) እና በ`priority` ከትንሽ ወደ ትልቅ እንደገና ይደረድራል።
+- `clear()` / `list()` — የአስተዳደር አጋዥ ተግባራት።
+- `runPreCallHooks(payload, context)` — ንቁ መከላከያ መስፈርቶችን በቅደም ተከተል ያልፋል፣ payloadን በ`modifiedPayload` በኩል ያስተላልፋል እና በመጀመሪያው `block: true` ላይ ይቆማል።
+- `runPostCallHooks(response, context)` — በምላሹ በኩል ተመሳሳይ ሂደትን ይከተላል።
+- `resetGuardrailsForTests({ registerDefaults })` — ለንጹሕ የፈተና ማግለል ሁኔታውን ያጸዳል እና እንደ ምርጫ ነባሪዎቹን እንደገና ይመዘግባል።
 
-ሁለቱም አስኪያጆች `{ blocked, payload|response, results, guardrail?, message? }` ይመልሳሉ፤ በዚህ ውስጥ `results` ለእያንዳንዱ guardrail `blocked`፣ `skipped`፣ `modified`፣ `error` እና `meta` መስኮችን የሚያካትቱ የ`GuardrailExecutionResult` መዝገቦች ድርድር ሲሆን፣ ለክትትል ጠቃሚ ነው።
+ሁለቱም አስኬጆች `{ blocked, payload|response, results, guardrail?, message? }` ይመልሳሉ፤ `results` ለእያንዳንዱ መከላከያ መስፈርት `blocked`፣ `skipped`፣ `modified`፣ `error` እና `meta` መስኮችን የያዙ የ`GuardrailExecutionResult` መዝገቦች ድርድር ሲሆን ለክትትል ይጠቅማል።
 
-### Guardrailsን በእያንዳንዱ ጥያቄ ማሰናከል
+### ለእያንዳንዱ ጥያቄ መከላከያ መስፈርቶችን ማሰናከል
 
-`resolveDisabledGuardrails({ apiKeyInfo, body, headers })` ለአሁኑ ጥያቄ መዝለል ያለባቸውን የguardrail ስሞች ድግግሞሽ የተወገደለት ዝርዝር ያሰባስባል። ምንጮቹ (ሁሉም አማራጭ፣ ሁሉም የሚዋሃዱ)፦
+`resolveDisabledGuardrails({ apiKeyInfo, body, headers })` ለአሁኑ ጥያቄ መዘለል ያለባቸውን የመከላከያ መስፈርት ስሞች ያለ ድግግሞሽ ወደ አንድ ዝርዝር ያሰባስባል። በዚህ ቅደም ተከተል የሚነበቡና ወደ አንድ ዝርዝር የሚዋሃዱ አምስት ምንጮች አሉ (ድግግሞሽ ሲወገድ መጀመሪያ የታየው ይቀራል)፦
 
-- `apiKeyInfo.disabledGuardrails`
-- የጥያቄ አካል `disabledGuardrails` (ከፍተኛ ደረጃ)
-- የጥያቄ አካል `metadata.disabledGuardrails`
-- ራስጌ `x-omniroute-disabled-guardrails` (ወይም የቀድሞው
-  `x-disabled-guardrails`)
+1. `apiKeyInfo.disabledGuardrails`
+2. የጥያቄው body `disabledGuardrails` (በከፍተኛው ደረጃ)
+3. የጥያቄው body `metadata.disabledGuardrails` (`metadata` ነገር ሲሆን ብቻ)
+4. ራስጌ `x-omniroute-disabled-guardrails`
+5. የቆየው ራስጌ `x-disabled-guardrails`
 
-እሴቶቹ የሕብረቁምፊዎች ድርድር ወይም በኮማ የተለየ ሕብረቁምፊ ሊሆኑ ይችላሉ፤ ስሞች ወደ ትንሽ ፊደል kebab-case (`pii_masker` → `pii-masker`) ይደበኛሉ። ውጤቱ በ`context.disabledGuardrails` በኩል ወደ መዝገቡ ይተላለፋል፤ መዝገቡም ተዛማጅ guardrailsን ይዘላል (`skipped: true` በ`results` ውስጥ)።
+ሁለቱን ራስጌዎች ጨምሮ አምስቱም ምንጮች ይዋሃዳሉ፦ `x-omniroute-disabled-guardrails` እና `x-disabled-guardrails` ሁለቱንም መላክ በዝርዝሮቻቸው ውህደት ውስጥ ያሉትን ያስዘልላል፤ ባዶ ዘመናዊ ራስጌም ከእንግዲህ የቆየውን አይደብቅም ([#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412)፣ በ[#16805](https://github.com/diegosouzapw/OmniRoute/pull/16805) ተስተካክሏል)።
 
-## የአፈጻጸም ቅደም ተከተል
+እሴቶች የሕብረቁምፊዎች ድርድር ወይም በነጠላ ሰረዝ የተለየ ሕብረቁምፊ ሊሆኑ ይችላሉ፤ ከስሞች ዙሪያ ያሉ ክፍተቶች ይወገዳሉ፣ ስሞቹም ወደ ትንሽ ፊደል kebab-case (`pii_masker` → `pii-masker`) ይለወጣሉ፣ ባዶ ግቤቶችም ይተዋሉ። ውጤቱ በ`context.disabledGuardrails` በኩል ወደ መዝገቡ ይተላለፋል፤ መዝገቡም ተዛማጅ መከላከያ መስፈርቶችን ያስዘልላል (በ`results` ውስጥ `skipped: true`)።
 
-በ`src/sse/handlers/chat.ts` እና
-`open-sse/handlers/chatCore.ts` በኩል ለሚያልፍ ለእያንዳንዱ ጥያቄ፦
+የማሰናከያ ዝርዝሩ የሚነካው **መዝገቡን** ብቻ ነው። የprompt-injection `block` ሁነታ ግዴታ የሆነ የደህንነት ድንበር ነው፦ የinjection-guard middleware (`src/middleware/promptInjectionGuard.ts`) በጥሪ አድራጊው የሚቆጣጠር የማሰናከያ ዝርዝር ሳያስተላልፍ `evaluatePromptInjection()` ይጠራል (ከዚህ ቀደም ያደርገው የነበረው ጥቅም የሌለው `resolveDisabledGuardrails({ body })` ጥሪ በ[#16934](https://github.com/diegosouzapw/OmniRoute/pull/16934) ተወግዷል)፤ ስለዚህ `prompt-injection`ን የሚያሰናክል ጥያቄ አሁንም በ`block` ሁነታ ውድቅ ይደረጋል። ይህ በንድፍ የተወሰነ ነው። የማሰናከያ ምንጮቹ በጥሪ አድራጊው የሚቆጣጠሩ ናቸው (የጥያቄ body፣ metadata፣ ራስጌዎች)፤ ጥሪ አድራጊ ኦፕሬተሩ ያቀናበረውን የደህንነት ቁጥጥር ማጥፋት መቻል የለበትም ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413))። የ[#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412) የራስጌ ውህደት የሚቀይረው የትኞቹ የመዝገብ መከላከያ መስፈርቶች እንደሚዘለሉ ብቻ ነው፤ ደንበኛ የmiddlewareን እንዲያልፍ አያስችለውም። ግዴታ የሆኑ ለእያንዳንዱ ቁልፍ እና ለእያንዳንዱ ቡድን የመከላከያ መስፈርት ፖሊሲዎች በv4 RFC [#16417](https://github.com/diegosouzapw/OmniRoute/issues/16417) ይከታተላሉ። [ሽፋን እና ገደቦች](#coverage-and-limits) ይመልከቱ።
 
-1. `resolveDisabledGuardrails(...)` ከAPI ቁልፍ፣ ከbody እና
-   ከheaders የመዝለያ ዝርዝሩን ይገነባል።
-2. `guardrailRegistry.runPreCallHooks(body, ctx)` guardrailsን በቅድሚያ
-   ደረጃቸው ከዝቅተኛ ወደ ከፍተኛ ቅደም ተከተል ያስኬዳል፦
-   - የተሰናከሉ guardrails እንደ `skipped` ይመዘገባሉ።
-   - የእያንዳንዱ guardrail `preCall` በ`modifiedPayload` አማካኝነት payloadን እንደገና ሊጽፍ ይችላል።
-   - የመጀመሪያው `block: true` ሰንሰለቱን ወዲያውኑ ያቋርጣል፣ እና handlerው
-     የguardrail ውድቅ ማድረጊያ ምላሽ ይመልሳል።
-3. (ሊሻሻል የሚችለው) payload ወደ combo routing እና upstream
-   dispatch ይገባል።
-4. ምላሹ ከተዋቀረ በኋላ፣ `guardrailRegistry.runPostCallHooks(...)`
-   በምላሹ ላይ ያንኑ ሰንሰለት ያስኬዳል። እዚህ ያለ `block: true` የupstream
-   ምላሹን ይጥላል።
+## አፈጻጸም ቅደም ተከተል
 
-ስህተት የሚያስነሱ guardrails በ`error: <message>` ይመዘገባሉ፣ እንዲሁም በ
-`logger.warn` በኩል log ይደረጋሉ፤ ነገር ግን ሰንሰለቱ ይቀጥላል — ይህ በንድፍ fail-open ነው።
+በ`src/sse/handlers/chat.ts` እና በ`open-sse/handlers/chatCore.ts` በኩል ለሚያልፍ እያንዳንዱ ጥያቄ ([ሽፋን እና ገደቦች](#coverage-and-limits) ስር የተዘረዘሩት የቻት ቤተሰብ መንገዶች)፦
+
+1. `resolveDisabledGuardrails(...)` ከAPI ቁልፍ፣ ከbody እና ከheaders የሚዘለሉትን ዝርዝር ያዘጋጃል።
+2. `guardrailRegistry.runPreCallHooks(body, ctx)` የደህንነት ጥበቃዎችን በቅድሚያ ደረጃቸው ከዝቅተኛ ወደ ከፍተኛ ያስኬዳል፦
+   - የተሰናከሉ የደህንነት ጥበቃዎች `skipped` ተብለው ይመዘገባሉ።
+   - የእያንዳንዱ የደህንነት ጥበቃ `preCall` በ`modifiedPayload` አማካኝነት የሚላከውን ውሂብ ሊለውጥ ይችላል።
+   - የመጀመሪያው `block: true` ሰንሰለቱን ያቋርጣል፣ እና ተቆጣጣሪው የደህንነት ጥበቃ ውድቅ ምላሽ ይመልሳል።
+3. የተላከው ውሂብ (ተለውጦ ሊሆን ይችላል) ወደ ጥምር ማስተላለፍ እና ወደ ውጫዊ አገልግሎት መላክ ይሄዳል።
+4. **ለዥረት ያልሆኑ ምላሾች ብቻ፦** ምላሹ ከተዘጋጀ በኋላ `guardrailRegistry.runPostCallHooks(...)` በምላሹ ላይ ተመሳሳይ ሰንሰለት ያስኬዳል። እዚህ ያለ `block: true` ከውጫዊ አገልግሎቱ የመጣውን ምላሽ ይጥለውና HTTP 400 ይመልሳል። በዥረት የሚላኩ ምላሾች ይህን ደረጃ ሙሉ በሙሉ ይዘላሉ።
+
+ስህተት የሚያስነሱ የደህንነት ጥበቃዎች በ`error: <message>` ይመዘገባሉ፣ በ`logger.warn` አማካኝነትም ወደ ሎግ ይጻፋሉ፤ ሆኖም ሰንሰለቱ ይቀጥላል — ይህ ሆን ተብሎ የተዘጋጀ ስህተት ሲኖር ጥያቄውን የማሳለፍ ባህሪ ነው።
+
+## ሽፋን እና ገደቦች
+
+የደህንነት ጥበቃ መዝገቡ ከቻት የሂደት መስመር ጋር ብቻ ተያይዟል። እነዚህ ገደቦች በ`tests/unit/guardrail-pipeline-wiring-characterization.test.ts` እና በ`tests/unit/guardrail-pipeline-characterization.test.ts` ተረጋግጠዋል፤ ባህሪው ሲቀየር እነዚያን ፈተናዎች ሆን ብለው ያዘምኑ።
+
+### መንጠቆዎቹ የሚሰሩባቸው ቦታዎች
+
+| መንጠቆ / ቁጥጥር                       | የሚሰራበት                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runPreCallHooks`                 | በ`handleChat` (`src/sse/handlers/chat.ts`) የሚስተናገዱ ጥያቄዎች፦ `/v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/responses` (እና `/v1/responses/*`), `/v1/relay/chat/completions`, `/v1/providers/{provider}/chat/completions`, `/v1/api/chat`, `/v1/antigravity`, `/v1beta/models/*` እና የTelegram ቻት ፕሮክሲ። እንዲሁም የዳሽቦርድ ሙከራ መገናኛ `/api/guardrails/test`። ከጥሪ በፊት የሚደረግ እገዳ HTTP 400 ይመልሳል። |
+| `runPostCallHooks`                | **በዥረት የማይላኩ** የቻት ምላሾች ብቻ (`open-sse/handlers/chatCore/nonStreamingResponse.ts`)። በዥረት የሚላኩ ምላሾች እዚህ ፈጽሞ አይደርሱም።                                                                                                                                                                                                                                                                                   |
+| በዥረት ላይ ያለ PII                    | `createPiiSseTransform` (`src/lib/streamingPiiTransform.ts`)፣ `PII_RESPONSE_SANITIZATION` ሲበራ በ`streamingPipeline.ts` ውስጥ በሂደቱ ላይ ይጨመራል። ይህ የደህንነት ጥበቃ አይደለም፣ ስለዚህ የማሰናከያ መንገዶች ተጽዕኖ አያሳድሩበትም።                                                                                                                                                                                                      |
+| የመርፌ ጥቃት መከላከያ መካከለኛ ሶፍትዌር (የቀድሞ) | ጥያቄ ጽሑፍ የያዘ እያንዳንዱ `/v1` መንገድ፣ የቻት ቤተሰብንም ጨምሮ ([የመንገዶች ሽፋን](#injection-guard-route-coverage--red-team-phase-8--block-d) ይመልከቱ)። ለጥያቄ ጽሑፍ መርፌ ጥቃት ብቻ።                                                                                                                                                                                                                                                |
+
+### ያልተሸፈኑ ነገሮች
+
+- **የሚዲያ፣ የembedding እና የውሂብ መንገዶች** (`/v1/images/*`, `/v1/embeddings`,
+  `/v1/audio/*`, `/v1/videos/generations`, `/v1/music/generations`,
+  `/v1/rerank`, `/v1/search`, `/v1/moderations`) ወደ መዝገቡ ፈጽሞ አይደርሱም።
+  በእነዚህ መንገዶች PII መደበቅ፣ የማረጋገጫ መረጃን መደበቅ ወይም የሞዳሊቲ ድልድይ አይሰራም።
+  ብቸኛው ማረጋገጫቸው የቀድሞው የመርፌ ጥቃት መከላከያ መካከለኛ ሶፍትዌር ነው።
+- **በዥረት የሚላኩ ምላሾች** ከጥሪ በኋላ የደህንነት ጥበቃ አይተገበርባቸውም፦ ከጥሪ በኋላ `pii-masker` ወይም
+  `credential-masker` አይሰራባቸውም፣ ከጥሪ በኋላም አይታገዱም። የሚተገበረው የዥረት PII
+  ለውጥ ብቻ ነው (`PII_RESPONSE_SANITIZATION` ሲበራ)። በዥረት በሚላክ ምላሽ ውስጥ
+  ተመልሶ የታየ የማረጋገጫ መረጃ አይደበቅም።
+- **የማሰናከያ መንገዶች እና መካከለኛ ሶፍትዌሩ (ሆን ተብሎ የተነደፈ)፦** መካከለኛ ሶፍትዌሩ
+  በራሱ `evaluatePromptInjection()` ጥሪ የጥያቄ ጽሑፍ መርፌ ጥቃትን ይገመግማል፤
+  በጥሪው አድራጊ የሚቆጣጠር የማሰናከያ ዝርዝር አያስተላልፍም። `block` ሁነታ
+  በጥሪው አድራጊ የሚቆጣጠሩ ማሰናከያዎች ሊያልፉት የማይችሉት ግዴታ የሆነ የጥበቃ ድንበር ነው፤
+  ይህም የቻት ቤተሰብ መንገዶችን ይጨምራል
+  ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413))።
+  `prompt-injection`ን ማሰናከል የሚዘለው በመዝገቡ ውስጥ ያለውን የደህንነት ጥበቃ ብቻ ነው።
+
+### ከጥሪ በኋላ ከሚሰሩ የደህንነት ጥበቃዎች በፊት ምላሹን የሚያገኙ ሂደቶች
+
+በዥረት ባልሆነው መንገድ ቅደም ተከተሉ፦ ከምላሹ የማስታወሻ መረጃ ማውጣት → አብሮ የተካተቱ መሣሪያዎችን ማስኬድ → ከጥሪ በኋላ የሚሰሩ የደህንነት ጥበቃዎች → ከጥሪ በኋላ በእገዳ መውጣት → በትርጉም ላይ የተመሠረተ መሸጎጫ ውስጥ ማስቀመጥ።
+
+- **ከማህደረ ትውስታ መረጃ ማውጣት** እና **መሣሪያዎችን ማስኬድ** ከጥሪው በኋላ የሚተገበሩ የጥበቃ ደንቦች
+  ምላሹን እንደገና ከመጻፋቸው ወይም ከማገዳቸው በፊት ምላሹን ያገኛሉ። ከ
+  [#16401](https://github.com/diegosouzapw/OmniRoute/pull/16401) ጀምሮ፣
+  `PII_RESPONSE_SANITIZATION` ሲበራ ከማህደረ ትውስታ መረጃ ማውጣት የወጣውን ጽሑፍ በ`sanitizePII`
+  ያጣራል (በዥረት እና ዥረት ባልሆነ ሁኔታ)፤ ሆኖም ከጥሪው በኋላ የሚተገበሩ የጥበቃ ደንቦች
+  በኋላ የሚያግዱት ምላሽ አስቀድሞ ለማህደረ ትውስታ እና ለመሣሪያዎች ቀርቦ ይሆናል።
+- **የትርጉም መሠረት ያደረገው መሸጎጫ** ምላሹን ከጥሪው በኋላ የሚተገበሩ የጥበቃ ደንቦች በኋላ ያከማቻል፤ ስለዚህ
+  እንደገና የተጻፈውን ምላሽ ያከማቻል፣ የታገደ ምላሽ ግን ፈጽሞ አይሸጎጥም። የመሸጎጫ መዝገቦች
+  ለእያንዳንዱ API ቁልፍ ለየብቻ ይመደባሉ።
 
 ## ውቅር
 
-አብሮ በተሰሩት guardrails የሚነበቡ የአካባቢ ተለዋዋጮች፦
+አብሮ የተካተቱት የጥበቃ ስርዓቶች የሚያነቧቸው የአካባቢ ተለዋዋጮች፦
 
-| ተለዋዋጭ                                 | የሚጠቀምበት                   | ውጤት                                                                                        |
-| ------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
-| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`        | ማወቂያውን ሙሉ በሙሉ ለማሰናከል `false` ያድርጉ።                                                         |
-| `INPUT_SANITIZER_MODE`                | `prompt-injection`        | የinjection ፖሊሲ፦ `warn`፣ `block` ወይም `log`። የቀድሞው `redact` እሴት የinjection ጽሑፍን እንደገና አይጽፍም። |
-| `INJECTION_GUARD_MODE`                | `prompt-injection`        | የinjection guard ሁነታ፤ እንዲሁም የenv varsን **የሚሽር** የDB feature flag ነው (DB > ENV)።            |
-| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`        | `MODE=block` ውድቅ የሚያደርገው ዝቅተኛው የከባድነት ደረጃ፦ `high` (ነባሪ)፣ `medium` ወይም `low`።               |
-| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`        | የ`INPUT_SANITIZER_BLOCK_THRESHOLD` የቀድሞ alias።                                             |
-| `PII_REDACTION_ENABLED`               | `pii-masker`              | `true` ሲሆን፣ በጥያቄው ውስጥ ያለ PII ይሰወራል (ከinjection ሁነታ ነጻ ነው)።                                 |
-| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (downstream) | በምላሽ በኩል ያለውን masker ባህሪ ይቆጣጠራል።                                                           |
+| ተለዋዋጭ                                 | የሚጠቀምበት                   | ተጽዕኖ                                                                                     |
+| ------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
+| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`        | ማወቅን ሙሉ በሙሉ ለማሰናከል `false` ያድርጉት።                                                        |
+| `INPUT_SANITIZER_MODE`                | `prompt-injection`        | የጥቃት ጽሑፍ ማስገባት ፖሊሲ፦ `warn`፣ `block` ወይም `log`። የቀድሞው እሴት `redact` የጥቃት ጽሑፉን እንደገና አይጽፍም። |
+| `INJECTION_GUARD_MODE`                | `prompt-injection`        | የጥቃት ጽሑፍ ማስገባት መከላከያው ሁነታ፤ እንዲሁም የአካባቢ ተለዋዋጮችን **የሚሽር** የDB ባህሪ መቀያየሪያ ነው (DB > ENV)።    |
+| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`        | `MODE=block` የሚከለክለው ዝቅተኛው የከባድነት ደረጃ፦ `high` (ነባሪ)፣ `medium` ወይም `low`።                 |
+| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`        | ለ`INPUT_SANITIZER_BLOCK_THRESHOLD` የቀድሞ አማራጭ ስም።                                         |
+| `PII_REDACTION_ENABLED`               | `pii-masker`              | `true` ሲሆን፣ በጥያቄው ውስጥ ያለ PII ይደበቃል (ከጥቃት ጽሑፍ ማስገባት ሁነታ ነፃ ነው)።                           |
+| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (downstream) | በምላሽ በኩል ያለውን የመደበቂያ ባህሪ ይቆጣጠራል።                                                         |
 
-የModality Bridge guardrails የruntime ውቅርን ከDB-backed settings
-store (`getSettings()`) ያነባሉ፣ ከenv vars አይደለም። የVision ዋና ቁልፎች
+የModality Bridge የጥበቃ ስርዓቶች የሩጫ ጊዜ ውቅርን ከDB በሚደገፈው የቅንብሮች
+ማከማቻ (`getSettings()`) ያነባሉ፣ ከአካባቢ ተለዋዋጮች አይደለም። የVision ዋና ቁልፎች
 `modalityBridgeVisionEnabled`፣ `modalityBridgeVisionMode`፣
 `modalityBridgeVisionModel`፣ `modalityBridgeVisionTaskAware`፣
 `modalityBridgeVisionPrompt`፣ `modalityBridgeVisionTimeout`፣
 `modalityBridgeVisionMaxImages`፣ `modalityBridgeVisionMaxChars`፣
 `modalityBridgeCacheEnabled`፣ `modalityBridgeCacheTtlMinutes` እና
 `modalityBridgeCacheMaxEntries` ናቸው። የቀድሞዎቹ
-`visionBridge*` ቁልፎች በሰነድ እንደተገለጸው ለአንድ ዑደት የንባብ
-fallback ብቻ ተቀባይነት አላቸው፤ dashboard ጽሁፎች ዋና ቁልፎቹን ይጠቀማሉ። ነባሪዎቹ እና fallback
-resolverው በ`src/shared/constants/modalityBridgeDefaults.ts` ውስጥ ይገኛሉ፣ የቀድሞ
-constants ደግሞ በ`src/shared/constants/visionBridgeDefaults.ts` ውስጥ ተይዘዋል።
+`visionBridge*` ቁልፎች ተቀባይነት ያላቸው በሰነድ እንደተገለጸው ለአንድ ዑደት ብቻ የሚያገለግሉ ተተኪ የንባብ
+ቁልፎች ሆነው ብቻ ነው፤ ከዳሽቦርድ የሚደረጉ ጽሕፈቶች ዋና ቁልፎቹን ይጠቀማሉ። ነባሪ እሴቶችና ተተኪውን
+የሚወስነው ክፍል በ`src/shared/constants/modalityBridgeDefaults.ts` ውስጥ ይገኛሉ፤ የቀድሞ
+ቋሚ እሴቶች ደግሞ በ`src/shared/constants/visionBridgeDefaults.ts` ውስጥ ተጠብቀዋል።
 
 Audio `modalityBridgeAudioEnabled`፣ `modalityBridgeAudioModel`፣
-`modalityBridgeAudioTimeout` እና `modalityBridgeAudioMaxClips`ን፣ እንዲሁም የጋራ
-`modalityBridgeCache*` settingsን ይጠቀማል። እነዚህ
-ቁልፎች ከModality Bridge schema ጋር ስለተዋወቁ፣ Audio የቀድሞ ቁልፍ fallback የለውም።
+`modalityBridgeAudioTimeout` እና `modalityBridgeAudioMaxClips` ይጠቀማል፤ በተጨማሪም የጋራ
+`modalityBridgeCache*` ቅንብሮችን ይጠቀማል። እነዚህ ቁልፎች ከModality Bridge ስኪማ ጋር
+ስለተዋወቁ Audio ለቀድሞ ቁልፎች ተተኪ የለውም።
 
 Video `modalityBridgeVideoEnabled`፣ `modalityBridgeVideoAnalysisMode`፣
 `modalityBridgeVideoModel`፣
 `modalityBridgeVideoFrameCount`፣ `modalityBridgeVideoSamplingPolicy`፣
 `modalityBridgeVideoMaxVideos` እና
-`modalityBridgeVideoTimeout`ን፣ እንዲሁም የጋራ `modalityBridgeCache*` settingsን ይጠቀማል።
-FFmpeg/ffprobe አማራጭ የክወና
-ጥገኞች በመሆናቸው፣ እንዲሁም የframe captioning መዘግየትን እና የmodel ወጪን ስለሚጨምር፣ በነባሪ ተሰናክሏል።
+`modalityBridgeVideoTimeout` ይጠቀማል፤ በተጨማሪም የጋራ `modalityBridgeCache*` ቅንብሮችን
+ይጠቀማል። FFmpeg/ffprobe ለሥራ አስኬዳጅ አማራጭ ጥገኝነቶች ስለሆኑ እና ለቪዲዮ ፍሬሞች መግለጫ
+መፍጠር መዘግየትና የሞዴል ወጪ ስለሚጨምር፣ በነባሪነት ተሰናክሏል።
 
-## ብጁ መከላከያዎች
+## ብጁ Guardrails
 
 ```typescript
 import { BaseGuardrail, guardrailRegistry } from "@/lib/guardrails";
@@ -617,69 +864,72 @@ guardrailRegistry.register(new BudgetGuardrail());
 
 ደረጃዎች፦
 
-1. `BaseGuardrail`ን የሚወርስ `src/lib/guardrails/myGuardrail.ts` ይፍጠሩ።
-2. `preCall` እና/ወይም `postCall`ን ይተግብሩ።
-3. በመጫን ጊዜ ይመዝግቡ (`registerDefaultGuardrails` ውስጥ ያክሉ) ወይም
-   በአሂድ ጊዜ `guardrailRegistry.register(...)`ን ይጥሩ — መዝገቡ ተመሳሳይ መደበኛ የተደረገ ስም ያለውን
-   ቀደምት መከላከያ ይተካል።
-4. ሙከራዎችን በ`tests/unit/` ስር ያክሉ (ያሉ ምሳሌዎች፦
+1. `BaseGuardrail`ን የሚያራዝም `src/lib/guardrails/myGuardrail.ts` ይፍጠሩ።
+2. `preCall`ን እና/ወይም `postCall`ን ይተግብሩ።
+3. በማስገባት ጊዜ ይመዝግቡ (`registerDefaultGuardrails` ውስጥ ያክሉት) ወይም
+   በሂደት ጊዜ `guardrailRegistry.register(...)`ን ይጥሩ — መዝገቡ ተመሳሳይ መደበኛ ስም ያለውን
+   ማንኛውንም ቀድሞ የተመዘገበ guardrail ይተካል።
+4. በ`tests/unit/` ስር ሙከራዎችን ያክሉ (ነባር ምሳሌዎች፦
    `tests/unit/guardrails-registry.test.ts`,
    `tests/unit/prompt-injection-guard.test.ts`,
    `tests/unit/guardrails/visionBridge.test.ts`)።
 
 ## ሙከራ
 
-ከታወቀ ሁኔታ ለመጀመር በሙከራዎች መካከል `resetGuardrailsForTests()`ን ይጠቀሙ።
+ከሚታወቅ ሁኔታ ለመጀመር በሙከራዎች መካከል `resetGuardrailsForTests()`ን ይጠቀሙ።
 ባዶ መዝገብ ለመጀመር `{ registerDefaults: false }`ን ያስተላልፉ እና
-በሙከራ ላይ ያሉትን መከላከያዎች ብቻ ይመዝግቡ። Vision Bridge የጥገኝነት
-ማስገባትን (`deps.getSettings`, `deps.callVisionModel`) ይቀበላል፤ Audio Bridge ደግሞ
-ለቅንብሮች፣ ችሎታዎች፣ የSTT ሞዴል ምርጫ፣ የማረጋገጫ መረጃ
-ፍተሻዎች እና ወደ ጽሑፍ መቀየር ተመጣጣኝ የማስገቢያ ነጥቦችን ያቀርባል። ስለዚህ ሙከራዎች ያለ DB
-ወይም የአውታረ መረብ መዳረሻ ሁለቱንም ፍሰቶች ሊፈትኑ ይችላሉ።
+እየተሞከሩ ያሉትን guardrails ብቻ ይመዝግቡ። Vision Bridge ጥገኝነቶችን
+በመርፌ መስጠት (`deps.getSettings`, `deps.callVisionModel`) ይቀበላል፤ Audio Bridge ደግሞ
+ለቅንብሮች፣ ችሎታዎች፣ ለSTT ሞዴል ምርጫ፣ ለማረጋገጫ መረጃ ፍተሻዎች እና
+ለጽሑፍ ቅጂ ማዘጋጀት ተመሳሳይ የሙከራ መገናኛዎችን ያቀርባል። ስለዚህ ሙከራዎች ያለ DB
+ወይም የአውታረ መረብ መዳረሻ ሁለቱንም ፍሰቶች ሊፈትሹ ይችላሉ።
 
-## በተጨማሪ ይመልከቱ
+## ተጨማሪ ይመልከቱ
 
 - `src/lib/guardrails/` — ትግበራ
-- `src/shared/utils/inputSanitizer.ts` — የprompt-injection እና PII መሸፈኛን የሚያንቀሳቅስ
-  የጋራ ማወቂያ
+- `src/shared/utils/inputSanitizer.ts` — የprompt injection እና የPII መደበቂያን
+  የሚደግፍ የጋራ ማወቂያ
 - `src/shared/constants/visionBridgeDefaults.ts` — የVision Bridge ነባሪዎች እና
-  የግዳጅ-ድልድይ ሞዴል ዝርዝር
-- `src/shared/constants/modalityBridgeDefaults.ts` — የጋራ Vision/Audio የአሂድ ጊዜ ነባሪዎች
-- `docs/architecture/RESILIENCE_GUIDE.md` — ራሱን የቻለ ንብርብር (የወረዳ መቋረጫ፣ የማቀዝቀዣ ጊዜያት)
-- `docs/reference/ENVIRONMENT.md` — ሙሉ የenv var ማጣቀሻ
+  በግድ በbridge የሚያልፉ ሞዴሎች ዝርዝር
+- `src/shared/constants/modalityBridgeDefaults.ts` — የጋራ የVision/Audio የአሂድ ጊዜ ነባሪዎች
+- `docs/architecture/RESILIENCE_GUIDE.md` — ገለልተኛ ንብርብር (circuit breaker፣ cooldowns)
+- `docs/reference/ENVIRONMENT.md` — የenvironment variable ሙሉ ማጣቀሻ
 
-## የInjection-guard መስመር ሽፋን እና red-team (Phase 8 · Block D)
+## የinjection-guard መንገዶች ሽፋን እና የred-team ሙከራ (ደረጃ 8 · ክፍል D)
 
-injection-guard (`createInjectionGuard` / `withInjectionGuard`) የተጠቃሚ መጠየቂያዎችን የሚቀበሉ ሁሉንም መስመሮች
-ይሸፍናል። `INJECTION_GUARD_MODE`ን ያከብራል (ነባሪ `warn` = መዝገብ ላይ ማስፈር ብቻ፤
+የinjection-guard (`createInjectionGuard` / `withInjectionGuard`) የተጠቃሚ prompt የሚቀበሉ
+መንገዶችን ሁሉ ይሸፍናል። `INJECTION_GUARD_MODE`ን ያከብራል (ነባሪው `warn` = ሎግ ማድረግ ብቻ፤
 `block` = HTTP 400 `SECURITY_001`ን ይመልሳል)።
 
-| ዓይነት     | መስመሮች                                                                                                                                                | ነባሪ ሁነታ |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| ጽሑፍ (ያለ) | `/v1/chat/completions`, `/v1/completions`, `/v1/relay/chat/completions`                                                                              | warn    |
-| አመንጪ     | `/v1/messages`, `/v1/responses`, `/v1/images/generations`, `/v1/images/edits`, `/v1/videos/generations`, `/v1/music/generations`, `/v1/audio/speech` | warn    |
-| ውሂብ      | `/v1/embeddings`, `/v1/rerank`, `/v1/search`, `/v1/moderations`                                                                                      | warn    |
+| ዓይነት      | መንገዶች                                                                                                                                                | ነባሪ ሁነታ |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| ጽሑፍ (ነባር) | `/v1/chat/completions`, `/v1/completions`, `/v1/relay/chat/completions`                                                                              | warn    |
+| የይዘት ፈጠራ  | `/v1/messages`, `/v1/responses`, `/v1/images/generations`, `/v1/images/edits`, `/v1/videos/generations`, `/v1/music/generations`, `/v1/audio/speech` | warn    |
+| ውሂብ       | `/v1/embeddings`, `/v1/rerank`, `/v1/search`, `/v1/moderations`                                                                                      | warn    |
 
-የጽሑፍ ማውጣት (`extractMessageContents`) `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system`ን ይሸፍናል።
+ጽሑፍ ማውጣት (`extractMessageContents`) `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system`ን ይሸፍናል።
 
-**Red-team (በየሌሊቱ፣ `nightly-llm-security.yml`)፦** promptfoo እያንዳንዱ መስመር
-በ`INJECTION_GUARD_MODE=block` ውስጥ የOWASP-LLM ኮርፐስን እንደሚከለክል ያረጋግጣል፤ garak ምርመራዎችን ያካሂዳል (ሚስጥር ከሌለ ይዘላል)።
-`moderations` ለወጥነት ተካትቷል — በblock-mode ያሉ ኦፕሬተሮች
-በ`resolveDisabledGuardrails` በኩል ነፃ ሊያደርጉት ይችላሉ።
+**የred-team ሙከራ (በየሌሊቱ፣ `nightly-llm-security.yml`)፦** promptfoo በ`INJECTION_GUARD_MODE=block`
+እያንዳንዱ መንገድ በ`INJECTION_GUARD_MODE=block` የOWASP-LLM ስብስብን እንደሚያግድ ያረጋግጣል፤
+garak የሙከራ ጥያቄዎችን ያካሂዳል (ሚስጥራዊ ቁልፍ ከሌለ ይዘላል)።
+`moderations` ለወጥነት ተካትቷል። የማገድ ሁነታ ግዴታ የሆነ የደህንነት ድንበር ነው፦
+`evaluatePromptInjection()` middleware የሚያስተላልፍለትን በእያንዳንዱ ጥያቄ የተሰናከሉ ዝርዝር
+ችላ ይላል፤ ስለዚህ `disabledGuardrails` መንገድን ከዚህ **ነፃ አያደርግም**
+([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413))።
 
-የሌሊቱ የስራ ፍሰት (`.github/workflows/nightly-llm-security.yml`፣ cron + በእጅ
-ማስጀመሪያ) ሁለት ስራዎች አሉት፦
+የበየሌሊቱ workflow (`.github/workflows/nightly-llm-security.yml`፣ cron + በእጅ
+ማስጀመር) ሁለት ሥራዎች አሉት፦
 
-- **`promptfoo-guard` (ከልካይ)** — `promptfoo eval -c promptfooconfig.yaml`ን
-  በ`INJECTION_GUARD_MODE=block` ያሂዳል። እያንዳንዱ ተቃዋሚ የሙከራ ሁኔታ (ለምሳሌ፣ "ignore all
-  previous instructions…", የDAN ቅጥ ያላቸው jailbreaks) ምላሹ
-  `error.code === "SECURITY_001"`ን እንደያዘ ያረጋግጣል፣ ማለትም መከላከያው ጥያቄውን በትክክል ውድቅ አድርጓል።
-- **`garak` (አማካሪ)** — garakን ከአካባቢያዊ OmniRoute አጋጣሚ (`http://localhost:20128/v1`) ጋር
-  `--probes promptinject,dan,leakreplay` በመጠቀም ያሂዳል። በአቅራቢ ሚስጥር
-  (`PROMPTFOO_PROVIDER_KEY`) ላይ የተመሠረተ ነው፤ ሚስጥሩ ከሌለ ያለችግር ይዘላል እና
-  `|| true` ይታከልበታል፣ ስለዚህ CIን ሳያሳክት ሪፖርት ያደርጋል።
+- **`promptfoo-guard` (ውድቀቱ ሂደቱን ያግዳል)** — `promptfoo eval -c promptfooconfig.yaml`ን
+  በ`INJECTION_GUARD_MODE=block` ያሂዳል። እያንዳንዱ የጥቃት ሙከራ (ለምሳሌ፦ "የቀድሞ
+  መመሪያዎችን ሁሉ ችላ በል…"፣ የDAN ዓይነት jailbreaks) ምላሹ
+  `error.code === "SECURITY_001"` እንደያዘ ያረጋግጣል፤ ይህም guard ጥያቄውን በእርግጥ እንደከለከለ ያሳያል።
+- **`garak` (ለመረጃ ብቻ)** — በአካባቢያዊ OmniRoute instance (`http://localhost:20128/v1`) ላይ
+  garakን በ`--probes promptinject,dan,leakreplay` ያሂዳል። የprovider ሚስጥራዊ ቁልፍ
+  (`PROMPTFOO_PROVIDER_KEY`) ሲኖር ብቻ ይሰራል፤ ቁልፉ ከሌለ ችግር ሳይፈጥር ይዘላል፣
+  እና `|| true` ተጨምሮበታል፤ ስለዚህ CIን ሳያስወድቅ ውጤቱን ያሳውቃል።
 
-የመከላከያ ረዳቱ (`createInjectionGuard` / `withInjectionGuard`) ሽፋን
-መጠየቂያ የያዙ ሁሉንም `/v1` መስመሮች ያካትታል፤ የመጠየቂያ ጽሑፍ በ
-`src/shared/utils/inputSanitizer.ts` ውስጥ ባለው `extractMessageContents()` አማካኝነት ከ
-`messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` ይወጣል።
+የguard አጋዥ (`createInjectionGuard` / `withInjectionGuard`) ሽፋን
+prompt የያዙ የ`/v1` መንገዶችን ሁሉ ያካትታል፤ የprompt ጽሑፍ በ`src/shared/utils/inputSanitizer.ts`
+ውስጥ ባለው `extractMessageContents()` አማካኝነት
+ከ`messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` ይወጣል።

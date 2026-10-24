@@ -1,3 +1,6 @@
+import { isCodexCompactionWebReplay } from "../executors/codex/compactionReplay.ts";
+import { getResponsesSubpath } from "../executors/codex/responsesSubpath.ts";
+
 function toValidJsonString(value: unknown, fallback = "{}"): string {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -28,6 +31,7 @@ import { isValidResponsesItemId } from "./responsesItemId.ts";
 type JsonRecord = Record<string, unknown>;
 type SanitizeResponsesInputOptions = {
   dropInternalAssistantMessages?: boolean;
+  preserveWebSearchCalls?: boolean;
   // Codex's multi_agent_v2 uses a proprietary `agent_message` input-item type to pass
   // tasks/replies between a parent thread and a sub-agent. The real Codex/ChatGPT backend
   // understands this type; every other Responses-API upstream (e.g. Muse Spark 1.3 /
@@ -232,6 +236,7 @@ function sanitizeInputItem(item: unknown, options: SanitizeResponsesInputOptions
     next = convertAgentMessageItem(next);
   }
 
+  if (options.preserveWebSearchCalls && next.type === "web_search_call") return next;
   next = sanitizeInputItemId(next);
   if (isResponsesMessageItem(next)) {
     next = sanitizeMessageContent(next);
@@ -317,12 +322,42 @@ function isGrokBuildReasoningItem(item: unknown): boolean {
 // are still there.
 export function sanitizeCodexResponsesInput(
   body: Record<string, unknown>,
-  nativeCodexPassthrough: boolean
+  nativeCodexPassthrough: boolean,
+  credentials?: unknown
 ): void {
   if (!Array.isArray(body.input)) return;
-  const input = body.input.filter((item) => !isGrokBuildReasoningItem(item));
+  const context = toRecord(credentials);
+  const settings = toRecord(context?.providerSpecificData);
+  // Omitting an id is verified only for ordinary stateless Codex opaque replay.
+  // Do not apply this recovery policy to shared/provider-specific ids or references.
+  const repairOpaqueIds =
+    body.store !== true &&
+    settings?.openaiStoreEnabled !== true &&
+    !body.previous_response_id &&
+    !body.conversation &&
+    getResponsesSubpath(context?.requestEndpointPath ?? "/responses") === "" &&
+    !body.input.some((item) => toRecord(item)?.type === "item_reference");
+  let input = body.input.filter((item) => !isGrokBuildReasoningItem(item));
+  if (repairOpaqueIds) {
+    input = input.map((item) => {
+      const record = toRecord(item);
+      if (
+        record?.type !== "reasoning" ||
+        typeof record.encrypted_content !== "string" ||
+        record.encrypted_content.length === 0 ||
+        typeof record.id !== "string" ||
+        !record.id.startsWith("rs_") ||
+        !/[^a-zA-Z0-9_-]/.test(record.id)
+      )
+        return item;
+      const next = { ...record };
+      delete next.id;
+      return next;
+    });
+  }
   body.input = sanitizeResponsesInputItems(input, false, {
     dropInternalAssistantMessages: !nativeCodexPassthrough,
     preserveAgentMessages: nativeCodexPassthrough,
+    preserveWebSearchCalls: isCodexCompactionWebReplay(body),
   });
 }

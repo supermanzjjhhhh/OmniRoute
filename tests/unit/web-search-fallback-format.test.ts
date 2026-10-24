@@ -6,6 +6,8 @@ const {
   supportsNativeWebSearchFallbackBypass,
   OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME,
 } = await import("../../open-sse/services/webSearchFallback.ts");
+const { openaiResponsesToOpenAIRequest } =
+  await import("../../open-sse/translator/request/openai-responses.ts");
 
 // Regression for #2390: when the target is a Responses-API provider, the injected
 // omniroute_web_search tool must use the FLAT function shape ({ type, name }), not the
@@ -334,7 +336,7 @@ test("OpenAI -> Claude (non-passthrough): built-in web_search IS still converted
   assert.equal(fallback.enabled, true);
   assert.equal(fallback.toolName, OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME);
   assert.equal(fallback.convertedToolCount, 1);
-  const tools = (body.tools as Record<string, any>[]) || [];
+  const tools = (body.tools as Array<{ name?: unknown; function?: { name?: unknown } }>) || [];
   const toolNames = tools.map((t) => (t.function ? t.function.name : t.name));
   assert.ok(toolNames.includes(OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME));
 });
@@ -385,7 +387,20 @@ test("TokenRouter Chat converts web_search despite a native-passthrough override
 
   assert.equal(fallback.enabled, true);
   assert.equal(fallback.toolName, OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME);
-  const tool = (body.tools as Array<Record<string, unknown>>)[0];
+  const sourceTool = (body.tools as Array<Record<string, unknown>>)[0];
+  assert.equal(sourceTool.name, OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME);
+  assert.equal(
+    "function" in sourceTool,
+    false,
+    "pre-translation injection uses the Responses source shape"
+  );
+  const translated = openaiResponsesToOpenAIRequest(
+    "tokenrouter/test-model",
+    { ...body, input: "search fixture" },
+    false,
+    null
+  ) as { tools: Array<Record<string, unknown>> };
+  const tool = translated.tools[0];
   const fn = tool.function as Record<string, unknown>;
   assert.equal(tool.type, "function");
   assert.equal(fn.name, OMNIROUTE_WEB_SEARCH_FALLBACK_TOOL_NAME);

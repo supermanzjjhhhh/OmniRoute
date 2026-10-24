@@ -116,7 +116,10 @@ test("Antigravity executor keeps function declarations from a mixed Gemini tool 
     request.tools?.flatMap((tool) => tool.functionDeclarations ?? []).map((tool) => tool.name),
     ["exec_command"]
   );
-  assert.equal(request.tools?.some((tool) => tool.googleSearch !== undefined), false);
+  assert.equal(
+    request.tools?.some((tool) => tool.googleSearch !== undefined),
+    false
+  );
 });
 
 test("(c) a Claude conversation already ending on user is unchanged", async () => {

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { parse } from "yaml";
+// `yaml` is only transitive here and its ESM interop puts `parse` on the default
+// export, so a named import fails at link time. `js-yaml` is a direct dependency.
+import { load as parseYaml } from "js-yaml";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../..");
@@ -16,7 +18,7 @@ function isRecord(value: unknown): value is UnknownRecord {
 }
 
 function loadWorkflow(): UnknownRecord {
-  const workflow: unknown = parse(readFileSync(WORKFLOW, "utf8"));
+  const workflow: unknown = parseYaml(readFileSync(WORKFLOW, "utf8"));
   if (!isRecord(workflow)) throw new TypeError("quality workflow must be a YAML mapping");
   return workflow;
 }

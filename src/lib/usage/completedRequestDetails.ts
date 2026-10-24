@@ -1,9 +1,6 @@
 import { getDbInstance } from "../db/core";
 import type { PendingRequestDetail } from "./usageHistory";
-import {
-  prunePendingPreview,
-  truncatePendingPreviewStrings,
-} from "./usageHistory/helpers";
+import { prunePendingPreview, truncatePendingPreviewStrings } from "./usageHistory/helpers";
 
 const COMPLETED_DETAIL_TTL_MS = 120_000;
 // ponytail: 256 entries x a few MB of streamChunks each was measured retaining
@@ -81,7 +78,9 @@ function capStreamChunkList(values?: string[]): string[] | undefined {
         : chunk
     );
   if (values.length > MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE) {
-    kept.push(`[TRUNCATED_STREAM_CHUNKS: ${values.length - MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE}]`);
+    kept.push(
+      `[TRUNCATED_STREAM_CHUNKS: ${values.length - MAX_COMPLETED_STREAM_CHUNKS_PER_STAGE}]`
+    );
   }
   return kept;
 }
@@ -250,7 +249,7 @@ async function enrichCompletedDetailFromArtifacts(
     const sinceIso = new Date(Date.now() - 30_000).toISOString();
     const rows = db
       .prepare(
-        `SELECT artifact_relpath FROM call_logs WHERE connection_id = ? AND model = ? AND timestamp >= ? ORDER BY timestamp DESC LIMIT 5`
+        `SELECT artifact_relpath FROM call_logs WHERE connection_id = ? AND model = ? AND timestamp >= ? AND detail_state = 'ready' AND artifact_relpath IS NOT NULL ORDER BY timestamp DESC LIMIT 5`
       )
       .all(connectionId, model, sinceIso) as Array<{ artifact_relpath: string | null }>;
     for (const row of rows) {

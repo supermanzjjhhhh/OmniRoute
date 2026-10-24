@@ -82,7 +82,11 @@ test("Responses -> Chat normalizes empty or invalid JSON arguments to {}", () =>
           content: null,
           tool_calls: [
             { id: "call_empty", type: "function", function: { name: "get_cwd", arguments: "" } },
-            { id: "call_broken", type: "function", function: { name: "read_file", arguments: "{\"path\":" } },
+            {
+              id: "call_broken",
+              type: "function",
+              function: { name: "read_file", arguments: '{"path":' },
+            },
           ],
         },
       ],
@@ -109,7 +113,11 @@ test("Chat -> Responses normalizes empty or invalid JSON arguments to {}", () =>
           content: null,
           tool_calls: [
             { id: "call_empty", type: "function", function: { name: "get_cwd", arguments: "" } },
-            { id: "call_broken", type: "function", function: { name: "read_file", arguments: "{incomplete" } },
+            {
+              id: "call_broken",
+              type: "function",
+              function: { name: "read_file", arguments: "{incomplete" },
+            },
           ],
         },
       ],

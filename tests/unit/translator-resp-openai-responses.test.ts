@@ -222,7 +222,7 @@ test("OpenAI -> Responses: chained translators do not duplicate numeric tool-cal
   assert.deepEqual([...state.toolCalls.keys()], [0]);
 });
 
-test("OpenAI -> Responses: flush on null closes text content and emits response.completed", () => {
+test("OpenAI -> Responses: premature flush closes text content and emits response.failed", () => {
   const events = collectEvents([
     {
       id: "chatcmpl-2",
@@ -234,7 +234,7 @@ test("OpenAI -> Responses: flush on null closes text content and emits response.
 
   assert.ok(events.some((event) => event.event === "response.output_text.done"));
   assert.ok(events.some((event) => event.event === "response.content_part.done"));
-  assert.ok(events.some((event) => event.event === "response.completed"));
+  assert.ok(events.some((event) => event.event === "response.failed"));
 });
 
 test("OpenAI -> Responses: prompt-format <think> tags remain text by default", () => {

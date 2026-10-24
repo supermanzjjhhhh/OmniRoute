@@ -1,9 +1,10 @@
-import { checkHeapPressureGuard, HEAP_PRESSURE_THRESHOLD_MB } from "./heapPressure.ts";
+import { HEAP_PRESSURE_THRESHOLD_MB } from "./heapPressure.ts";
 import { buildErrorBody } from "./error.ts";
 import {
   createResourcePressureTracker,
   resolveResourcePressureThresholds,
   type PressureReason,
+  type PressureSeverity,
   type ResourcePressureState,
   type ResourcePressureThresholds,
   type ResourceSignals,
@@ -17,6 +18,24 @@ const MB = 1024 * 1024;
 const RETRY_AFTER_SECONDS = "5";
 const PRESSURE_MESSAGE = "Service temporarily unavailable due to resource pressure. Retry shortly.";
 
+/**
+ * Absolute RSS fuse for native/external memory that is invisible to V8 heapUsed.
+ * OMNIROUTE_MEMORY_MB is the configured V8 heap budget; use 2x that value with
+ * a 3 GiB floor unless OMNIROUTE_RSS_PRESSURE_MB explicitly overrides it.
+ */
+export function computeRssPressureThresholdMb(
+  memoryBudgetRaw: string | number | undefined = process.env.OMNIROUTE_MEMORY_MB,
+  overrideRaw: string | number | undefined = process.env.OMNIROUTE_RSS_PRESSURE_MB
+): number | null {
+  const explicit = Number(overrideRaw);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.floor(explicit);
+  const memoryBudget = Number(memoryBudgetRaw);
+  if (!Number.isFinite(memoryBudget) || memoryBudget <= 0) return null;
+  return Math.max(3_072, Math.floor(memoryBudget * 2));
+}
+
+export const RSS_PRESSURE_THRESHOLD_MB = computeRssPressureThresholdMb();
+
 export type ResourcePressureGuardResult = {
   success: false;
   status: 503;
@@ -29,10 +48,21 @@ export type ResourcePressureObservation = {
   state: ResourcePressureState;
 };
 
+export type ResourcePressureDecision = {
+  severity: PressureSeverity;
+  shouldReject: boolean;
+  reason: PressureReason;
+  sampleAgeMs: number | null;
+  stale: boolean;
+  refreshing: boolean;
+};
+
 export type ResourcePressureRuntimeOptions = {
   thresholds?: Partial<ResourcePressureThresholds>;
   heapThresholdMb?: number | null;
+  rssThresholdMb?: number | null;
   immediateHeapUsedMb?: () => number;
+  immediateRssUsedMb?: () => number;
   sample?: () => Promise<ResourceSignals>;
   nowMs?: () => number;
   schedule?: (refresh: () => void) => void;
@@ -118,6 +148,7 @@ function logCriticalTransitionDiagnostics(
 
 export type ResourcePressureRuntime = {
   check: () => ResourcePressureGuardResult | null;
+  getDecision: () => ResourcePressureDecision;
   getObservation: () => ResourcePressureObservation;
   whenRefreshSettled: () => Promise<void>;
   dispose: () => void;
@@ -202,19 +233,6 @@ function buildCriticalGuard(
   };
 }
 
-function immediateHeapGuard(
-  heapUsedMb: number,
-  thresholdMb: number | null
-): ResourcePressureGuardResult | null {
-  if (thresholdMb == null) return null;
-  const guard = checkHeapPressureGuard(heapUsedMb, thresholdMb);
-  if (!guard) return null;
-  return buildCriticalGuard("v8_heap_absolute", {
-    heapUsedMb: Math.round(heapUsedMb),
-    thresholdMb: Math.round(thresholdMb),
-  });
-}
-
 export function createResourcePressureRuntime(
   options: ResourcePressureRuntimeOptions = {}
 ): ResourcePressureRuntime {
@@ -222,6 +240,11 @@ export function createResourcePressureRuntime(
     options.heapThresholdMb === undefined ? HEAP_PRESSURE_THRESHOLD_MB : options.heapThresholdMb;
   if (heapThresholdMb !== null && (!Number.isFinite(heapThresholdMb) || heapThresholdMb <= 0)) {
     throw new RangeError("heapThresholdMb must be positive and finite or null");
+  }
+  const rssThresholdMb =
+    options.rssThresholdMb === undefined ? RSS_PRESSURE_THRESHOLD_MB : options.rssThresholdMb;
+  if (rssThresholdMb !== null && (!Number.isFinite(rssThresholdMb) || rssThresholdMb <= 0)) {
+    throw new RangeError("rssThresholdMb must be positive and finite or null");
   }
   const thresholds = resolveResourcePressureThresholds({
     ...options.thresholds,
@@ -240,6 +263,7 @@ export function createResourcePressureRuntime(
   const nowMs = options.nowMs ?? Date.now;
   const immediateHeapUsedMb =
     options.immediateHeapUsedMb ?? (() => process.memoryUsage().heapUsed / MB);
+  const immediateRssUsedMb = options.immediateRssUsedMb ?? (() => process.memoryUsage().rss / MB);
   const sample = options.sample ?? (() => sampleResourceSignals(options.samplerDeps));
   const schedule =
     options.schedule ??
@@ -259,6 +283,8 @@ export function createResourcePressureRuntime(
   let disposed = false;
   let criticalSinceMs: number | null = null;
   let selfRestartFired = false;
+  let lastHeapUsedMb = 0;
+  let lastRssUsedMb = 0;
 
   const observeSelfRestart = (settledAtMs: number): void => {
     if (state.severity !== "critical") {
@@ -303,11 +329,18 @@ export function createResourcePressureRuntime(
   const refresh = (): void => {
     if (disposed || inFlight) return;
     scheduled = false;
+    const startedAtMs = nowMs();
     inFlight = Promise.resolve()
       .then(sample)
       .then((signals) => {
         if (disposed) return;
         const settledAtMs = nowMs();
+        // A sampler that outlived the usable cache window must not re-arm stale rejection.
+        // Keep one in-flight sampler even when it hangs; do not accumulate replacements.
+        if (settledAtMs - startedAtMs > maxStaleMs) {
+          nextRefreshAtMs = settledAtMs + retryAfterMs;
+          return;
+        }
         lastSignals = signals;
         state = tracker.observe(signals);
         observeSelfRestart(settledAtMs);
@@ -363,41 +396,68 @@ export function createResourcePressureRuntime(
     ensureDriver();
   }
 
+  const getDecision = (): ResourcePressureDecision => {
+    try {
+      lastHeapUsedMb = immediateHeapUsedMb();
+    } catch {
+      lastHeapUsedMb = 0;
+    }
+    try {
+      lastRssUsedMb = immediateRssUsedMb();
+    } catch {
+      lastRssUsedMb = 0;
+    }
+    const now = nowMs();
+    if (now >= nextRefreshAtMs) scheduleRefresh();
+    const sampleAgeMs = lastSignals ? Math.max(0, now - lastRefreshAtMs) : null;
+    const expired = sampleAgeMs === null || sampleAgeMs > maxStaleMs;
+    let severity: PressureSeverity = expired ? "normal" : state.severity;
+    let reason: PressureReason = expired ? "none" : state.reason;
+    if (
+      (heapThresholdMb !== null && lastHeapUsedMb > heapThresholdMb) ||
+      (rssThresholdMb !== null && lastRssUsedMb > rssThresholdMb)
+    ) {
+      severity = "critical";
+      reason =
+        heapThresholdMb !== null && lastHeapUsedMb > heapThresholdMb
+          ? "v8_heap_absolute"
+          : "rss_absolute";
+      state = {
+        severity,
+        reason,
+        elevatedStreak: 0,
+        recoveryStreak: 0,
+        lastTransitionAtMs: now,
+        observedAtMs: now,
+      };
+      ensureDriver();
+    }
+    return {
+      severity,
+      shouldReject: severity === "critical",
+      reason,
+      sampleAgeMs,
+      stale: sampleAgeMs === null || sampleAgeMs >= staleAfterMs,
+      refreshing: scheduled || inFlight !== null,
+    };
+  };
+
   return {
+    getDecision,
     check() {
-      let heapUsedMb = 0;
-      try {
-        heapUsedMb = immediateHeapUsedMb();
-      } catch {
-        heapUsedMb = 0;
-      }
-      const immediate = immediateHeapGuard(heapUsedMb, heapThresholdMb);
-      const now = nowMs();
-      if (now >= nextRefreshAtMs) scheduleRefresh();
-      if (immediate) {
-        state = {
-          severity: "critical",
-          reason: "v8_heap_absolute",
-          elevatedStreak: 0,
-          recoveryStreak: 0,
-          lastTransitionAtMs: now,
-          observedAtMs: now,
-        };
-        ensureDriver();
-        return immediate;
-      }
-      const cacheAge = lastSignals ? Math.max(0, now - lastRefreshAtMs) : Number.POSITIVE_INFINITY;
-      if (cacheAge > maxStaleMs || state.severity !== "critical") {
-        return null;
-      }
-      return buildCriticalGuard(
-        state.reason,
-        describeCachedPressure({
-          signals: lastSignals,
-          recoveryStreak: state.recoveryStreak,
-          cacheAgeMs: cacheAge,
-        })
-      );
+      const decision = getDecision();
+      if (!decision.shouldReject) return null;
+      const detail =
+        heapThresholdMb !== null && lastHeapUsedMb > heapThresholdMb
+          ? { heapUsedMb: Math.round(lastHeapUsedMb), thresholdMb: Math.round(heapThresholdMb) }
+          : rssThresholdMb !== null && lastRssUsedMb > rssThresholdMb
+            ? { rssMb: Math.round(lastRssUsedMb), thresholdMb: Math.round(rssThresholdMb) }
+            : describeCachedPressure({
+                signals: lastSignals,
+                recoveryStreak: state.recoveryStreak,
+                cacheAgeMs: decision.sampleAgeMs!,
+              });
+      return buildCriticalGuard(decision.reason, detail);
     },
     getObservation: () => ({ signals: lastSignals, state }),
     whenRefreshSettled: async () => {
@@ -415,22 +475,71 @@ export function createResourcePressureRuntime(
   };
 }
 
-let defaultRuntime = createResourcePressureRuntime();
+// Turbopack compiles this module once per entry graph: `open-sse/` imports it
+// by relative specifier while `src/` imports it via the `@omniroute/open-sse`
+// alias, so the packaged build ships two live copies (module ids 7186 and
+// 51118 in the 2026-10-09 `.build/next` evidence, issue #13621) with disjoint
+// import graphs. A bare module-level singleton would split per copy and a
+// reload through one copy would leave the other serving a stale runtime;
+// keying the singleton on globalThis via Symbol.for keeps exactly one live
+// runtime process-wide. Same idiom as proxyRefusalMemory.ts (duplicate-copy
+// alarm) and providerRequestLogging.ts (shared capture state).
+const RESOURCE_PRESSURE_RUNTIME_KEY = Symbol.for("omniroute.resourcePressure.runtime");
+// Symbol-keyed globalThis indexing needs the cast — the globalThis type has no
+// symbol index signature (mirror of proxyRefusalMemory.ts's holder cast).
+const runtimesHolder = globalThis as unknown as {
+  [RESOURCE_PRESSURE_RUNTIME_KEY]?: ResourcePressureRuntime;
+};
+
+function bindDefaultRuntime(): ResourcePressureRuntime {
+  const existing = runtimesHolder[RESOURCE_PRESSURE_RUNTIME_KEY];
+  if (existing) return existing;
+  const created = createResourcePressureRuntime();
+  runtimesHolder[RESOURCE_PRESSURE_RUNTIME_KEY] = created;
+  return created;
+}
+
+let defaultRuntime = bindDefaultRuntime();
+
+// Readers go through the holder, not the captured var, so every compiled copy
+// serves the runtime the latest copy (re)loaded; the ?? only guards
+// out-of-order evaluation — in practice the holder is set by the same
+// statement that sets defaultRuntime.
+function activeRuntime(): ResourcePressureRuntime {
+  return runtimesHolder[RESOURCE_PRESSURE_RUNTIME_KEY] ?? defaultRuntime;
+}
 
 export function checkResourcePressureGuard(): ResourcePressureGuardResult | null {
-  return defaultRuntime.check();
+  return activeRuntime().check();
+}
+
+/** Request-path decision: schedules sampling, but never waits or constructs a Response. */
+export function getResourcePressureDecision(): ResourcePressureDecision {
+  return defaultRuntime.getDecision();
 }
 
 export function getResourcePressureObservation(): ResourcePressureObservation {
-  return defaultRuntime.getObservation();
+  return activeRuntime().getObservation();
 }
 
-/** Replaces and disposes the process singleton when configuration is reloaded. */
+/**
+ * Replaces and disposes the process singleton when configuration is reloaded.
+ * Cross-copy semantics (last reloader wins): the runtime currently in the
+ * holder is the one being superseded, so it is disposed regardless of which
+ * copy created it — disposing only this copy's own `defaultRuntime` would leak
+ * the holder's background driver whenever a different copy reloaded last (the
+ * non-owning copy's stale runtime was already disposed by whoever replaced
+ * it). The new runtime is installed in both the holder and this copy's module
+ * var; every other copy adopts it via the holder on its next read, and
+ * references captured before the reload are superseded.
+ */
 export function reloadResourcePressureRuntime(
   options: ResourcePressureRuntimeOptions = {}
 ): ResourcePressureRuntime {
-  defaultRuntime.dispose();
+  const superseded = runtimesHolder[RESOURCE_PRESSURE_RUNTIME_KEY] ?? defaultRuntime;
   defaultRuntime = createResourcePressureRuntime(options);
+  runtimesHolder[RESOURCE_PRESSURE_RUNTIME_KEY] = defaultRuntime;
+  superseded.dispose();
   return defaultRuntime;
 }
 
