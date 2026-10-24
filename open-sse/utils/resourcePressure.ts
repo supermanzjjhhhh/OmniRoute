@@ -286,6 +286,17 @@ export function createResourcePressureRuntime(
   let lastHeapUsedMb = 0;
   let lastRssUsedMb = 0;
 
+  // Single source for the RSS fuse reading, shared by getDecision() and the
+  // background sampler. A failing memoryUsage() read must never look like an
+  // over-threshold sample, so it degrades to 0 (below any real threshold).
+  const sampleRssMb = (): number => {
+    try {
+      return immediateRssUsedMb();
+    } catch {
+      return 0;
+    }
+  };
+
   const observeSelfRestart = (settledAtMs: number): void => {
     if (state.severity !== "critical") {
       criticalSinceMs = null;
@@ -343,6 +354,28 @@ export function createResourcePressureRuntime(
         }
         lastSignals = signals;
         state = tracker.observe(signals);
+        // The RSS fuse is evaluated from immediate process.memoryUsage(), not
+        // from `signals`, so tracker.observe() cannot see it. Without this
+        // overlay the fuse only ever returned 503 from getDecision() and the
+        // sustained-critical circuit behind self-restart never armed: the next
+        // sample reset state to normal, leaving criticalSinceMs null forever.
+        // Preserve the circuit's own transition timestamp while already
+        // critical so RSS crossing the fuse does not restart the countdown.
+        // Read RSS here instead of reusing lastRssUsedMb: that value only
+        // refreshes inside getDecision(), i.e. per incoming request. During an
+        // outage clients back off, and a fuse that needs traffic to arm is the
+        // exact gap this closes.
+        if (rssThresholdMb !== null && sampleRssMb() > rssThresholdMb) {
+          state = {
+            severity: "critical",
+            reason: "rss_absolute",
+            elevatedStreak: state.severity === "critical" ? state.elevatedStreak : 0,
+            recoveryStreak: 0,
+            lastTransitionAtMs:
+              state.severity === "critical" ? state.lastTransitionAtMs : settledAtMs,
+            observedAtMs: settledAtMs,
+          };
+        }
         observeSelfRestart(settledAtMs);
         if (state.severity !== "normal") {
           ensureDriver();
