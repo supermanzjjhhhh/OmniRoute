@@ -6,8 +6,8 @@ services:
     networks:
       - default
       - router-link
-    mem_limit: 2304m
-    memswap_limit: 2304m
+    mem_limit: 3072m
+    memswap_limit: 3072m
     cpus: 2.0
     pids_limit: 512
     restart: unless-stopped
@@ -21,10 +21,12 @@ services:
       - REQUIRE_API_KEY=true
       - OMNIROUTE_PRESSURE_SELF_RESTART=1
       - OMNIROUTE_PRESSURE_SELF_RESTART_AFTER_MS=30000
-      # Absolute process-RSS fuse. Must stay below mem_limit (2304m) or the
+      # Absolute process-RSS fuse. Must stay below mem_limit (3072m) or the
       # kernel OOM-kills before the fuse is reachable. Measured RSS on this
-      # host: 942-1109MB fresh, 1874MB peak before the cap was lowered.
-      - OMNIROUTE_RSS_PRESSURE_MB=1800
+      # host: 942-1109MB fresh; native-side ratchet crosses 1800MB under load
+      # (2026-10-25 incident: heapUsed stayed 300-400MB), so the fuse moved to
+      # 2600MB to keep the guard above the healthy operating band.
+      - OMNIROUTE_RSS_PRESSURE_MB=2600
       - OMNIROUTE_MEMORY_MB=2048
       - OMNIROUTE_ADOPT_EXISTING_SERVICE=1
       - OMNIROUTE_MIGRATIONS_DIR=/app/migrations
