@@ -1,6 +1,6 @@
 services:
   omniroute:
-    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:b40e7a699a9e951fa0a1fae144df41d5238f4629d5752c26c830b31ff6a20bce
+    image: ghcr.io/supermanzjjhhhh/omniroute@sha256:91122b6915b945c36c16ce388e57223ba0a3c23e4c994c265b69906ffcdcf69b
     container_name: omniroute
     command: ["node", "--max-old-space-size=128", "/bridge/external-connector.mjs"]
     networks:
@@ -60,7 +60,13 @@ services:
       - ./data:/omni-data:ro
       - ./.secrets/9router:/router-secret:ro
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20130/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:20130/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
