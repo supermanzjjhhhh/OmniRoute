@@ -36,6 +36,21 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+          driver-opts: |
+            memory=12g
+            memory-swap=12g
+            cpu-period=100000
+            cpu-quota=200000
+
+      - name: Verify build sandbox limits
+        run: |
+          builder="$(docker ps -q --filter name=buildx_buildkit_)"
+          test -n "$builder"
+          limits="$(docker inspect --format '{{.HostConfig.Memory}} {{.HostConfig.MemorySwap}} {{.HostConfig.CpuPeriod}} {{.HostConfig.CpuQuota}}' "$builder")"
+          echo "Build sandbox limits: $limits"
+          test "$limits" = '12884901888 12884901888 100000 200000'
 
       - name: Build production-runtime test base
         run: |

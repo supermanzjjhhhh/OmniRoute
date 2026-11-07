@@ -88,3 +88,17 @@ test("the worker pool does not oversubscribe the runner's 4 vCPU", () => {
   const workers = readArgDefault("OMNIROUTE_BUILD_WORKERS") - 1;
   assert.ok(workers <= 4, `${workers} workers oversubscribe a 4 vCPU runner`);
 });
+
+test("fork ARM64 builds cap the actual BuildKit sandbox and verify its cgroup limits", () => {
+  const workflow = readFileSync(
+    fileURLToPath(new URL("../../.github/workflows/build-arm64-ghcr.yml", import.meta.url)),
+    "utf8"
+  );
+  assert.match(workflow, /runs-on: ubuntu-24\.04-arm/);
+  assert.match(workflow, /driver: docker-container/);
+  assert.match(
+    workflow,
+    /driver-opts: \|\n\s+memory=12g\n\s+memory-swap=12g\n\s+cpu-period=100000\n\s+cpu-quota=200000/
+  );
+  assert.ok(workflow.includes("12884901888 12884901888 100000 200000"));
+});
