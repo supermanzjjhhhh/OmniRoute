@@ -13,6 +13,14 @@ export class ControlledWorker extends EventEmitter {
   failSend = false;
   replyImmediately = false;
 
+  ref(): this {
+    return this;
+  }
+
+  unref(): this {
+    return this;
+  }
+
   postMessage(job: CompressionWorkerJob): void {
     if (this.failSend) throw new Error("synthetic postMessage failure");
     this.ids.push(job.id);
