@@ -1,0 +1,1 @@
+- **fix(responses):** Restore native passthrough tool identities only once, keeping namespaced tools distinct from flat tools with the same leaf name, including SSE tail flushes.

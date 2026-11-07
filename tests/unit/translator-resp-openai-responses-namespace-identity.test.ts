@@ -7,6 +7,7 @@ const { openaiToOpenAIResponsesResponse } =
   await import("../../open-sse/translator/response/openai-responses.ts");
 const { initState } = await import("../../open-sse/translator/index.ts");
 const { FORMATS } = await import("../../open-sse/translator/formats.ts");
+const { createSSEStream } = await import("../../open-sse/utils/stream.ts");
 
 type NamespaceIdentity = { namespace: string; name: string };
 type RuntimeState = ReturnType<typeof initState> & {
@@ -99,11 +100,7 @@ function functionItems(events: ResponseEvent[]) {
 // `{namespace, name}` tuple on every output item.
 test("Chat -> Responses emits namespace tuple in added, done, and completed output", () => {
   const wireName = "mcp__1mcp__tool_list";
-  const events = collectToolEvents(
-    wireName,
-    "call_1mcp",
-    identityMapFor("mcp__1mcp", "tool_list")
-  );
+  const events = collectToolEvents(wireName, "call_1mcp", identityMapFor("mcp__1mcp", "tool_list"));
   for (const item of Object.values(functionItems(events))) {
     assert.deepEqual(
       { namespace: item.namespace, name: item.name },
@@ -212,4 +209,102 @@ test("Chat -> Responses keeps same wire names isolated between per-request strea
     { namespace: second.completed.namespace, name: second.completed.name },
     { namespace: "mcp__two", name: "read" }
   );
+});
+
+test("native Responses passthrough keeps a namespaced read distinct from flat read", async () => {
+  const request = {
+    model: "any-model",
+    input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "go" }] }],
+    tools: [
+      { type: "function", name: "read", parameters: { type: "object" } },
+      {
+        type: "namespace",
+        name: "mcp__files",
+        tools: [{ type: "function", name: "read", parameters: { type: "object" } }],
+      },
+    ],
+  };
+  const requestToolIdentityMap = new Map<string, NamespaceIdentity>([
+    ["mcp__files__read", { namespace: "mcp__files", name: "read" }],
+    ["read", { namespace: "", name: "read" }],
+  ]);
+
+  const namespacedCall = {
+    type: "function_call",
+    id: "fc_namespaced",
+    call_id: "call_namespaced",
+    name: "mcp__files__read",
+    arguments: "{}",
+  };
+  const flatCall = { ...namespacedCall, id: "fc_flat", call_id: "call_flat", name: "read" };
+  const input = [
+    { type: "response.output_item.added", output_index: 0, item: namespacedCall },
+    { type: "response.output_item.done", output_index: 0, item: namespacedCall },
+    { type: "response.output_item.added", output_index: 1, item: flatCall },
+    { type: "response.output_item.done", output_index: 1, item: flatCall },
+    {
+      type: "response.completed",
+      response: {
+        id: "resp_namespace_flat",
+        status: "completed",
+        output: [namespacedCall, flatCall],
+      },
+    },
+  ];
+  for (const finalBoundary of ["\n\n", "\n"]) {
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const [index, event] of input.entries()) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify(event)}${index === input.length - 1 ? finalBoundary : "\n\n"}`
+            )
+          );
+        }
+        controller.close();
+      },
+    });
+    const text = await new Response(
+      source.pipeThrough(
+        createSSEStream({
+          mode: "passthrough",
+          sourceFormat: FORMATS.OPENAI_RESPONSES,
+          targetFormat: FORMATS.OPENAI_RESPONSES,
+          clientResponseFormat: FORMATS.OPENAI_RESPONSES,
+          body: request,
+          requestToolIdentityMap,
+        })
+      )
+    ).text();
+    const events = text
+      .split("\n")
+      .filter((line) => line.startsWith("data: ") && line !== "data: [DONE]")
+      .map(
+        (line) =>
+          JSON.parse(line.slice(6)) as {
+            type: string;
+            output_index?: number;
+            item?: ResponseItem;
+            response?: { output?: ResponseItem[] };
+          }
+      );
+    for (const type of ["response.output_item.added", "response.output_item.done"]) {
+      const namespaced = events.find((event) => event.type === type && event.output_index === 0);
+      const flat = events.find((event) => event.type === type && event.output_index === 1);
+      assert.deepEqual(
+        namespaced?.item && { name: namespaced.item.name, namespace: namespaced.item.namespace },
+        { name: "read", namespace: "mcp__files" }
+      );
+      assert.equal(flat?.item?.name, "read");
+      assert.equal(Object.hasOwn(flat?.item ?? {}, "namespace"), false);
+    }
+    const completed = events.find((event) => event.type === "response.completed");
+    assert.deepEqual(completed?.response?.output?.[0], {
+      ...namespacedCall,
+      name: "read",
+      namespace: "mcp__files",
+    });
+    assert.equal(Object.hasOwn(completed?.response?.output?.[1] ?? {}, "namespace"), false);
+  }
 });

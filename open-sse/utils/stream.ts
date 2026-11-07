@@ -1895,9 +1895,13 @@ export function createSSEStream(options: StreamOptions = {}) {
                   )
                     reasoningObserver.note(parsed, Date.now());
 
-                  // #7936 — restore `namespace` + `name` fields on passthrough
-                  // Responses function_call items for downstream Codex clients.
+                  const responsesIdentityRestored = restoreResponsesToolNames(
+                    parsed as JsonRecord,
+                    responsesToolAliasMap,
+                    requestToolIdentityMap
+                  );
                   const passthroughIdentityRestored =
+                    !responsesIdentityRestored &&
                     restoreResponsesPassthroughFunctionCallIdentity(
                       parsed as JsonRecord,
                       requestToolIdentityMap
@@ -1911,18 +1915,6 @@ export function createSSEStream(options: StreamOptions = {}) {
                       parsed.item && typeof parsed.item === "object" && !Array.isArray(parsed.item)
                         ? { ...(parsed.item as JsonRecord) }
                         : null;
-                    // #18600 — restore the client's original tool name on the
-                    // pending copy too: it is pushed into the backfill buffer at
-                    // `arguments.done` / the completed merge, so a stream that
-                    // never emits `output_item.done` would otherwise backfill the
-                    // alias into the empty-output snapshot.
-                    if (item) {
-                      restoreResponsesToolNames(
-                        [item],
-                        responsesToolAliasMap,
-                        requestToolIdentityMap
-                      );
-                    }
                     const pendingKey =
                       item && typeof item.id === "string"
                         ? item.id
@@ -1970,21 +1962,8 @@ export function createSSEStream(options: StreamOptions = {}) {
                   // response.completed snapshot can be backfilled when upstream
                   // returns an empty `output` (happens with store: false).
                   let responsesCommentaryStrippedFromCompleted = false;
-                  let responsesIdentityRestored = false;
                   if (parsed.type === "response.output_item.done" && parsed.item) {
                     emitSyntheticResponsesReasoningSummary(controller, parsed);
-                    // #18600 — restore the client's original tool name BEFORE this
-                    // item joins the backfill buffer, or the alias returns through
-                    // the empty-output snapshot backfill below. `doneItemRestored`
-                    // feeds the re-serialization latch further down.
-                    const doneItemRestored = restoreResponsesToolNames(
-                      parsed as JsonRecord,
-                      responsesToolAliasMap,
-                      requestToolIdentityMap
-                    );
-                    if (doneItemRestored) {
-                      responsesIdentityRestored = true;
-                    }
                     pushUniqueResponsesOutputItems(passthroughResponsesOutputItems, [parsed.item]);
                     // L12 replay already filtered above via isDuplicateResponsesSequence.
                     reasoningObserver.note(parsed, Date.now());
@@ -2022,52 +2001,10 @@ export function createSSEStream(options: StreamOptions = {}) {
                         responsesCommentaryStrippedFromCompleted = true;
                       }
                     }
-                    // #18600 — restore the client's original tool names on the
-                    // terminal snapshot BEFORE it seeds the backfill buffer, so
-                    // the buffered copy matches what the client receives. The
-                    // generic branch below skips `response.completed` because it
-                    // is handled here; `snapshotRestored` feeds the same
-                    // re-serialization latch.
-                    const snapshotRestored = restoreResponsesToolNames(
-                      parsed as JsonRecord,
-                      responsesToolAliasMap,
-                      requestToolIdentityMap
-                    );
                     pushUniqueResponsesOutputItems(
                       passthroughResponsesOutputItems,
                       parsed.response.output
                     );
-                    if (snapshotRestored) {
-                      responsesIdentityRestored = true;
-                    }
-                  }
-                  // #7936/#18600 — restore provider tool-name aliases (and the
-                  // #7936 `{namespace, name}` identities) on passthrough Responses
-                  // call items through the shared shape-safe helper. The done and
-                  // completed branches above already restored their own copies;
-                  // this covers `response.output_item.added` plus the
-                  // `response.incomplete`/`response.failed`/`response.done` and
-                  // cancellation terminal snapshots so a truncated/alternate stream
-                  // is restored too. The restoration mutates
-                  // `parsed`, so a real change must be re-serialized; otherwise
-                  // the client still receives the alias.
-                  if (
-                    parsed.type === "response.output_item.added" ||
-                    parsed.type === "response.incomplete" ||
-                    parsed.type === "response.failed" ||
-                    parsed.type === "response.done" ||
-                    parsed.type === "response.cancelled" ||
-                    parsed.type === "response.canceled"
-                  ) {
-                    if (
-                      restoreResponsesToolNames(
-                        parsed as JsonRecord,
-                        responsesToolAliasMap,
-                        requestToolIdentityMap
-                      )
-                    ) {
-                      responsesIdentityRestored = true;
-                    }
                   }
                   const identityChanged = passthroughIdentityRestored || responsesIdentityRestored;
                   if (
@@ -2091,18 +2028,17 @@ export function createSSEStream(options: StreamOptions = {}) {
                   const textualToolCallBackfilled =
                     parsed.type === "response.completed" && passthroughToolCalls.size > 0;
                   if (textualToolCallBackfilled) {
+                    const existingOutputLength = Array.isArray(parsed.response?.output)
+                      ? parsed.response.output.length
+                      : 0;
                     parsed = toResponsesCompletedWithToolCalls(parsed as JsonRecord, [
                       ...passthroughToolCalls.values(),
                     ]) as typeof parsed;
-                    if (
-                      restoreResponsesToolNames(
-                        parsed as JsonRecord,
-                        responsesToolAliasMap,
-                        requestToolIdentityMap
-                      )
-                    ) {
-                      responsesIdentityRestored = true;
-                    }
+                    restoreResponsesToolNames(
+                      parsed.response.output.slice(existingOutputLength),
+                      responsesToolAliasMap,
+                      requestToolIdentityMap
+                    );
                   }
                   const stripped = stripResponsesLifecycleEcho(parsed);
                   // Belt-and-suspenders for #10156: filter the backfill buffer itself
@@ -2907,15 +2843,23 @@ export function createSSEStream(options: StreamOptions = {}) {
                 toResponsesCompletedWithToolCalls(parsed, [
                   ...passthroughToolCalls.values(),
                 ]) as JsonRecord,
-              restoreResponsesToolNames: (parsed: JsonRecord) =>
-                restoreResponsesToolNames(parsed, responsesToolAliasMap, requestToolIdentityMap),
+              restoreResponsesToolNames: (parsed: JsonRecord) => {
+                const restored = restoreResponsesToolNames(
+                  parsed,
+                  responsesToolAliasMap,
+                  requestToolIdentityMap
+                );
+                return (
+                  restored ||
+                  restoreResponsesPassthroughFunctionCallIdentity(parsed, requestToolIdentityMap)
+                );
+              },
               restoreOpenAIToolNames: (parsed: JsonRecord) =>
                 restoreOpenAIToolNames(parsed, toolNameMap),
               abortFailure: (failure: StreamFailurePayload, publicMessage: string) =>
                 abortStreamFailure(controller, failure, publicMessage, {
                   ...failureBoundaryOptions(),
                 }),
-              requestToolIdentityMap,
             };
 
             for (const line of normalizedTailLines) {
@@ -2979,18 +2923,17 @@ export function createSSEStream(options: StreamOptions = {}) {
                     }
                     const idsNormalized = normalizeResponsesSseIds(flushedParsed);
                     const usageNormalized = normalizeUsage(flushedParsed);
-                    const identityChanged = restoreResponsesPassthroughFunctionCallIdentity(
-                      flushedParsed,
-                      requestToolIdentityMap
-                    );
-                    // #18600 — restore tool-name aliases on the final buffered
-                    // Responses frame too (a terminal snapshot can end without a
-                    // trailing newline and reach this flush path).
                     const identityRestored = restoreResponsesToolNames(
                       flushedParsed,
                       responsesToolAliasMap,
                       requestToolIdentityMap
                     );
+                    const identityChanged =
+                      !identityRestored &&
+                      restoreResponsesPassthroughFunctionCallIdentity(
+                        flushedParsed,
+                        requestToolIdentityMap
+                      );
                     if (
                       idsNormalized ||
                       usageNormalized ||
