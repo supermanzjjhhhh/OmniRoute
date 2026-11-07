@@ -164,8 +164,16 @@ test("UPDATE path measures payloads (regression: the ceiling must not no-op in p
   assert.equal(getPendingRetainedBytes(), 0, "clear resets retained bytes");
 });
 
-test("UPDATE path enforces the byte ceiling when growing bare entries (regression)", () => {
+test("UPDATE path enforces the byte ceiling when growing bare entries (regression)", (t) => {
   clearPendingRequests();
+  // Exercise the byte ceiling independently of the fork's smaller default count cap.
+  const previous = process.env.MAX_PENDING_DETAILS;
+  process.env.MAX_PENDING_DETAILS = "5000";
+  t.after(() => {
+    if (previous === undefined) delete process.env.MAX_PENDING_DETAILS;
+    else process.env.MAX_PENDING_DETAILS = previous;
+    clearPendingRequests();
+  });
 
   const worstCaseString = "x".repeat(1200);
   const worstCaseArray = Array.from({ length: 12 }, () => ({
@@ -387,10 +395,11 @@ test("pending detail cap is configurable through the environment", () => {
 
   try {
     assert.equal(getMaxPendingDetails(), 17);
-    assert.equal(getMaxPendingDetails("0"), 5000);
-    assert.equal(getMaxPendingDetails("-1"), 5000);
-    assert.equal(getMaxPendingDetails("1.5"), 5000);
-    assert.equal(getMaxPendingDetails("not-a-number"), 5000);
+    assert.equal(getMaxPendingDetails("5000"), 5000);
+    assert.equal(getMaxPendingDetails("0"), PENDING_DETAIL_CAP);
+    assert.equal(getMaxPendingDetails("-1"), PENDING_DETAIL_CAP);
+    assert.equal(getMaxPendingDetails("1.5"), PENDING_DETAIL_CAP);
+    assert.equal(getMaxPendingDetails("not-a-number"), PENDING_DETAIL_CAP);
   } finally {
     if (previous === undefined) delete process.env.MAX_PENDING_DETAILS;
     else process.env.MAX_PENDING_DETAILS = previous;
