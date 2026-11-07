@@ -10,6 +10,7 @@ import {
   warnConflictingHeapLimits,
   buildStandaloneNodeOptions,
   spawnWithForwardedSignals,
+  startSelfPinger,
 } from "../build/runtime-env.mjs";
 import { bootstrapEnv } from "../build/bootstrap-env.mjs";
 
@@ -46,3 +47,6 @@ spawnWithForwardedSignals(process.execPath, nodeArgs, {
   stdio: "inherit",
   env: childEnv,
 });
+
+// Render free-tier keep-alive; inert unless a public URL is configured. See startSelfPinger.
+startSelfPinger(childEnv);

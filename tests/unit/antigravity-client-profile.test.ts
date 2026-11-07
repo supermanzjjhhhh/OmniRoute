@@ -111,6 +111,7 @@ test("content header application emits IDE and CLI identities and strips fake he
 
   assert.match(ideHeaders["User-Agent"], /^antigravity\/ide\/2\.1\.1 /);
   assert.match(ideHeaders["User-Agent"], / darwin\/arm64$| windows\/amd64$| linux\/[^ ]+$/);
+  // 1.1.1 has no recorded changelist, so `cl=` is omitted rather than borrowed from 1.4.4.
   assert.match(
     cliHeaders["User-Agent"],
     /^antigravity\/cli\/1\.1\.1 \(aidev_client; os_type=.+; arch=.+; auth_method=consumer\)$/
@@ -120,6 +121,22 @@ test("content header application emits IDE and CLI identities and strips fake he
   // Cloud Code 403s on x-goog-user-project; the project rides in the envelope body.
   assert.equal(ideHeaders["x-goog-user-project"], undefined);
   assert.equal(cliHeaders["x-goog-user-project"], undefined);
+});
+
+test("content headers omit x-goog-user-project for the aicode-consumers default project", () => {
+  seedAntigravityIdeVersionCache("2.1.1");
+  const headers: Record<string, string> = {
+    Authorization: "Bearer token",
+    "x-goog-user-project": "stale-project",
+  };
+
+  applyAntigravityClientProfileHeaders(
+    headers,
+    { connectionId: "connection-ide", providerSpecificData: { clientProfile: "ide" } },
+    { project: "aicode-consumers" }
+  );
+
+  assert.equal(headers["x-goog-user-project"], undefined);
 });
 
 test("public request envelopes never infer the internal jetski identity from email", () => {

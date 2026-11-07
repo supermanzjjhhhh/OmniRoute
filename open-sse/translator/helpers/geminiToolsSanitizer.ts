@@ -3,6 +3,9 @@ import { createHash } from "crypto";
 import { cleanJSONSchemaForAntigravity } from "./geminiHelper.ts";
 import { createSchemaBudget } from "./schemaBudget.ts";
 import type { SchemaBudget } from "./schemaBudget.ts";
+import { logger } from "../../utils/logger.ts";
+
+const toolsLog = logger("GEMINI_TOOLS");
 
 type GeminiFunctionDeclaration = {
   name: string;
@@ -224,6 +227,26 @@ function toGeminiGoogleSearchTool(tool: Record<string, unknown>): GeminiTool | n
   return null;
 }
 
+/**
+ * Function declarations win over native `googleSearch`: Gemini rejects mixing them, and dropping
+ * the caller's tools would break agent clients. Native search is only kept when there are no
+ * declarations; when it is dropped, say so instead of failing silently.
+ */
+function assembleGeminiTools(
+  functionDeclarations: GeminiFunctionDeclaration[],
+  googleSearchTool: GeminiTool | null
+): GeminiTool[] | undefined {
+  if (functionDeclarations.length > 0) {
+    if (googleSearchTool) {
+      toolsLog.warn(
+        "native web search dropped: Gemini cannot mix googleSearch with function declarations, keeping function tools"
+      );
+    }
+    return [{ functionDeclarations }];
+  }
+  return googleSearchTool ? [googleSearchTool] : undefined;
+}
+
 export function buildGeminiTools(
   tools: unknown,
   options: GeminiToolSanitizationOptions = {}
@@ -309,18 +332,5 @@ export function buildGeminiTools(
     }
   }
 
-  const result: GeminiTool[] = [];
-
-  if (
-    googleSearchTool &&
-    (!options.preferFunctionDeclarations || functionDeclarations.length === 0)
-  ) {
-    return [googleSearchTool];
-  }
-
-  if (functionDeclarations.length > 0) {
-    result.push({ functionDeclarations });
-  }
-
-  return result.length > 0 ? result : undefined;
+  return assembleGeminiTools(functionDeclarations, googleSearchTool);
 }

@@ -57,6 +57,14 @@ function repositoryOwners(): string[] {
     const match = url.stdout.trim().match(/[:/]([^/:]+)\/[^/]+?(?:\.git)?$/);
     if (match) owners.add(match[1].toLowerCase());
   }
+  // A repository transfer can leave an older owner alias in configured remotes.
+  const canonical = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  const canonicalUrl =
+    typeof canonical.repository === "string"
+      ? canonical.repository
+      : canonical.repository?.url || "";
+  const canonicalOwner = canonicalUrl.match(/[:/]([^/:]+)\/[^/]+?(?:\.git)?$/);
+  if (canonicalOwner) owners.add(canonicalOwner[1].toLowerCase());
   if (owners.size === 0) owners.add("diegosouzapw");
   return [...owners];
 }

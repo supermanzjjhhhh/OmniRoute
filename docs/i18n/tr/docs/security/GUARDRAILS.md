@@ -5,18 +5,20 @@
 ---
 
 > **Doğruluk kaynağı:** `src/lib/guardrails/`
-> **Son güncelleme:** 2026-10-17 — v3.8.52 (eklenenler [Kapsam ve sınırlar](#coverage-and-limits):
-> kancaların hangi rotalara ve yanıt yollarına ulaştığı, birleştirilmiş devre dışı bırakma başlıkları (#16412), zorunlu bir sınır olarak enjeksiyon engelleme modu (#16413) ve post-call öncesinde bir yanıtı neyin gördüğü)
+> **Son güncelleme:** 2026-10-17 — v3.8.52 ([Kapsam ve sınırlar](#coverage-and-limits) eklendi:
+> hook'ların hangi rotalara ve yanıt yollarına ulaştığı, birleştirilmiş devre dışı bırakma başlıkları (#16412), zorunlu bir sınır olarak enjeksiyon
+> engelleme modu (#16413) ve çağrı sonrasından önce yanıtı neyin gördüğü)
 
-Guardrails, OmniRoute ile upstream (kaynak) sağlayıcılar arasındaki sınırda güvenlik, politika ve içerik dönüşümlerini uygular. Her guardrail; istek yüklerini (`preCall`) ve upstream yanıtlarını (`postCall`) inceleyebilir (ve isteğe bağlı olarak reddedebilir, dönüştürebilir veya bunlara açıklama ekleyebilir).
+Guardrail'ler, OmniRoute ile yukarı akış sağlayıcıları arasındaki sınırda güvenlik, politika ve içerik dönüşümlerini zorunlu kılar. Her guardrail, istek yüklerini (`preCall`) ve yukarı akış yanıtlarını (`postCall`) inceleyebilir (ve isteğe bağlı olarak reddedebilir, dönüştürebilir veya açıklama ekleyebilir).
 
-Sistem **fail-open** (hata durumunda açık kalma) prensibiyle çalışır: yürütme sırasında bir guardrail hata fırlatırsa, kayıt defteri (registry) hatayı kaydeder ve isteği başarısız kılmak yerine bir sonraki guardrail ile devam eder. Engelleme (blocking) açık bir karardır (`block: true`), asla tesadüf değildir. Tek istisna iptal edilmiş bir istektir: çağıran tarafın `signal`'i iptal edildiğinde, hata fırlatan bir guardrail atlanmak yerine kanca (hook) çalışmasını reddeder.
+Sistem **fail-open**'dır: bir guardrail çalışırken hata fırlatırsa, kayıt defteri hatayı kaydeder ve isteği başarısız kılmak yerine bir sonraki guardrail ile devam eder. Engelleme açık bir karardır (`block: true`), asla bir kaza değildir. Tek istisna iptal edilen bir istektir: çağıranın `signal`'ı iptal edildiğinde, hata fırlatan bir guardrail atlanmak yerine hook çalıştırmasını reddeder.
 
-Kancalar her rotada veya her yanıtta **çalışmaz**. Bir guardrail'e güvenlik kontrolü olarak güvenmeden önce [Kapsam ve sınırlar](#coverage-and-limits) bölümünü okuyun.
+Hook'lar her rotada veya her yanıtta **çalışmaz**. Bir guardrail'e güvenlik denetimi olarak güvenmeden önce
+[Kapsam ve sınırlar](#coverage-and-limits) bölümünü okuyun.
 
-## Yerleşik Guardrail'ler
+## Dahili Korkuluklar
 
-Kayıt defteri, içe aktarıldığında öncelik sırasına göre altı guardrail'i otomatik olarak yükler (`registry.ts` → `registerDefaultGuardrails()` kısmına bakın):
+Kayıt defteri, içe aktarma sırasında öncelik sırasına göre altı korkuluğu otomatik olarak yükler (bkz `registry.ts` → `registerDefaultGuardrails()`):
 
 | Öncelik | İsim                | Aşama(lar)     | Dosya                 |
 | ------- | ------------------- | -------------- | --------------------- |
@@ -27,254 +29,259 @@ Kayıt defteri, içe aktarıldığında öncelik sırasına göre altı guardrai
 | `20`    | `prompt-injection`  | `preCall`      | `promptInjection.ts`  |
 | `95`    | `credential-masker` | `pre` + `post` | `credentialMasker.ts` |
 
-Daha düşük öncelik numaraları **önce** çalışır.
+Daha düşük öncelikli numaralar çalıştırılır** Birinci** .
 
-### Vision Bridge (`visionBridge.ts`) — Modality Bridge PR-1
+### Vizyon Köprüsü (`visionBridge.ts`) — Modalite Köprüsü PR-1
 
-GLM 5.3 taban modeli ve `glm-5.3-{low,high,max}`, açık bir şekilde `supportsVision:false` kayıt defteri/belirtim (spec) meta verisine sahiptir. GLM 5.3 Flash varyantları yerel görsel (native-vision) modelleri olarak kalır. Claude Code'un `/v1/messages` rotası, Claude'dan OpenAI'a çeviriden **önce** paylaşılan `handleChat` pre-call guardrail zincirine girer; iç içe geçmiş `Read` araç sonucu görselleri, bu çeviri onları OpenAI `image_url` içeriğine taşımadan önce açıklanmalı veya işlenmelidir (#17069).
+GLM 5.3 temel modeli ve `glm-5.3-{low,high,max}` açık `supportsVision:false` registry/spec meta verilerine sahiptir. GLM 5.3 Flash çeşitleri yerel görüşlü modeller olarak kalır. Claude Kodunun `/v1/messages` rotası, paylaşılan `handleChat` ön çağrı korkuluk zincirine girer** önce** Claude'dan OpenAI'ye çeviri; iç içe `Read` aracı sonuç görüntülerinin, çevirinin onları OpenAI `image_url` içeriğine (#17069) kaldırmadan önce tanımlanması veya işlenmesi gerekir.
 
-Görsel içeren ve **görsel yeteneği olmayan modellere** yönlendirilen istekleri yakalar ve upstream çağrısından önce ya tüm isteği görsel yeteneği olan bir modele yönlendirir ya da görsel kısımlarını yapılandırılabilir bir görsel modeli tarafından üretilen metin açıklamalarıyla değiştirir. Bu, yalnızca metin destekleyen sağlayıcıların çok modlu yükleri şeffaf bir şekilde işleyebilmesini sağlar.
+Hedeflenen görüntü taşıyan istekleri keser** görüş dışı modeller** ve ya tüm isteği görsel özellikli bir modele yeniden yönlendirir ya da görüntü parçalarını, yukarı akış çağrısından önce yapılandırılabilir bir görsel model tarafından üretilen metin açıklamalarıyla değiştirir. Bu, salt metin sağlayıcılarının çok modlu yükleri şeffaf bir şekilde işlemesine olanak tanır.
 
 Akış:
 
-1. Hedef model halihazırda görsel desteğine sahipse atla (zorunlu köprü listesi `isVisionBridgeForcedModel` içinde yer almıyorsa).
-2. Kombo uyumluluk filtresiyle paylaşılan tek doğruluk kaynağı olan `open-sse/utils/mediaParts.ts` içindeki **birleştirilmiş medya dedektörü** `detectMediaParts()` fonksiyonuna delege eden `extractImageParts(messages)` (`visionBridgeHelpers.ts`) aracılığıyla görsel parçalarını ayıkla. Ayıklama işlemi, `replaceImageParts` fonksiyonunun geri ekleyebileceği şekillerle (çıkarma↔ekleme sözleşmesi) sınırlandırılmıştır: OpenAI `image_url`, Anthropic base64 `source.type:"base64"`, Anthropic URL `source.type:"url"` ve Responses API `input_image`. Claude Code `tool_result.content` ve Responses araç çıktıları içine yerleştirilmiş eşleşen görseller de çıkarılır ve orijinal yollarında değiştirilir; yalnızca gösterge niteliğindeki şekiller kombo filtre malzemesidir ve çıkarılmaz.
-   Hiçbiri bulunamazsa atla.
-3. Çalışma zamanı yapılandırmasını `resolveVisionBridgeRuntimeSettings()` (`src/shared/constants/modalityBridgeDefaults.ts`) aracılığıyla çözümle: yeni `modalityBridge*` ayar anahtarları geçerlidir; eski `visionBridge*` anahtarları ise **bir döngülük geri dönüş** (geri alma penceresi) olarak kalır. Köprü devre dışı bırakıldığında herhangi bir medya taramasından önce atla.
-4. Mod seçici (`modalityBridgeVisionMode`, aşağıdaki tabloya bakın) yeniden yönlendirme ile açıklama arasında karar verir. Yeniden yönlendirme, yalnızca `model` alanı değiştirilmiş `modifiedPayload` ve buna ek olarak `{ rerouted, fromModel, toModel, imagesKept }` meta verisini döndürür.
-5. Açıklama yolu: görselleri `maxImages` ile sınırla, görev odaklı istemi oluştur, açıklama önbelleğine danış, görsel modelini **paralel olarak** (`Promise.allSettled`) çağır ve yerlerine `[Image N]: <description>` metin parçaları ekle. Başarısız bir açıklama `null` döndürür: ham görsel, bilinmeyen/görsel destekli hedefler için korunur (#4012), ancak **doğrulanmış yalnızca metin destekleyen doğrudan hedef** veya sıfır görsel içeren kombo, kısmî hatalar ve açıklama çağrısı sınırının ötesindeki görseller de dahil olmak üzere açıklanmayan her görsel için açık bir `(unavailable — no vision-capable provider connected)` metin taslağı alır (#17069). Mevcut tümü başarısız olan kombo açıklama geri dönüşü yerinde kalır (#8430).
-6. `modifiedPayload` + meta verileri (`imagesProcessed`, `descriptions`, `processingTimeMs`, `visionModel`) döndür.
+1. Hedef model zaten görmeyi destekliyorsa atlayın (zorunlu köprü listesinde görünmüyorsa `isVisionBridgeForcedModel`).
+2. Görüntü parçalarını, yetki veren `extractImageParts(messages)` (`visionBridgeHelpers.ts`) aracılığıyla çıkarın.** birleşik medya dedektörü** `open-sse/utils/mediaParts.ts` — `detectMediaParts()` birleşik uyumluluk filtresiyle paylaşılan tek gerçek kaynaktır. Çıkarma, `replaceImageParts` geri ekleyebileceği şekillere (↔ sözleşmenin yerine geçen özet) izin verilenler listesine eklenmiştir: OpenAI `image_url`, Anthropic base64 `source.type:"base64"`, Anthropic URL `source.type:"url"` ve Responses API `input_image`. Claude Code `tool_result.content` ve Yanıtlar aracı çıktılarının içine yerleştirilmiş eşleşen görüntüler de çıkarılır ve orijinal yollarında değiştirilir; yalnızca göstergeden oluşan şekiller birleşik filtre malzemesidir ve çıkarılmaz. Hiçbiri bulunamazsa atlayın.
+3. Çalışma zamanı yapılandırmasını `resolveVisionBridgeRuntimeSettings()` (`src/shared/constants/modalityBridgeDefaults.ts`) aracılığıyla çözün: yeni `modalityBridge*` ayar anahtarları kazanır; eski `visionBridge*` anahtarları kalır** tek döngülü geri dönüş** (geri alma penceresi). Köprü devre dışı bırakıldığında herhangi bir medya geçişinden önce atlayın.
+4. Mod seçici (`modalityBridgeVisionMode`, aşağıdaki tabloya bakın) yeniden yönlendirmeye veya açıklamaya karar verir. Yeniden yönlendirme, `modifiedPayload` yalnızca `model` değiştirilmiş olarak ve ayrıca meta `{ rerouted, fromModel, toModel, imagesKept }` ile döndürür.
+5. Yolu açıklayın: `maxImages` görüntüleri sınırlayın, göreve uygun istemi oluşturun, tanımlama önbelleğine başvurun, görüntü modelini çağırın** paralel olarak** (`Promise.allSettled`) ve `[Image N]: <description>` metin parçalarını yerlerine enjekte edin. Başarısız bir açıklama `null` sonucunu verir: ham görüntü unknown/vision-capable hedefleri (#4012) için korunur, ancak** onaylanmış salt metin doğrudan hedefi** veya sıfır görüş kombinasyonu, kısmi hatalar ve açıklama çağrısı başlığının (#17069) ötesindeki görüntüler de dahil olmak üzere, tanımlanmamış her görüntü için açık bir `(unavailable — no vision-capable provider connected)` metin koçanı alır. Mevcut tamamen başarısız olan birleşik açıklama geri dönüşü yerinde kalır (#8430).
+6. `modifiedPayload` + metasını döndürün (`imagesProcessed`, `descriptions`, `processingTimeMs`, `visionModel`).
 
 #### Mod seçici (`modalityBridgeVisionMode`)
 
-| Mod        | Varsayılan | Davranış                                                                                                                                                                                                                                                                                                     |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `auto`     | ✔          | Eski sezgisel yöntem, değiştirilmedi (#6640/#7204): kombine olmayan / `auto/` modeller, orijinal modelin zaten kullanılabilir kimlik bilgilerine sahip olması durumu (bu durumda betimle) hariç, en iyi görsel modeline yeniden yönlendirilir; kombine hedefler her zaman betimler.                          |
-| `describe` |            | Her zaman betimle — yeniden yönlendirme bloğu tamamen atlanır; kullanıcının seçtiği model her zaman yanıt verir.                                                                                                                                                                                             |
-| `reroute`  |            | Yeniden yönlendirmeye zorla: kimlik bilgisine sahip model koruması atlanır. Yeniden yönlendirme **hedefi** kimlik bilgisi koruması geçerliliğini korur — kullanılabilir görsel hedefi bulunmadığında köprü, ham görüntüleri salt metin hedefine göndermek veya betimlemek yerine açık bir hata ile engeller. |
+| Mod        | Varsayılan | Davranış                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`     | ✔          | Eski buluşsal yöntem, el değmemiş (#6640/#7204): birleşik olmayan/`auto/` modelleri, orijinal model zaten kullanılabilir kimlik bilgilerine sahip olmadığı sürece en iyi görüş modeline yeniden yönlendirilir (sonra açıklayın); Birleşik hedefler her zaman açıklanır.                                                            |
+| `describe` |            | Her zaman — açıklayın, yeniden yönlendirme bloğu tamamen atlanır; kullanıcının seçtiği model her zaman cevap verir.                                                                                                                                                                                                                |
+| `reroute`  |            | Yeniden yönlendirmeyi zorla: kimlik bilgilerini koruyan model koruması atlanır. Yeniden yönlendirme-** hedef** kimlik bilgisi koruması, kullanılabilir bir görüş hedefi olmadığında hala — uygular; köprü, ham görüntüleri salt metinden oluşan bir hedefi tanımlamak veya bu hedefe göndermek yerine açık bir hatayla bloke eder. |
 
-Zorunlu modlar, otomatik sezgisel yöntem çalıştırılmadan **önce** kısa devre yapar; `auto` davranışı, PR-1 öncesi güvenlik kuralıyla bayt düzeyinde aynıdır.
+Zorunlu modlar kısa devre** önce** otomatik buluşsal çalışmalar; `auto` davranışı, pre-PR-1 korkuluğuyla bayt aynıdır.
 
 #### API anahtarı kapsamı (`visionBridgeKeyScope.ts`)
 
-Çağıranın API anahtarı `allowedConnections`, kota havuzlarını (`allowedQuotas`) veya modelleri (`allowedModels` / `blockedModels` / `modelAccessMode: "restricted"` / `disableNonPublicModels`) kısıtladığında, köprü yalnızca anahtarın kullanabileceği bağlantılar üzerinden, anahtarın kullanabileceği yeniden yönlendirme ve betimleme modellerini seçer. Betimleme çağrısı daha sonra her zaman `x-omniroute-self-loop-key-id` başlığı ile OmniRoute kendi kendine döngüsü (self-loop) üzerinden gerçekleştirilir, böylece alan sohbet isteği o anahtarın bağlantı ve model politikasını yeniden uygular. `enforceApiKeyPolicy()`, bu başlığı yalnızca kendi kendine döngü taşıyıcısı ile birlikte dikkate alır; böylece yalnızca erişimi daraltabilir ve çözümlenemeyen bir kimlik reddedilir.
+Arayanın API anahtarı `allowedConnections`, kota havuzlarını (`allowedQuotas`) veya modelleri (`allowedModels` / `blockedModels` / `modelAccessMode: "restricted"` / `disableNonPublicModels`) kısıtladığında, köprü yalnızca yeniden yönlendirmeyi seçer ve anahtarın kullanabileceği bağlantılarda anahtarın kullanabileceği modelleri tanımlar. Açıklama çağrısı daha sonra her zaman `x-omniroute-self-loop-key-id` başlığıyla OmniRoute kendi kendine döngüsünden geçer, böylece alıcı sohbet isteği o anahtarın bağlantı ve model politikasını yeniden zorlar. `enforceApiKeyPolicy()` bu başlığı yalnızca kendi kendine döngü taşıyıcısıyla birlikte kabul eder, böylece yalnızca erişimi daraltabilir ve çözümlenmeyen bir kimlik reddedilir.
 
-Anahtar için hiçbir görsel modeline izin verilmiyorsa, **onaylanmış salt metin hedefi**, görüntü baytlarını yetersiz bir üst akışa iletmek yerine net bir HTTP 400 ile görüntü isteğini yerel olarak reddeder (#17069). Bilinmeyen veya yerel görsel yeteneğine sahip hedefler için betimleme yolu, önceki hatada açık kalma (fail-open) davranışını korur (meta `{ skipped: true, reason: "no_permitted_vision_model" }`). Anahtarı olmayan istekler ve bu kısıtlamalara sahip olmayan anahtarlar tam olarak eskisi gibi davranır.
+Anahtar için herhangi bir görüş modeline izin verilmiyorsa,** onaylanmış salt metin hedefi** görüntü baytlarını yetersiz bir yukarı akışa (#17069) iletmek yerine, görüntü isteğini yerel olarak net bir HTTP 400 ile reddeder. Bilinmeyen veya yerel görüş yeteneğine sahip hedefler için, açıklama yolu önceki arıza açma davranışını (meta `{ skipped: true, reason: "no_permitted_vision_model" }`) korur. Anahtarsız istekler ve bu kısıtlamaların olmadığı anahtarlar tam olarak eskisi gibi davranır.
 
-#### Görev farkında betimleme istemi (`modalityBridgeVisionTaskAware`)
+#### Göreve duyarlı açıklama istemi (`modalityBridgeVisionTaskAware`)
 
-Varsayılan **true**. `composeVisionPrompt()` (`visionBridgeHelpers.ts`), **son kullanıcı mesajının** metnini (500 karaktere kısaltılmış olarak) temel betimleme istemine ekler; betimlemeyi kullanıcının gerçekten ne sorduğuna yönlendirir (codex-vision-proxy deseni) ve görsel modelinden görünür metni dönüştürmesini (transkribe etmesini) ister. Bayrak kapalı olduğunda — veya kullanıcı metni olmadığında — temel istem değiştirilmeden kullanılır.
+Varsayılan** doğru** . `composeVisionPrompt()` (`visionBridgeHelpers.ts`) metnini ekler** son kullanıcı mesajı** (500 karaktere kısaltılmış) temel açıklama istemine, açıklamayı kullanıcının gerçekte sorduğu şeye (kodeks-görüntü-vekil modeli) yönlendirerek ve görüntü modelinden görünür metni yazıya geçirmesini ister. — işareti kapalıyken veya — kullanıcı metni yokken temel bilgi istemi değiştirilmeden kullanılır.
 
-Betimleme kendi kendine döngüsünün kendi OpenAI uyumlu isteği (`visionBridgeHelpers.ts` içindeki `callVisionModelSingle()`), herhangi bir istemci sinyaline bağlı olmaksızın, her çağıran/sağlayıcı için koulsuz olarak `image_url.detail: "high"` ister. Düşük detaylı örnekleme, bu istemin tam olarak istediği metin dönüştürme görevi için OCR doğruluğunu düşürür; bu nedenle betimleme çağrısının kendisi, orijinal gelen isteğin hangi detay düzeyini kullandığından bağımsız olarak her zaman yüksek detay ister. Bu durum yalnızca dahili betimleme isteği gövdesini etkiler; OmniRoute'un çağıranın kendi `image_url.detail` değerini birincil istekte nasıl ilettiğini değiştirmez — bu varsayılan değer ayrı olarak ve yalnızca algılanan OpenCode istemcileri için `defaultImageDetail()` içinde (`open-sse/handlers/chatCore/upstreamBody.ts`) uygulanır. Betimleme kendi kendine döngüsünün Anthropic tel formatı dalı hiçbir `detail` alanına sahip değildir ve her iki varsayılandan da etkilenmez.
+Tanımlama öz döngüsünün kendi OpenAI uyumlu isteği ( `visionBridgeHelpers.ts` `callVisionModelSingle()` ), herhangi bir istemci sinyaline bağlanmadan her caller/provider için her zaman koşulsuz olarak `image_url.detail: "high"` — talep eder. Düşük ayrıntılı örnekleme, tam olarak bu istemin istediği metin transkripsiyon görevi için OCR doğruluğunu azaltır; bu nedenle, açıklama çağrısının kendisi, orijinal gelen isteğin kullandığı ayrıntı düzeyine bakılmaksızın her zaman yüksek ayrıntı ister. Bu yalnızca dahili açıklama isteği gövdesini etkiler; OmniRoute arayanın kendi `image_url.detail` `defaultImageDetail()` (`open-sse/handlers/chatCore/upstreamBody.ts`) cinsinden varsayılanın ayrı olarak ve yalnızca algılanan OpenCode istemcileri için uygulandığı — birincil isteğinde nasıl ilettiğini değiştirmez. Tanımlanan kendi kendine döngünün Anthropic kablo formatı dalında `detail` alanı yoktur ve her iki varsayılandan da etkilenmez.
 
-#### Betimleme çıkış üst sınırı (`modalityBridgeVisionMaxChars`)
+#### Çıkış sınırını (`modalityBridgeVisionMaxChars`) açıklayın
 
-| Anahtar                        | Varsayılan | Aralık             |
+| Anahtar                        | Varsayılan | Menzil             |
 | ------------------------------ | ---------- | ------------------ |
 | `modalityBridgeVisionMaxChars` | `0`        | `0` veya 100–50000 |
 
-`0` (varsayılan) **üst sınır yok** anlamına gelir — `callVisionModel()` tarafından döndürülen betimleme, mevcut davranışı koruyarak değiştirilmeden aktarılır. 100–50000 aralığındaki herhangi bir değer, `[Image N]: <description>` (`src/lib/guardrails/visionBridge.ts` içindeki `VisionBridgeGuardrail.preCall()`) olarak geri birleştirilmeden önce betimlemeyi `…` son ekiyle kısaltır. Aşağı akış modelinin tam transkripsiyona ihtiyaç duyduğu detay odaklı OCR görevleri için bunu yükseltin; çok konuşkan görsel modellerinde token kullanımını sınırlamak için bunu düşürün. Kontrol paneli alanı, Görsel sekmesinin Gelişmiş panelinde yer alır (`ModalityBridgeVisionTab.tsx` içindeki `modality-bridge-max-chars`) ve 1 ile 99 arasındaki herhangi bir değeri 100 tabanına (floor) sıkıştırırken açık bir `0` değerini değiştirilmeden bırakır — `0`, yalnızca "ayarlanmamış" varsayılan değil, başlı başına geçerli bir Zod değeridir (`z.union([z.literal(0), z.number().int().min(100).max(50000)])`).
+`0` (varsayılan) şu anlama gelir:** kapak yok** — `callVisionModel()` tarafından döndürülen açıklama, mevcut davranış korunarak değiştirilmeden geçirilir. 100–50000 aralığındaki herhangi bir değer, `[Image N]: <description>` ( `src/lib/guardrails/visionBridge.ts` `VisionBridgeGuardrail.preCall()` ) olarak geri eklenmeden önce açıklamayı bir `…` son ekiyle keser. Aşağı akış modelinin tam transkripsiyona ihtiyaç duyduğu, ayrıntı ağırlıklı OCR görevleri için bunu yükseltin; Konuşkan görüş modellerinde bunu sınırlı jeton kullanımına düşürün. Kontrol paneli alanı, Vision sekmesinin Gelişmiş panelinde bulunur ( `ModalityBridgeVisionTab.tsx` `modality-bridge-max-chars` ) ve 1 ile 99 arasındaki herhangi bir değeri 100. kata kadar sıkıştırır ve açık bir `0` dokunulmaz — `0` yalnızca "ayarlanmamış" varsayılan değil, kendi başına geçerli bir Zod değeridir (`z.union([z.literal(0), z.number().int().min(100).max(50000)])`).
 
-#### Betimleme önbelleği (`modalityBridge/bridgeCache.ts`)
+#### Önbelleği tanımlama (`modalityBridge/bridgeCache.ts`)
 
-Süreç genelinde paylaşılan, betimleme çıktısı için bellek içi LRU + TTL önbelleği.
-Anahtar = uzunluk ön ekli çerçeveleme ile (alan sınırı çakışması olmadan) `sha256(imageRef + composedPrompt + configuredBridgeModel)`. Model bileşeni, gerçekten yanıt veren model değil, **yapılandırılmış** köprü modelidir — `callVisionModel` dahili olarak geri düşebilir (fallback) ve deneme başına anahtarlama önbelleği parçalayacaktır. Başarısız betimlemeler asla önbelleğe alınmaz. Ayarlar:
+Süreç genelinde paylaşılan çıktıları tanımlamak için bellek içi LRU + TTL önbelleği. Uzunluk öneki çerçeveli anahtar = `sha256(imageRef + composedPrompt + configuredBridgeModel)` (alan sınırı çarpışması yok). Model bileşeni** yapılandırılmış** gerçekte — `callVisionModel` yanıtını veren model değil, köprü modeli dahili olarak geri düşebilir ve deneme başına anahtarlama önbelleği parçalayabilir. Başarısız açıklamalar hiçbir zaman önbelleğe alınmaz. Ayarlar:
 
-| Anahtar                         | Varsayılan | Aralık  |
+| Anahtar                         | Varsayılan | Menzil  |
 | ------------------------------- | ---------- | ------- |
 | `modalityBridgeCacheEnabled`    | `true`     | —       |
 | `modalityBridgeCacheTtlMinutes` | `60`       | 1–1440  |
 | `modalityBridgeCacheMaxEntries` | `200`      | 10–5000 |
 
-#### Uzak görsel normalizasyonu (self-loop describe/base64 fetch)
+#### Uzaktan görüntü normalleştirme (kendi kendine döngülü describe/base64 getirme)
 
-Köprü **uzak** bir görseli kendisi getirdiğinde — Anthropic describe öz çağrısı ve claude-wire-format base64 dönüşümü (`ensureBase64ImagesForClaudeWire`), her ikisi de `visionBridgeHelpers.ts` içindeki `fetchRemoteImageAsDataUri()` aracılığıyla — elde edilen veri URI'si, görsel-modeli isteğine gömülmeden önce `normalizeDataUri()` (`open-sse/utils/imageNormalize.ts`) üzerinden geçirilir. Boyutu büyük görseller, OpenAI/Anthropic'in sunucu tarafında halihazırda uyguladığı yeniden boyutlandırma üst sınırı ile eşleşecek şekilde **2048px uzun kenar** boyutuna küçültülür; bu da görsel modelin gördüğü içeriği değiştirmeden yükleme baytlarını/gecikmesini azaltır. Yeniden boyutlandırma, dinamik içe aktarma yoluyla yüklenen `sharp` kullanır: yerel ikili dosyasının yüklenemediği bir platformda, `normalizeDataUri()` **asla hata fırlatmaz** — orijinal baytların doğrudan aktarılmasına (passthrough) geri döner, böylece describe/base64-conversion yolu her zaman çalışmaya devam eder. Görsel olmayan baytlar (kodlanabilir bir görsel döndürmeyen bir getirme işlemi) de dokunulmadan doğrudan aktarılır. Bu normalizasyon, köprünün kendi öz çağrısı için getirdiği görsellerle sınırlıdır; katılım zorunluluğu mutasyon ilkesiyle (Sert Kural #20) tutarlı olarak, çağrılan tarafın ham passthrough yüküne asla uygulanmaz.
+Köprü bir şey getirdiğinde** uzak** görüntünün kendisi — Anthropic, kendi kendine çağrıyı ve Claude-wire formatı base64 dönüşümünü (`ensureBase64ImagesForClaudeWire`) tanımlar; her ikisi de `visionBridgeHelpers.ts` — `fetchRemoteImageAsDataUri()` aracılığıyla, sonuçta ortaya çıkan URI verileri, vizyon modeli isteğine gömülmeden önce `normalizeDataUri()` (`open-sse/utils/imageNormalize.ts`) üzerinden geçirilir. Büyük boyutlu görüntüler küçültülür** 2048 piksel uzun kenar** ( OpenAI/Anthropic yeniden boyutlandırma sınırıyla eşleşme zaten sunucu tarafında geçerlidir), bu da vizyon modelinin gördüklerini değiştirmeden bytes/latency yüklemesini keser. Yeniden boyutlandırma, dinamik içe aktarma yoluyla yüklenen `sharp` kullanır: yerel ikili dosyasının yüklenemediği bir platformda `normalizeDataUri()`** asla atmaz** — orijinal baytların geçişine geri döner, böylece describe/base64-conversion yolu her zaman çalışmaya devam eder. Görüntü olmayan baytlar (kodu çözülebilir bir görüntü döndürmeyen bir getirme) da dokunulmadan iletilir. Bu normalleştirmenin kapsamı, köprünün kendi kendi kendine çağrısı için getirdiği görüntülerle sınırlıdır —, yalnızca isteğe bağlı mutasyon ilkesine (Zor Kural #20) uygun olarak hiçbir zaman arayanın ham geçiş yüküne uygulanmaz.
 
-#### Ayarlar şeması + migration
+#### Ayarlar şeması + geçişi
 
-Yeni `modalityBridge*` anahtarları `updateSettingsSchema` (`src/shared/validation/settingsSchemas.ts`) içinde Zod ile doğrulanır: `modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`, `modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`, `modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`, `modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`, `modalityBridgeCache*` üçlüsü ve Audio Bridge tarafından kullanılan `modalityBridgeAudio*` grubu. `141_modality_bridge_settings.sql` migrasyonu, mevcut eski `visionBridge*` değerlerini eşleşen yeni anahtarlara kopyalar (idempotenttir, operatör tarafından ayarlanmış bir `modalityBridge*` değerinin üzerine asla yazmaz); eski anahtarlar bir sürüm döngüsü boyunca okuma yedeği olarak kabul edilmeye devam eder.
+Yeni `modalityBridge*` anahtarları `updateSettingsSchema` (`src/shared/validation/settingsSchemas.ts`) cinsinden Zod tarafından doğrulanmıştır: `modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`, `modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`, `modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`, `modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`, `modalityBridgeCache*` üçlüsü ve Audio Bridge tarafından kullanılan `modalityBridgeAudio*` grubu. Geçiş `141_modality_bridge_settings.sql` mevcut eski `visionBridge*` değerlerini eşleşen yeni anahtarlara kopyalar (aynı değerdedir, hiçbir zaman operatör tarafından ayarlanan `modalityBridge*` değerinin üzerine yazmaz); eski anahtarlar, bir yayın döngüsü boyunca okuma geri dönüşü olarak kabul edilmeye devam eder.
 
-#### Şeffaflık başlığı + istatistikler
+#### Şeffaflık başlığı + istatistikleri
 
-Describe ile dönüştürülmüş yanıtlar `x-omniroute-modality-bridge: image->text;model=<visionModel>;parts=<n>` başlığını taşır (`modalityBridge/bridgeStats.ts` içindeki `buildModalityBridgeHeader()` tarafından oluşturulur, `src/sse/handlers/chatHelpers.ts` içindeki `withModalityBridgeHeader()` tarafından damgalanır). Yeniden yönlendirilen isteklere **hiçbir** başlık eklenmez — yük değiştirilmemiştir ve model değişimi yanıt gövdesinin `model` alanında zaten görülmektedir.
+Açıklama-dönüştürülmüş yanıtlar `x-omniroute-modality-bridge: image->text;model=<visionModel>;parts=<n>` taşır ( `modalityBridge/bridgeStats.ts` `buildModalityBridgeHeader()` tarafından oluşturulmuştur, `src/sse/handlers/chatHelpers.ts` `withModalityBridgeHeader()` tarafından damgalanmıştır). Yeniden yönlendirilen istekler** HAYIR** başlık — yüküne dokunulmamıştı ve model değişimi yanıt gövdesinin `model` alanında zaten görülebiliyordu.
 
-`GET /api/modality-bridge/stats` (`GET /api/settings` ile aynı düzeyde yönetim kimlik doğrulaması), `vision`, `audio` ve `video` için bellek içi modalite başı sayaçları olan `{ attempts, successes, bridged, cacheHits, failures, totalLatencyMs, latencySamples, averageLatencyMs, lastUsedAt }` değerlerini döndürür. `averageLatencyMs`, payda olarak tüm denemeleri değil `latencySamples` değerini kullanır; zamanlaması olmayan bir işlem sıfır milisaniyelik bir örnek uydurmaz. `bridged`, başarılı dönüşümler için geriye dönük uyumlu takma ad olmaya devam eder; başarısız denemeler bunu artırmaz. Sayaçlar tasarım gereği süreç yeniden başlatıldığında sıfırlanır (muhasebe değil, telemetri amaçlıdır).
+`GET /api/modality-bridge/stats` (yönetim kimlik doğrulaması, `GET /api/settings` ile aynı katman) `vision`, `audio` ve `video` için her modaliteye özel `{ attempts, successes, bridged, cacheHits, failures, totalLatencyMs, latencySamples, averageLatencyMs, lastUsedAt }` sayaçlarını döndürür. `averageLatencyMs`, payda olarak tüm denemeleri değil `latencySamples` kullanır; zamanlaması olmayan bir işlem sıfır milisaniyelik bir örnek üretmez. `bridged` başarılı dönüşümler için geriye dönük uyumlu takma ad olmaya devam ediyor; başarısız girişimler bunu artırmaz. Sayaçlar tasarım gereği süreç yeniden başlatıldığında sıfırlanır (telemetri, muhasebe değil).
 
-#### Dashboard yapılandırması
+#### Kontrol paneli yapılandırması
 
-Özel dashboard sayfası `/dashboard/settings/modality-bridge` adresindedir. URL ile erişilebilen `Vision`, `Audio` ve `Video` sekmeleri, `tab` değerini değiştirirken sorgu parametrelerini korur. Vision sekmesi; etkinleştirmeyi, modu, model seçimini (otomatik varsayılan dahil), görev farkındalıklı istem oluşturmayı, gelişmiş zaman aşımı/görsel/açıklama-uzunluğu/önbellek limitlerini, çalışma zamanı sayaçlarını ve korumalı bir örnek isteği sunar. Audio sekmesi de yayındadır: etkinleştirmeyi, Auto içeren yalnızca STT'ye yönelik bir model seçiciyi, zaman aşımı/maksimum klip limitlerini, ses sayaçlarını ve bir `input_audio` örnek testini sunar. Video sekmesi işlevseldir: FFmpeg/ffprobe çalışma zamanı durumunu bildirir — dört açık arayüz durumundan biri (`unknown` yoklama devam ederken veya tamamlanamadığında, `restricted` yoklamanın istemci tarafında atlandığı loopback olmayan bir dashboard sunucusunda, `unavailable` yoklandığında ve eksik olduğu doğrulandığında veya `available` FFmpeg/ffprobe sürümleriyle birlikte) — etkinleştirme/model/kare/video/zaman aşımı limitlerini kalıcı hale getirir, model seçiciyi görsel yetenekli modellere filtreler ve video sayaçlarını sunar.
+Özel kontrol paneli sayfası `/dashboard/settings/modality-bridge`. URL adreslenebilir `Vision`, `Audio` ve `Video` sekmeleri, `tab` değerini değiştirirken sorgu parametrelerini korur. Vision sekmesi; etkinleştirmeyi, modu, model seçimini (otomatik varsayılan dahil), göreve duyarlı istemi, gelişmiş timeout/image/description-length/cache sınırlarını, çalışma zamanı sayaçlarını ve korunan örnek isteğini gösterir. Ses sekmesi de yayında: etkinleştirmeyi, Otomatik özellikli yalnızca STT model seçiciyi, timeout/max-clip limitlerini, ses sayaçlarını ve `input_audio` örnek testini ortaya çıkarıyor. Video sekmesi işlevseldir: FFmpeg/ffprobe çalışma zamanı durumunu bildirir — dört açık UI durumundan biri (prob uçuştayken veya tamamlanamazken `unknown`, probun istemci tarafında atlandığı geridöngü olmayan bir kontrol paneli ana bilgisayarında `restricted`, incelendikten ve eksik olduğu onaylandıktan sonra `unavailable` veya FFmpeg/ffprobe sürümleriyle `available` ) — enable/model/frame/video/timeout sınırlarını korur, model seçiciyi görsel yetenekli modellere göre filtreler ve video sayaçlarını açığa çıkarır.
 
-Yapay zeka ayarları altındaki eski Vision Bridge kartı, yeni sayfaya yönelik bir uyumluluk bağlantısıdır; artık formun ikinci bir kopyasına sahip değildir. Media Providers ayrıca, mevcut Speech-to-Text çalışma alanını kaldırmadan, Image-to-Text ve Speech-to-Text iş akışlarını ilgili Modality Bridge sekmelerine bağlar.
+AI ayarları altındaki eski Vision Bridge kartı, yeni sayfaya yönelik bir uyumluluk bağlantısıdır; artık formun ikinci bir kopyasına sahip değildir. Medya Sağlayıcıları ayrıca mevcut Konuşmadan Metne oyun alanını kaldırmadan Görüntüden Metne ve Konuşmadan Metne iş akışlarını ilgili Modalite Köprüsü sekmelerine bağlar.
 
-**Self-loop kabul baypası:** Describe çağrısı OmniRoute'un kendi `/v1` self-loop'u (standart dışı sağlayıcı modeli) üzerinden yönlendirildiğinde, alt istek `x-omniroute-admission-bypass: internal` gönderir ve çözümlenen self-loop kimlik bilgisiyle kimlik doğrulaması yapılır — yerel moddaki yerel `sk_omniroute` koruyucusu veya operatör tarafından yapılandırılan `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` env anahtarı (#1350) sayesinde `REQUIRE_API_KEY=true` olan dağıtımlar yine de describe çağrısını çalıştırabilir. Baypas yalnızca bu kesin kimlik bilgileri için geçerli kabul edilir, bu nedenle dış istemciler kabulü atlamak için bu başlığı kullanamaz.
+**Kendi kendine döngü kabul bypass'ı:** açıklama çağrısı OmniRoute kendi `/v1` kendi kendine döngüsü (standart dışı sağlayıcı modeli) üzerinden yönlendirdiğinde, alt istek `x-omniroute-admission-bypass: internal` gönderir ve yerel modda yerel `sk_omniroute` nöbetçisi çözümlenmiş öz döngü kimlik bilgisi — veya operatör tarafından yapılandırılmış `OMNIROUTE_API_KEY` / `ROUTER_API_KEY` env anahtarı (#1350) ile doğrulanır, böylece `REQUIRE_API_KEY=true` dağıtımları tanımlama çağrısını hala çalıştırabilir. Baypas yalnızca bu kesin kimlik bilgileri için kabul edilir, dolayısıyla harici istemciler girişi atlamak için başlığı kullanamaz.
 
-Eski varsayılanlar `src/shared/constants/visionBridgeDefaults.ts` içinde yer alır; yeni mod/görev-farkındalıklı/önbellek varsayılanları ve ayar çözücü `src/shared/constants/modalityBridgeDefaults.ts` içinde bulunur. Koruma mekanizması, testlerin sahte `getSettings` ve `callVisionModel` uygulamaları enjekte edebilmesi için bir `deps` kurucu seçeneği sunar.
+Eski varsayılanlar `src/shared/constants/visionBridgeDefaults.ts` bulunur; yeni mode/task-aware/cache varsayılanları ve ayar çözümleyicisi `src/shared/constants/modalityBridgeDefaults.ts` mevcuttur. Korkuluk, testlerin sahte `getSettings` ve `callVisionModel` uygulamalarını enjekte edebilmesi için bir `deps` yapıcı seçeneğini ortaya çıkarır.
 
-### Audio Bridge (`audioBridge.ts`) — Modality Bridge PR-3
+### Ses Köprüsü (`audioBridge.ts`) — Modalite Köprüsü PR-3
 
-Ses içeren sohbet isteklerini, ses girişini kabul ettiği bilinmeyen bir hedefe ulaşmadan önce yakalar. Sohbet isteğini asla yeniden yönlendirmez: ses parçaları mevcut OpenAI uyumlu çok parçalı uç nokta aracılığıyla dönüştürülür ve seçilen sohbet modeli metin transkriptleriyle devam eder.
+Ses içeren sohbet isteklerini, ses girişini kabul ettiği bilinmeyen bir hedefe ulaşmadan önce durdurur. Sohbet isteğini hiçbir zaman yeniden yönlendirmez: Ses parçaları, mevcut OpenAI uyumlu çok parçalı uç nokta aracılığıyla kopyalanır ve seçilen sohbet modeli, metin transkriptleriyle devam eder.
 
 Akış:
 
-1. `supportsAudio` değerini `getResolvedModelCapabilities()` aracılığıyla çözümler. Açık sağlayıcı-kayıt defteri meta verileri önceliklidir, ardından statik model meta verileri ve son olarak eşitlenen `modalities_input` gelir. `audio` içermeyen beyan edilmiş bir girdi listesi `false` değerini alır; hiçbir yetenek kanıtı kalmazsa `null` kalır. Hem `false` hem de `null` muhafazakâr köprüyü etkinleştirirken, `true` bunu atlar.
-2. `modalityBridgeAudio*` ayarlarını çözümler ve paylaşılan `detectMediaParts()` dedektörü aracılığıyla her mesajdan birleştirilebilir üst düzey ses parçalarını çıkarır. Desteklenen tel şekilleri (wire shapes) OpenAI `input_audio`, `audio_url` ve `source.media_type: "audio/*"` şeklindedir. İç içe geçmiş ses yönlendirme için algılanır ancak birleştirme yoluyla kaldırılmaz. Çalışma `modalityBridgeAudioMaxClips` ile sınırlandırılmıştır; sonraki parçalar dokunulmadan kalır.
-3. Yapılandırılmış bir `provider/model` değerine uyun veya `selectAudioBridgeModel()` fonksiyonunun `AUDIO_TRANSCRIPTION_PROVIDERS` dizisini kararlı katalog düzeninde taramasına ve kullanılabilir aktif sağlayıcı kimlik bilgisine sahip ilk modeli seçmesine izin verin.
-4. `callAudioTranscription()`, base64/veri-URI sesini çok parçalı bir `file` dosyasına dönüştürür veya DNS sabitlemeye ve 25 MB sınıra sahip yalnızca umumi (public-only) dışarı giden koruması aracılığıyla uzak bir `audio_url` indirir. Ardından dosyayı ve seçilen modeli, `resolveSelfLoopBearer()` ile kimliği doğrulanmış yerel `/v1/audio/transcriptions` kendi kendine döngüsüne (self-loop) POST eder. Mevcut transkripsiyon rotası normal kimlik bilgisi arama, soğuma/oran sınırı yönetimi ve sağlayıcı dağıtımı gerçekleştirir.
-5. Başarılı çağrılar kendi parçalarını `[Audio N]: <transcript>` ile değiştirir. Çağrılar `Promise.allSettled` ile çalışır: münferit bir hata, orijinal ses parçasını korur (#4012 sözleşmesi). Tüm çağrılar başarısız olur ve hedefin `supportsAudio === false` olduğu kanıtlanırsa, parçalar `[Audio N]: (unavailable — no STT provider connected)` haline gelir (#8430 sözleşmesi). Bilinmeyen bir hedef (`null`) için tümü başarısız sonuç dokunulmadan kalır. Kullanılabilir STT kimlik bilgisi olmayan, kanıtlanmış yalnızca metin içeren bir hedef, bir ağ çağrısı yapmadan aynı açık taslağı (stub) alır.
+1. `supportsAudio` `getResolvedModelCapabilities()` aracılığıyla çözümleyin. Açık sağlayıcı kayıt defteri meta verileri kazanır, ardından statik model meta verileri kazanır ve ardından senkronize edilen `modalities_input`. `audio` olmadan bildirilmiş bir giriş listesi `false`; hiçbir yetenek kanıtı kalmadı `null`. Hem `false` hem de `null` muhafazakar köprüyü etkinleştirirken `true` onu atlar.
+2. Paylaşılan `detectMediaParts()` algılayıcı aracılığıyla `modalityBridgeAudio*` ayarlarını çözümleyin ve her mesajdan eklenebilir üst düzey ses parçalarını çıkarın. Desteklenen tel şekilleri OpenAI `input_audio`, `audio_url` ve `source.media_type: "audio/*"`. Yönlendirme için iç içe ses algılanır ancak ekleme yolu tarafından kaldırılmaz. Çalışma `modalityBridgeAudioMaxClips` ile sınırlandırılmıştır; sonraki kısımlara dokunulmaz.
+3. Yapılandırılmış bir `provider/model` kabul edin veya `selectAudioBridgeModel()` `AUDIO_TRANSCRIPTION_PROVIDERS` sabit katalog sırasıyla yürütmesine izin verin ve kullanılabilir bir etkin sağlayıcı kimlik bilgilerine sahip ilk modeli seçin.
+4. `callAudioTranscription()` base64/data-URI sesini çok parçalı bir `file` dönüştürür veya DNS sabitlemesi ve 25 MB sınırı ile yalnızca genel giden giden koruma aracılığıyla uzak bir `audio_url` indirir. Daha sonra dosyayı ve seçilen modeli, `resolveSelfLoopBearer()` ile doğrulanan yerel `/v1/audio/transcriptions` kendi kendine döngüsüne POSTs. Mevcut transkripsiyon yolu normal kimlik bilgisi aramayı, cooldown/rate-limit işlemeyi ve sağlayıcı gönderimini gerçekleştirir.
+5. Başarılı çağrılar, parçalarını `[Audio N]: <transcript>` ile değiştirir. Çağrılar `Promise.allSettled` ile yürütülür: bireysel bir arıza, orijinal ses parçasını (#4012 sözleşmesi) korur. Her çağrı başarısız olursa ve hedef `supportsAudio === false` kanıtlanmışsa, parçalar `[Audio N]: (unavailable — no STT provider connected)` (#8430 sözleşmesi) olur. Bilinmeyen bir hedef (`null`) için, tamamen başarısızlık sonucu değişmeden kalır. Kullanılabilir STT kimlik bilgisi olmayan kanıtlanmış salt metin hedefi, bir ağ çağrısı yapmadan aynı açık saplamayı alır.
 
-Başarılı transkriptler işlem genelindeki Modality Bridge LRU/TTL önbelleğini kullanır. Anahtar; ses referansını, kararlı `audio-transcription` işlem etiketini ve seçilen STT modelini birleştirir; hatalar asla önbelleğe alınmaz. Ses denemeleri paylaşılan `bridged`, `cacheHits`, `failures` ve `lastUsedAt` sayaçlarını günceller. Dönüştürülen yanıtlar `x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>` başlığını taşır; dokunulmayan istekler bir Audio Bridge segmenti almaz.
+Başarılı transkriptler süreç genelindeki Modalite Bridge LRU/TTL önbelleğini kullanır. Anahtar, ses referansını, kararlı `audio-transcription` işlem etiketini ve seçilen STT modelini birleştirir; hatalar hiçbir zaman önbelleğe alınmaz. Ses denemeleri paylaşılan `bridged`, `cacheHits`, `failures` ve `lastUsedAt` sayaçlarını günceller. Dönüştürülen yanıtlar `x-omniroute-modality-bridge: audio->text;model=<sttModel>;parts=<n>` taşır; dokunulmamış istekler bir Ses Köprüsü segmenti almaz.
 
-Çalışma zamanı ayarları DB desteklidir ve Zod ile doğrulanır:
+Çalışma zamanı ayarları DB desteklidir ve Zod tarafından doğrulanmıştır:
 
-| Anahtar                       | Varsayılan | Aralık         |
-| ----------------------------- | ---------- | -------------- |
-| `modalityBridgeAudioEnabled`  | `true`     | —              |
-| `modalityBridgeAudioModel`    | `""`       | Auto or STT ID |
-| `modalityBridgeAudioTimeout`  | `60000`    | 1000–300000    |
-| `modalityBridgeAudioMaxClips` | `3`        | 1–10           |
+| Anahtar                       | Varsayılan | Menzil               |
+| ----------------------------- | ---------- | -------------------- |
+| `modalityBridgeAudioEnabled`  | `true`     | —                    |
+| `modalityBridgeAudioModel`    | `""`       | Otomatik veya STT ID |
+| `modalityBridgeAudioTimeout`  | `60000`    | 1000–300000          |
+| `modalityBridgeAudioMaxClips` | `3`        | 1–10                 |
 
-Paylaşılan önbellek, `modalityBridgeCacheEnabled`, `modalityBridgeCacheTtlMinutes` ve `modalityBridgeCacheMaxEntries` tarafından kontrol edilmeye devam eder.
+Paylaşılan önbellek `modalityBridgeCacheEnabled`, `modalityBridgeCacheTtlMinutes` ve `modalityBridgeCacheMaxEntries` tarafından kontrol edilmeye devam eder.
 
 ### Video Köprüsü (`videoBridge.ts`, `videoBridgePipeline.ts`)
 
-Bilinen yerel video desteği olmayan bir hedef çağrılmadan önce Chat Completions `messages` ve Responses API `input` içerisindeki üst düzey video parçalarını keser. Desteklenen şekiller `input_video`, `video_url`, `video_source`, HTTPS URL'leri ve `data:video/*;base64,...` veri URI'leridir. Metin içerisindeki düz dosya adları video olarak kabul edilmez.
+Bilinen yerel video desteği olmayan bir hedef çağrılmadan önce Sohbet Tamamlamaları `messages` ve Yanıtlar API `input` üst düzey video bölümlerini keser. Desteklenen şekiller `input_video`, `video_url`, `video_source`, HTTPS URLs ve `data:video/*;base64,...` verileri URIs. Metindeki düz dosya adları video olarak değerlendirilmez.
 
-`VideoBridgeGuardrail.preCall` (`videoBridge.ts`), istek geçişini, yetenek/ilke kontrolünü, istek başına toplamayı ve yanıt yükünü yönetir. Video başına yapılan çalışma — edinme, tüm sonuç önbelleği, bir kare dizisini tanımlama (çağıran tarafından bildirilen herhangi bir ses transkriptini birleştiren) ve deneme başına metrikler/iptal/temizlik — `preCall` döngüsünün içinde video parçası başına bir kez çağrılan `videoBridgePipeline.ts` içindeki `processVideoPart` fonksiyonunun arkasında gizlidir. Bu modül ayrıca açık bağlantı noktası sınırlarını tanımlar: `VideoMediaBrokerPort` (bayt edinme ve örneklenen kareleri çıkarma), `VideoAudioTranscriptionPort` (çağıran tarafından bildirilen bir ses transkriptini örneklenen altyazılarla birleştirme) ve `VideoDrilldownPort` (kare detaylandırma kalıcılık sınırı; henüz `processVideoPart` içine bağlanmamıştır — bugün yalnızca ayrı `/api/modality-bridge/video/drilldown` rotası detaylandırma girdileri yazar).
+`VideoBridgeGuardrail.preCall` (`videoBridge.ts`) istek geçişinin, capability/policy kontrolünün, istek başına toplamanın ve yanıt yükünün sahibidir. Her video çalışması için — edinimi, tüm sonuç önbelleği, bir çerçeve dizisini tanımlar (arayan tarafından bildirilen herhangi bir ses metnini birleştirir) ve deneme başına metrics/abort/cleanup —, `videoBridgePipeline.ts` içindeki `processVideoPart` arkasında gizlenir ve `preCall` döngüsü içindeki video parçası başına bir kez çağrılır. Bu modül aynı zamanda açık bağlantı noktası sınırlarını da tanımlar `VideoMediaBrokerPort` (baytların alınması ve örneklenmiş çerçevelerin çıkarılması), `VideoAudioTranscriptionPort` (arayanın bildirdiği bir ses metnini örneklenmiş altyazılarla birleştirmek) ve `VideoDrilldownPort` (çerçeve detayına inme kalıcılık sınırı; henüz `processVideoPart` — bağlanmamıştır, yalnızca ayrı `/api/modality-bridge/video/drilldown` rotası bugün detaya inme girişlerini yazar).
 
-Genel `/v1` istek yolu asla bir alt işlem içe aktarmaz veya çağırmaz. Uzak videolar 50 MiB sınırının altında indirilir; satır içi base64 videolar, model/mesajlar/çerçeveleme zarfının 50 MiB'lık genel JSON istek kabul sınırının içinde kalabilmesi için video başına muhafazakâr bir 36 MiB çözülmüş sınıra sahiptir. Satır içi uzunluk ve çözülmüş boyut tahminleri tahsis edilmeden önce kontrol edilir. DNS sabitleme özelliğine sahip mevcut yalnızca umumi dışarı giden koruması kullanılarak, ilk uzak URL'de ve her yönlendirmede HTTPS gereklidir. Baytlar daha sonra tam iç `POST /api/modality-bridge/video/extract` broker sınırını geçer. Bu rota hem `LOCAL_ONLY` hem de `SPAWN_CAPABLE` özelliklerindedir, yalnızca süreç başına kimliği doğrulanmış, güvenilir bir geri döngü isteği kabul eder ve asla bir URL, dosya sistemi yolu, yürütülebilir dosya veya argüman listesi kabul etmez. API gövde boyutu hattı ve işleyicinin artımlı gövde okuyucusu, bağımsız olarak 50 MiB'lık bir broker girdi sınırını uygular. Sınırlı kuyruğu her seferinde bir çıkarma çalıştırır, dört bekleyen işe izin verir ve bekleyen girdiyi 100 MiB ile sınırlandırır.
+Genel `/v1` istek yolu hiçbir zaman bir alt işlemi içe aktarmaz veya çağırmaz. Uzak videolar 50 MiB sınırı altında indirilir; satır içi base64 videoları, video başına 36 MiB kodu çözülmüş muhafazakar bir sınıra sahiptir, böylece model/messages/framing zarfı, 50 MiB olan genel JSON isteği kabul sınırının içinde kalabilir. Satır içi uzunluk ve kodu çözülmüş boyut tahminleri, tahsisten önce kontrol edilir. HTTPS DNS sabitlemeli mevcut yalnızca genel giden giden korumayı kullanarak, ilk uzak URL ve her yeniden yönlendirmede gereklidir. Baytlar daha sonra tam dahili `POST /api/modality-bridge/video/extract` aracı sınırını geçer. Bu rota hem `LOCAL_ONLY` hem de `SPAWN_CAPABLE`, yalnızca işlem başına kimliği doğrulanmış, güvenilen geridöngü isteğini kabul eder ve hiçbir zaman URL, dosya sistemi yolu, yürütülebilir dosya veya argüman listesini kabul etmez. API gövde boyutu ardışık düzeni ve işleyicinin artımlı gövde okuyucusu, bağımsız olarak 50 MiB aracı giriş sınırını zorlar. Sınırlandırılmış kuyruğu her seferinde bir çıkarma işlemi gerçekleştirir, dört bekleyen işe izin verir ve bekleyen girişi 100 MiB ile sınırlandırır.
 
-Broker içinde, `ffprobe` özel bir yerel dosya okur; sabit biçim izin listesi çalma listesi ve manifest biçimlerini hariç tutar. İzin verilen MOV ailesi kapsayıcıları için harici MOV veri referansları varsayılan olarak devre dışı kalır ve sabit komut bunlara katılmaz. Hem `ffprobe` hem de `ffmpeg`, yalnızca `file` protokolü beyaz listesini, tek bir iş parçacığını, sabit argüman dizilerini, kabuk kullanmamayı ve `PATH` içinden çözümlenen yürütülebilir dosyaları kullanır. Ekli resim kapak akışları oynatılabilir adaylar değildir. Oynatılabilir tüm akışlar sınırları karşılamalıdır ve belirleyici en düşük indeksli yedek seçeneğinden önce açık bir varsayılan akış tercih edilir. Videolar 600 saniye, boyut başına 8.192 piksel ve 33.554.432 kaynak piksel ile sınırlıdır. FFmpeg, 1–16 orta nokta JPEG karesini örnekler, uzun kenarı daha küçük girdileri ölçek büyütmeden en fazla 1.024 piksele küçültür ve asla bir URL almaz. Örnekleme varsayılan olarak `uniform` şeklindedir. İsteğe bağlı `scene_aware` ve deneysel `segment_aware` politikaları, halihazırda doğrulanmış yerel akış üzerinde ek bir sabit FFmpeg geçişi gerçekleştirir, sınırlı `showinfo` sahneleri zaman damgalarını seçer ve dedektör arızası, zaman aşımı, bozuk çıktı veya boş bir aday kümesi durumunda belirleyici bir şekilde aynı düzgün orta noktalara geri döner. Segment odaklı mod, orta nokta örneklerini doğrulanmış sahne aralıklarıyla orantılı olarak tahsis eder; segment odaklı kanıtlar ve geri dönüş davranışı aşağıda detaylandırılmıştır. Kesin 16 kare sınırı, her politikada seçimden sonra uygulanır. Sahne odaklı bir talebin yalnızca tek karelik bütçesi olduğunda, etkin tam video veya odak penceresinin düzgün orta noktasını kullanır ve `policyEffective: uniform` rapor eder: tek bir seçilen sahne kare her iki zamansal ucu da koruyamaz. Bir çağırıcı isteğe bağlı olarak sonlu bir odak penceresi (`start`/`end` saniye) sağlayabilir; sınırlar medya süresine sabitlenir, tersine çevrilmiş veya sonlu olmayan pencereler reddedilir ve tüm örnekleme politikaları yalnızca normalleştirilmiş aralık içinde gerçekleştirilir. Elde edilen pencere, aşağı akış modellerin odaklanılmış bir alıntıyı tam zaman çizelgesinden ayırt edebilmesi için örnekleme meta verilerine ve güvenilmeyen açıklama önekine dahil edilir.
+Aracının içinde `ffprobe` özel bir yerel dosyayı okur; sabit biçimli izin verilenler listesi, oynatma listesi ve bildirim biçimlerini hariç tutar. İzin verilen MOV ailesi kapsayıcıları için harici MOV veri referansları varsayılan olarak devre dışı kalır ve sabit komut bunları etkinleştirmez. Hem `ffprobe` hem de `ffmpeg` `file` -only protokolü beyaz listesini, tek iş parçacığını, sabit bağımsız değişken dizilerini, kabuk yok ve `PATH` çözümlenen yürütülebilir dosyaları kullanır. Ekli resimli kapak yayınları oynanabilir adaylar değildir. Oynatılabilir tüm akışların sınırları karşılaması gerekir ve deterministik en düşük endeks geri dönüşünden önce açık bir varsayılan akış tercih edilir. Videolar 600 saniye, boyut başına 8.192 piksel ve 33.554.432 kaynak pikselle sınırlıdır. FFmpeg 1-16 orta nokta JPEG karesini örnekler, daha küçük girişlerin ölçeğini yükseltmeden uzun kenarı en fazla 1.024 piksele ölçeklendirir ve hiçbir zaman URL almaz. Örnekleme varsayılan olarak `uniform`. İsteğe bağlı `scene_aware` ve deneysel `segment_aware` politikaları, halihazırda doğrulanmış yerel akış üzerinden ek bir sabit FFmpeg geçişi gerçekleştirir, sınırlı `showinfo` sahne zaman damgalarını seçer ve dedektör arızası, zaman aşımı, hatalı biçimlendirilmiş çıktı veya boş bir aday kümesi durumunda belirleyici olarak aynı tekdüze orta noktalara geri döner. Segmente duyarlı mod, orta nokta örneklerini doğrulanmış sahne aralıklarıyla orantılı olarak tahsis eder; segmente duyarlı kanıtlar ve geri dönüş davranışı aşağıda ayrıntılı olarak açıklanmıştır. Her poliçede seçimden sonra 16 karelik sert tavan uygulanır. Sahneye duyarlı bir isteğin yalnızca tek karelik bir bütçesi olduğunda, etkin tam video veya odak penceresinin tek tip orta noktasını kullanır ve `policyEffective: uniform` raporunu verir: seçilen tek bir sahne karesi, her iki zamansal ucu da koruyamaz. Arayan kişi isteğe bağlı olarak sınırlı bir odak penceresi (`start`/`end` saniye) sağlayabilir; sınırlar medya süresine sabitlenir, tersine çevrilmiş veya sonlu olmayan pencereler reddedilir ve tüm örnekleme politikaları yalnızca normalleştirilmiş aralık içinde gerçekleştirilir. Ortaya çıkan pencere, örnekleme meta verilerine ve güvenilmeyen açıklama önekine dahil edilir, böylece aşağı akış modelleri odaklanmış bir alıntıyı tam zaman çizelgesinden ayırt edebilir.
 
-Semantic caption focus is a separate, explicit setting. The default `full`
-analysis mode preserves the existing frame prompt and never forwards request
-text to the caption model. In `focused` mode, the bridge reads only the latest
-non-empty user-authored `text`/`input_text` from the same Chat or Responses
-container, normalizes it to NFC, collapses control characters and whitespace,
-and limits it to 500 Unicode code points. An empty result falls back to the
-exact `full` prompt. A usable hint is serialized as JSON in a dedicated
-untrusted-user-context block and may only prioritize observable details; it
-cannot override the separate warning against following instructions visible
-or audible in the media. Textual focus never infers `start`/`end` or changes
-the temporal sampler.
+Anlamsal altyazı odağı ayrı ve açık bir ayardır. Varsayılan `full` analiz modu mevcut çerçeve istemini korur ve istek metnini hiçbir zaman altyazı modeline iletmez. `focused` modunda, köprü aynı Sohbet veya Yanıtlar kapsayıcısından yalnızca boş olmayan, kullanıcı tarafından yazılan en son `text`/`input_text` okur, bunu NFC olarak normalleştirir, kontrol karakterlerini ve boşlukları daraltır ve bunu 500 Unicode kod noktasıyla sınırlar. Boş bir sonuç tam `full` istemine geri döner. Kullanılabilir bir ipucu, özel bir güvenilmeyen kullanıcı bağlamı bloğunda JSON olarak serileştirilir ve yalnızca gözlemlenebilir ayrıntılara öncelik verebilir; medyada görünen veya işitilen aşağıdaki talimatlara ilişkin ayrı uyarıyı geçersiz kılamaz. Metinsel odak hiçbir zaman `start`/`end` sonucunu çıkarmaz veya zamansal örnekleyiciyi değiştirmez.
 
 #### FU-07 yapısal segment kanıtı
 
-`segment_aware`, halihazırda doğrulanmış yerel video akışı üzerinde sınırlı bir ön analiz geçişi kullanır. Sabit filtre zinciri önce en fazla 320 piksel genişliğe ölçeklendirir, sahne değişikliklerini ve donmuş aralıkları algılar, ardından bulanıklık, ortalama lüminans ve uzaysal/zamansal bilgi için saniyede 1 kare hızında örnekleme yapar. Geçiş; 600 yapısal örnek, bir FFmpeg/filtre iş parçacığı, aynı yalnızca `file` protokolü ve kapsayıcı izin listeleri, 1 MiB işlem çıktısı sınırı ve broker'ın paylaşılan iptal/son tarih süresi içinde en fazla 30 saniye ile sınırlıdır. Talepten asla bir komut, filtre, yol veya URL kabul etmez.
+`segment_aware` halihazırda doğrulanmış yerel video akışı üzerinden sınırlı bir ön analiz geçişi kullanır. Sabit filtre zinciri ilk önce en fazla 320 piksel genişliğe ölçeklenir, sahne değişikliklerini ve donmuş aralıkları algılar, ardından bulanıklık, ortalama luma ve spatial/temporal bilgileri için saniyede 1 kare hızında örnekleme yapar. Geçiş, 600 yapısal örnek, bir FFmpeg/filter iş parçacığı, aynı `file` -only protokolü ve kapsayıcı izin verilenler listeleri, 1 MiB işlem-çıkış sınırı ve aracının paylaşılan abort/deadline. en fazla 30 saniye ile sınırlıdır. İstekten hiçbir zaman bir komut, filtre, yol veya URL kabul etmez.
 
-Yapısal değerler, anlamsal video anlama değil, belirleyici örnekleme kanıtıdır. Konuları, eylemleri, altyazıları, konuşmaları veya kullanıcı niyetini çıkarmazlar. Sahne ve donma sınırları segmentleri oluşturur; donma kapsamı, bulanıklık, pozlama, uzaysal detay ve zamansal değişim yalnızca mevcut 1–16 kare bütçesinin nasıl tahsis edildiğini etkiler. Tamamen donmuş bir segment bir kare ile sınırlıyken, donmamış segmentler kalan bütçe için rekabet eder. Sınırlar kare sayısından fazla olduğunda, hızlı erken kesmelerin uzun bir takip eden segmenti gizleyememesi için düzgün zaman çizelgesi kapsamı korunur. Bir donma sınırının 1 saniyelik analiz çözünürlüğü içindeki sahne sınırları birleştirilir.
+Yapısal değerler anlamsal video anlayışı değil, deterministik örnekleme kanıtıdır. Konular, eylemler, altyazılar, konuşmalar veya kullanıcının amacı hakkında bir çıkarımda bulunmazlar. Sahne ve donma sınırları bölümler oluşturur; kapsamın dondurulması, bulanıklık, pozlama, mekansal ayrıntı ve zamansal değişiklik yalnızca mevcut 1-16 kare bütçesinin nasıl tahsis edildiğini etkiler. Tamamen dondurulmuş bir bölüm tek kareyle sınırlandırılırken, dondurulmamış bölümler kalan bütçe için rekabet eder. Sınırların sayısı karelerden fazla olduğunda, tekdüze zaman çizelgesi kapsamı korunur, böylece hızlı erken kesmeler uzun bir sondaki segmenti gizleyemez. Donma sınırının 1 saniyelik analiz çözünürlüğü içindeki sahne sınırları birleştirilir.
 
-Eksik filtreler, bozuk/boş kanıt, dedektör hatası veya sınırlı ön analiz zaman aşımı, tam olarak düzgün orta nokta politikasına açık duruma geçer (`fail open`). Bir çağırıcı iptali veya broker son tarihi açık duruma geçmez: devam eden alt süreci sonlandırır, sonraki kare çıkarımını engeller ve özel geçici ağaç `finally` içinde kaldırılır.
+Eksik filtreler, malformed/empty kanıtları, bir dedektör hatası veya sınırlı ön analiz zaman aşımı, tam olarak tek tip orta nokta politikasına açık değildir. Arayanı iptal etme veya aracının son teslim tarihi başarısız bir şekilde açılmaz: uçuş sırasındaki alt işlemi sonlandırır, daha sonra çerçeve çıkarılmasını önler ve özel geçici ağaç `finally` kaldırılır.
 
-`scripts/perf/video-bridge-fu07-eval.ts`, yinelenenleri kaldırma sonrası altyazı çağrısı tasarrufları, yoğun hareket bütçe tahsisi, bulanıklık/pozlama/SI-TI kanıtları, uzun kuyruklu hızlı kesmeler ve kademeli kararma yanlış pozitifleri için belirleyici gerçek FFmpeg fikstürleri üretir. Ön analiz duvar saati süresini ve `/usr/bin/time`'ın mevcut olduğu durumlarda alt işlem CPU ve tepe RSS değerini kaydeder. Kalite kontrolleri yalnızca yapısal kehanetlerdir. Bu donanım yetkili bir uç noktaya veya dondurulmuş bir hakeme sahip olmadığı için gerçek altyazı modeli kalitesi `HOLD` olarak kalır. `--caption-cost-per-call-usd` açık pozitif bir çağrı başına maliyet tahmini sağlamadığı sürece parasal tasarruflar da `HOLD` kalır; komut dosyası hiçbir zaman her iki sonucu da uydurmaz.
+`scripts/perf/video-bridge-fu07-eval.ts` tekilleştirme sonrası altyazı çağrı tasarrufları, yoğun hareketli bütçe tahsisi, blur/exposure/SI-TI kanıtları, uzun kuyruklu hızlı kesintiler ve kademeli olarak silinen hatalı pozitifler için deterministik gerçek FFmpeg fikstürleri üretir. Analiz öncesi duvar süresini ve `/usr/bin/time` mevcut olduğu durumlarda alt CPU ve zirve RSS kaydeder. Kalite kontrolleri yalnızca yapısal kahinlerdir. Gerçek altyazı modeli kalitesi `HOLD` kalır çünkü bu koşumun yetkili bir son noktası veya donmuş yargıcı yoktur. `--caption-cost-per-call-usd` çağrı başına açık bir pozitif tahmin sağlamadığı sürece parasal tasarruflar da `HOLD` olarak kalır; senaryo hiçbir zaman her iki sonucu da uydurmaz.
 
-Her kare 4 MiB, tüm ham kareler birlikte 23 MiB ve serileştirilmiş aracı yanıtı 32 MiB ile sınırlıdır. Özel bir geçici dizin `finally` içinde kaldırılır. OmniRoute, FFmpeg'i birlikte paketlemez ve özel bir çalıştırılabilir dosya yolu kabul etmez. Altyazılandırmadan önce, köprü muhafazakar bir görsel tekilleştirme geçişi uygular: her JPEG 16×16 gri tonlamalı arabelleğe indirgenir ve yalnızca tutulan son kareyle karşılaştırılır. Bir kareden fazla talep edilen altyazı bütçesi için çıkarma işlemi, bu bütçenin en fazla iki katı ve 16 kareden fazla olmayan sınırlı bir aday havuzu sağlar. Talep edilen üst sınır yalnızca tekilleştirmeden sonra uygulanır; bütçe en az iki olduğunda, seçilen ilk ve son adaylar nihai seyreltme sırasında korunur. Sürümlendirilmiş `grayscale-16x16-mean-cells-v2` politikası, ortalama luma deltası ile normalleştirilmiş deltası en az 0.05 olan küçük resim hücrelerinin oranından büyük olanını kullanır. Yinelenen eşiği, bir çalışma zamanı ayarı olarak sunulmaktan ziyade öngörülebilirlik için seçilen 0.04 sabitidir. Bu ikincil yüksek kontrastlı sinyal, yalnızca ortalama karşılaştırmasının gizleyebileceği küçük hareketleri ve görünür metin değişikliklerini korur. Karşılaştırıcı veya kod çözücü hataları açık başarısız olur ve kapsamı korur. Çıktı meta verileri, çıkarılan adayları, başarıyla kullanılan kareleri ve atılan görsel kopyaları birbirinden ayırır.
+Her çerçeve 4 MiB ile sınırlıdır, tüm ham çerçeveler birlikte 23 MiB ile ve serileştirilmiş aracı yanıtı 32 MiB ile sınırlıdır. `finally` özel bir geçici dizin kaldırıldı. OmniRoute FFmpeg paketlemez ve özel bir yürütülebilir yolu kabul etmez. Altyazı eklemeden önce köprü, koruyucu bir görsel tekilleştirme geçişi uygular: her JPEG 16 × 16 gri tonlamalı arabelleğe indirgenir ve yalnızca tutulan son kareyle karşılaştırılır. Bir karenin üzerinde talep edilen altyazı bütçesi için çıkarma, bu bütçenin iki katına kadar sınırlı bir aday havuzu sağlar ve hiçbir zaman 16 kareyi aşmaz. Talep edilen üst sınır yalnızca tekilleştirmeden sonra uygulanır; ilk ve son seçilen adaylar, bütçe en az iki olduğunda son azaltma sırasında korunur. Sürümlendirilmiş `grayscale-16x16-mean-cells-v2` politikası, ortalama luma deltasından büyük olanı ve normalleştirilmiş deltası en az 0,05 olan küçük resim hücrelerinin oranını kullanır. Yinelenen eşik, çalışma zamanı ayarı olarak ortaya çıkmak yerine öngörülebilirlik için seçilen sabit 0,04'tür. Bu ikincil yüksek kontrastlı sinyal, yalnızca ortalama karşılaştırmanın gizleyebileceği küçük hareketi ve görünür metin değişikliklerini korur. Karşılaştırıcı veya kod çözücü hataları açılmaz ve kapsama alanı korunur. Çıktı meta verileri, çıkarılan adayları, başarıyla kullanılan kareleri ve bırakılan görsel kopyaları ayırır.
 
-Açıkça işaretlenmiş bir video bölümü, zaman damgalı bir iletişim sayfası isteyebilir. Köprü, en fazla 4 sütunlu, 16 karelik bir JPEG ızgarası oluşturur. Her 512 piksel hücresi, kaynak zaman damgasını yüksek kontrastlı bir alt banda işlerken, aynı zaman damgaları aşağı akış ilişkilendirmesi ve denetimi için metinsel meta verilerde kalır. Eksiksiz JPEG 32 MiB ile sınırlı kalır. Eğer `sharp` ızgaranın kodunu çözemez veya onu oluşturamazsa, köprü bireysel JPEG karelerine geri döner; bir istemci iptal sinyali yine de sayfa işlemi boyunca yayılır.
+Açıkça işaretlenmiş bir video bölümü, zaman damgalı bir bağlantı sayfası isteyebilir. Köprü en fazla 4 sütunlu, 16 çerçeveli bir JPEG ızgarası oluşturur. Her 512 piksellik hücre, kaynak zaman damgasını yüksek kontrastlı bir alt banda yazarken aynı zaman damgaları, aşağı yönde ilişkilendirme ve denetim için metinsel meta verilerde kalır. JPEG tamamı 32 MiB ile sınırlı kalır. `sharp` ızgaranın kodunu çözemezse veya oluşturamazsa köprü bireysel JPEG çerçevelerine geri döner; istemci iptali sayfa işlemi boyunca yayılmaya devam eder.
 
-Yükseltme kanıtı, sentetik kompozisyon mikro kıyaslamasından bilerek ayrı tutulmuştur. `scripts/perf/video-bridge-contact-sheet-eval.ts`, gerçek OpenAI uyumlu görme modelleri için şema sürümlendirilmiş bir A/B test ortamı tanımlar. Sağlayıcı tarafından bildirilen token'ları, uçtan uca duvar gecikmesini (sayfa kompozisyonu dahil), model çağrısı sayısını ve bildirimde tanımlanan gerçek tutma oranını ölçer. Ham model yanıtları rapora yazılmaz; yalnızca SHA-256 özetleri ve eşleşen gerçek kimlikleri saklanır. Bu test ortamı, `--execute-real` geçilmediği ve `--model`, `OMNIROUTE_BASE_URL` ile `OMNIROUTE_API_KEY` yapılandırılmadığı sürece hiçbir ağ veya ücretli model çağrısı yapmaz. Bu açık gerçek çalıştırma olmadan, makine tarafından okunabilir kararı `HOLD` olarak kalır; yalnızca sentetik yük/çağrı sayısı ölçümleri yükseltme kanıtı değildir.
+Promosyon kanıtları kasıtlı olarak sentetik bileşim mikro kıyaslamalarından ayrı tutulmaktadır. `scripts/perf/video-bridge-contact-sheet-eval.ts` gerçek OpenAI uyumlu görüntü modelleri için şema sürümlü bir A/B donanımını tanımlar. Sağlayıcı tarafından bildirilen belirteçleri, uçtan uca duvar gecikmesini (sayfa bileşimi dahil), model çağrı sayısını ve bildirim tanımlı bilgi saklamayı ölçer. Ham model yanıtları rapora yazılmaz; yalnızca SHA-256 özetleri ve eşleşen IDs gerçeği korunur. Kablo demeti, `--execute-real` geçilmediği ve `--model`, `OMNIROUTE_BASE_URL` ve `OMNIROUTE_API_KEY` yapılandırılmadığı sürece hiçbir ağ veya ücretli model çağrısı yapmaz. Bu açık gerçek çalıştırma olmadan, makine tarafından okunabilir kararı `HOLD` kalır; sentetik payload/call-count ölçümleri tek başına tanıtım kanıtı değildir.
 
-Çağıranlar, ellerinde halihazırda hizalanmış metin bulunduğunda desteklenen bir video kısmına isteğe bağlı bir `transcript.cues` dizisi ekleyebilir. Her işaret `text`, taranan süre içinde sonlu bir `start`/`end` aralığı ve beyaz listede yer alan bir `source` (`client`, `embedded` veya `audio-bridge`) içermelidir; `confidence` varsayılan olarak `1` değerini alır ve `0` ile `1` arasında kalmalıdır. Tam yinelenen işaretler birleştirilir. OmniRoute asla bu meta verilerden transkripsiyon başlatmaz: doğrulanmış işaretler kaynak, güven ve aralık ile birlikte açıklanan sonuca kopyalanır ve kare altyazılarının yanında güvenilmeyen gözlemler olarak sunulur. Geçersiz, aralık dışı veya kökeni olmayan metinler altyazı akışına karıştırılmak yerine reddedilir. Her iki istek gövdesi transkripsiyon kanalı da sağlanan kökeni, kendi kendini iddia eden `embedded` veya `audio-bridge` etiketleri dahil olmak üzere `client` olarak normalleştirir. Bu güvenilen etiketleri yalnızca sunucuya ait bir adaptör, yalnızca koda özel `trustedSource` argümanı aracılığıyla atayabilir; bir istek JSON alanı bu argümana ulaşamaz. Transkripsiyon metni, kökeni ne olursa olsun güvenilmeyen medya kaynaklı içerik olmaya devam eder ve asla yetkilendirmeyi belirlememelidir.
+Arayanlar, halihazırda hizalanmış metne sahip olduklarında, desteklenen bir video bölümüne isteğe bağlı bir `transcript.cues` dizisi ekleyebilirler. Her işaret `text`, incelenen süre içinde sonlu bir `start`/`end` aralığını ve beyaz listeye alınmış bir `source` (`client`, `embedded` veya `audio-bridge`) taşımalıdır; `confidence` varsayılan olarak `1` ve `0` ile `1` arasında kalmalıdır. Tam yinelenen ipuçları daraltılır. OmniRoute hiçbir zaman transkripsiyonu bu meta verilerden başlatmaz: doğrulanmış ipuçları, kaynak, güven ve aralıkla birlikte açıklanan sonuca kopyalanır ve çerçeve başlıklarının yanında güvenilmeyen gözlemler olarak oluşturulur. Geçersiz, kapsam dışı veya kaynaktan bağımsız metin, altyazı akışına karıştırılmak yerine reddedilir. Her iki istek gövdesi transkript kanalı da, kendinden onaylı `embedded` veya `audio-bridge` etiketleri dahil olmak üzere `client` sağlanan kaynağı normalleştirir. Yalnızca sunucuya ait bir bağdaştırıcı bu güvenilir etiketleri salt kod `trustedSource` bağımsız değişkeni aracılığıyla atayabilir; bir istek JSON alanı bu bağımsız değişkene ulaşamaz. Transkript metni, kaynağına bakılmaksızın medyadan türetilmiş güvenilmeyen içerik olarak kalır ve hiçbir zaman yetkilendirmeyi belirlememelidir.
 
-Gelişmiş bir çağırıcı aynı video için bir `audioTranscript` izi sağlayabilir; bu, sunucu transkripsiyonunun kanıtı olarak değil, istemci tarafından sağlanan metin olarak ele alınır. Birleştirme dikişi görsel ve ses gözlemlerini tek bir son tarih ve iptal sinyali altında çalıştırır, bunları ortak bir zaman çizelgesinde sıralar, tam kopyaları birleştirir ve yalnızca bir taraf başarılı olduğunda kısmi bir sonuç bildirir. Geçersiz bir `audioTranscript`, tüm videoyu başarısız kılmak yerine bu kısmi sonuca indirgenir — görsel açıklama tutulur ve ses dalı temizlenmiş bir hata kodu kaydeder. Dal bazında kullanılabilirlik, kısmi bayrağı ve temizlenmiş hata kodları; açıklanan sonuçta, koruma meta verilerinde (`audioFusionRuns`/`audioFusionPartials`/`audioFusionFailureCodes`), sonuç önbelleği meta verilerinde ve köprü birleştirme sayaçlarında korunur. Varsayılan Video Köprüsü yolu, konuşmadan metne dönüştürmeyi çağırmaz veya ikinci bir medya kopyası indirmez; bu açık iz olmadan yalnızca video olarak kalır.
+İleri düzey bir arayan, aynı video için bir `audioTranscript` parçası sağlayabilir; sunucu transkripsiyonunun kanıtı olarak değil, müşteri tarafından sağlanan metin olarak kabul edilir. Füzyon dikişi, görsel ve işitsel gözlemleri tek bir son tarih ve iptal sinyali altında yürütür, bunları ortak bir zaman çizelgesinde sıralar, tam kopyaları daraltır ve yalnızca bir taraf başarılı olduğunda kısmi bir sonuç bildirir. Geçersiz bir `audioTranscript` görsel açıklamanın tutulduğu — kısmi sonucunun bozulmasına neden olur ve ses dalı, videonun tamamını başarısız kılmak yerine, arındırılmış bir hata kodu — kaydeder. Şube başına kullanılabilirlik, kısmi bayrak ve arındırılmış hata kodları, açıklanan sonuçta, korkuluk meta verilerinde (`audioFusionRuns`/`audioFusionPartials`/ `audioFusionFailureCodes`), sonuç önbellek meta verilerinde ve köprü füzyon sayaçlarında korunur. Varsayılan Video Köprüsü yolu, konuşmayı metne dönüştürmeyi başlatmaz veya ikinci bir medya kopyasını indirmez; bu açık parça olmadan yalnızca video olarak kalır.
 
-**Transkript saklama (#12150 P1).** Bu, Video Köprüsü (kendi başına isteğe bağlıdır) herhangi bir transkript ipucu oluşturduğunda otomatik olarak geçerlidir — ayrı bir saklama bayrağı yoktur. Bir istek herhangi bir transkript ipucu oluşturduğunda (çağıran tarafından bildirilen bir `` `transcript` `` veya birleştirilmiş bir `` `audioTranscript` ``), koruma katmanı bunu `` `videoBridgeObserved` `` olarak işaretler ve video açıklamasının sansürlenmiş bir gölgesini oluşturur — her ipucunun serbest metin gövdesinin `` `[redacted-video-transcript]` `` ile değiştirildiği, dizge birleştirilmeden önce yapılandırılmış ipucu alanının değiştirilmesiyle oluşturulan aynı görünüm (asla düzleştirilmiş metin ayrıştırılarak yapılmaz, böylece `` `[inaudible]` ``/`` `[music]` `` gibi `` `]` `` içeren gövdeler dahil olmak üzere hiçbir ipucu içeriği — kötü niyetli veya sıradan — hayatta kalamaz). Kalıcı hale getirilen çağrı günlüğü istek gövdesi, içerik eşitliğiyle eşleştirilerek her video kaynaklı metin parçasını bu sansürlenmiş gölgeyle değiştirir; `fullText` çapası, tamamlanmış çağrı öncesi koruma katmanı yükünden yeniden okunur, böylece daha sonraki zincir koruma katmanları (PII ve kimlik bilgisi maskeleyicileri, öncelikler 10/95) açıklama metnini yerinde yeniden yazdıktan ve sistem istemi/devir/bellek eklemesi mesaj dizisini yeniden şekillendirdikten sonra bile eşleşme başarılı olur. Modele yukarı akışta gönderilen gövde değiştirilmez. Gözlemlenen bir istek ayrıca kalıcı Bellek doldurmaz (hem istek hem de yanıt kaynaklı çıkarım atlanır), bu nedenle modelin kendi yanıtı transkript metnini Bellek'e yansıtamaz.
+**Transkript saklama (#12150 P1).** Bu, Video Bridge'in (kendisi dahil) bir transkript işareti oluşturduğunda otomatik olarak uygulanır — ayrı bir saklama işareti yoktur. Bir istek herhangi bir transkript işaretini (arayan tarafından bildirilen bir `transcript` veya birleştirilmiş `audioTranscript`) işlediğinde, korkuluk onu `videoBridgeObserved` işaretler ve video açıklamasının düzeltilmiş bir gölgesini üretir — her işaretin serbest metin gövdesinin `[redacted-video-transcript]` ile değiştirildiği özdeş bir oluşturma, dize bir araya getirilmeden önce yapılandırılmış işaret alanının değiştirilmesiyle oluşturulur (asla düzleştirilmiş metni ayrıştırarak değil, dolayısıyla işaret içeriği olmaz — ) `[inaudible]`/`[music]` — gibi `]` içeren organlar dahil olmak üzere düşmanca veya sıradan hayatta kalabilir). Kalıcı çağrı günlüğü isteği gövdesi, içerik eşitliğiyle eşleşen, redaksiyona tabi tutulan gölge için videodan türetilmiş her metin parçasını değiştirir; `fullText` çapası, bitmiş çağrı öncesi korkuluk yükünden yeniden okunur, böylece daha sonraki zincir korkulukları ( PII ve kimlik bilgisi maskeleyicileri, öncelikler 10/95) açıklama metnini yerinde yeniden yazdıktan ve system-prompt/handoff/memory enjeksiyonu mesaj dizisini yeniden şekillendirdikten sonra eşleşme hala başarılı olur. Modelin yukarısına gönderilen gövde değişmedi. Gözlemlenen bir istek aynı zamanda dayanıklı bir Bellek doldurmaz (hem istek hem de yanıttan türetilmiş çıkarma atlanır), dolayısıyla modelin kendi yanıtı transkripsiyon metnini Belleğe yansıtamaz.
 
-**Ham video alanları (#12430).** Köprü etkinleştirildiğinde ve yerel video desteği bilinmediğinde veya yokluğunda, tanımlanan `` `transcript` ``/`` `audioTranscript` `` alanları, açıklama hatasından veya bir `` `maxVideos` `` sınırından sonra bile `` `videoBridgeObserved` ``'ü etkinleştirir. `` `null` `` ve boş dizgeler sayılır; eksik alanlar ve video dışı meta veriler sayılmaz. Saklanan kopyalar bu alanları sansürler veya isteği atlar ve önbellekler/Bellek baypas edilir.
+**Ham video alanları (#12430).** Köprü etkinleştirildiğinde ve yerel video desteği bilinmediğinde veya bulunmadığında, tanımlı `transcript`/`audioTranscript` alanları, açıklama hatasından veya `maxVideos` sınırından sonra bile `videoBridgeObserved` etkinleştirir. `null` ve boş dizeler sayılır; Eksik alanlar ve video dışı meta veriler geçerli değildir. Saklanan kopyalar bu alanları düzenler veya isteği atlar ve caches/Memory atlanır.
 
-Bu geri dönüş yollarında, geçerli çağıran ipuçları standart dışı sağlayıcı alanları yerine desteklenen `` `text` ``/`` `input_text` `` parçaları haline gelir. İstek tarafından sağlanan her iki iz de güvenilmeyen `` `client` `` gözlemleri olarak kalır ve videonun açıklanmadığına ve zaman damgalarının medya karşısında doğrulanmadığına dair açık bir uyarı içerir. Mevcut 256 ipucu / 64 KiB toplam ve ipucu başına bütçeler iki iz için birlikte geçerlidir; zaman damgaları, broker'ın 600 saniyelik üst sınırına ve sağlanan herhangi bir odak penceresine uymelidir. Geçersiz izler atılır, rastgele metin olarak iletilmez; birleştirilmiş bütçeleri aşılmadığı sürece geçerli bir kardeş iz kullanılmaya devam edebilir. Boş/null alanlar metin eklemez. Bu geri dönüş tarafından hiçbir medya getirme veya transkripsiyon eklenmez. Transkripsiyon uzantı alanları, geri dönüş video taşıyıcısından ve onun `` `video_url` ``/`` `source` `` nesnelerinden kaldırılır. OpenAI tel izin listesi katı kalır; bilinmeyen yerel video taşıyıcıları kullanılabilir durumda kalır ve bilinen yalnızca metin hedefleri güvenli işaretçileri korur. Yapılandırılmış sansür gölgeleri eklenen transkript metnini korurken, orijinal çağırana ait istek değişmeden kalır. Yerel destekli hedefler ve devre dışı bırakılmış köprüler mevcut baypas davranışını korur.
+Bu geri dönüş yollarında geçerli arayan ipuçları, standart olmayan sağlayıcı alanları yerine desteklenen `text`/`input_text` parçaları haline gelir. İstekle sağlanan parçaların her ikisi de güvenilmeyen `client` gözlemleri olarak kalıyor ve videonun açıklanmadığına ve zaman damgalarının medyaya göre doğrulanmadığına dair açık bir uyarı veriliyor. Mevcut 256-cue/64-KiB toplamı ve işaret başına bütçeler iki yol boyunca birlikte uygulanır; zaman damgaları komisyoncunun 600 saniyelik tavanına ve sağlanan herhangi bir odak penceresine uymalıdır. Geçersiz parçalar atılır, rastgele metin olarak iletilmez; Toplam bütçeleri aşılmadığı sürece geçerli bir kardeş yine de kullanılabilir. Null/empty alanları metin eklemez. Bu geri dönüşte medya getirme veya transkripsiyon eklenmez. Transkript uzantısı alanları, yedek video taşıyıcısından ve onun `video_url`/`source` nesnelerinden kaldırılır. OpenAI wire izin verilenler listesi katı kalır; bilinmeyen yerel video taşıyıcıları kullanılabilir durumda kalır ve bilinen salt metin hedefleri güvenli işaretçileri tutar. Yapılandırılmış redaksiyon gölgeleri, eklenen transkript metnini korurken arayanın sahip olduğu orijinal istek değişmeden kalır. Yerel destekli hedefler ve devre dışı bırakılan köprüler mevcut bypass davranışlarını korur.
 
-Ek saklanan kopyalar aynı gözlemlenen istek sinyalini kullanır. Ham koruma katmanı öncesi istemci-istek anlık görüntüsü, bellek içi beklemedeki istek ve erken reddedilen istek günlüğü, video parçalarındaki transkript alanlarını yapısal olarak değiştirir; boru hattı aşamaları ve bağlam devri tarafından sentezlenen dize istemleri, kalıcı istek gövdesi havuzunda sansürlenir. Kalıcı hale getirilen `` `video_content_removed` `` işaretçisi, kasıtlı olarak atlanan metni yeniden oluşturmak yerine `` `previous_response_id` `` devamının güvenli bir şekilde başarısız olmasına neden olur. Gözlemlenen bir istek, oturum açmadan önce parça başına sansür gölgesini kaybederse veya birkaç video gölgesinden biri bile daha sonraki istek mutasyonlarından sonra eşleşmezse, kısmen sansürlenmiş bir transkript saklamak yerine saklanan istek gövdesi tamamen atlanır.
+Tutulan ek kopyalar aynı gözlemlenen istek sinyalini kullanır. Ham güvenlik öncesi istemci isteği anlık görüntüsü, bellek içi bekleyen istek ve erken reddedilen istek günlüğü, yapısal olarak video bölümlerindeki transkript alanlarının yerini alır; İşlem hattı aşamaları ve bağlam aktarımı tarafından sentezlenen dize istemleri, kalıcı istek gövdesi havuzunda düzenlenir. Kalıcı `video_content_removed` işaretçisi, kasıtlı olarak atılan metni yeniden oluşturmak yerine `previous_response_id` devamının başarısız şekilde kapatılmasını sağlar. Gözlemlenen bir istek, günlüğe kaydetmeden önce parça başına redaksiyon gölgesini kaybederse veya hatta birkaç video gölgesinden biri daha sonraki istek mutasyonlarından sonra eşleşmezse, kısmen düzeltilmiş bir transkriptin saklanması yerine tutulan istek gövdesi tamamen çıkarılır.
 
-Gözlemlenen bir istek için, model yanıtı yapılandırılmış bir ipucu sınırı olmadan transkriptin herhangi bir bölümünü alıntılayabilir. Bu nedenle kalıcı hale getirilen çağrı günlüğü `` `responseBody` `` alanı bir atlama işaretçisiyle değiştirilir; ayrıntılı boru hattı yapıtı (yukarı akış/istemci gövdelerini ve akış parçalarını içerebilir) saklanmaz. Anlamsal, eşdurumluluk ve akıl yürütme yeniden oynatma önbellekleri, söz konusu istek için okuma ve yazmaları baypas eder. Sağlayıcı isteği ve istemci tarafından görünen yanıt değişmeden kalır. Ayrıntılı yapıt atlandığında, erken canlı tutma baytları geçici tampondan boşaltılır. Kiro'nun bozuk EventStream uyarısı yalnızca yük bayt sayısını bildirir, içeriğini veya JSON ayrıştırıcısının ham hatasını asla bildirmez.
-Bu, ilgili olmayan her sağlayıcı/eklenti tanısının denetlendiğini iddia etmez; daha geniş saklanan havuz taraması #11658 altında izlenmektedir.
+Gözlemlenen bir istek için, bir model yanıtı, transkriptin herhangi bir bölümünü yapılandırılmış bir ipucu sınırı olmadan alıntılayabilir. Bu nedenle kalıcı çağrı günlüğü `responseBody` yerini bir atlama işaretçisi alır; ayrıntılı ardışık düzen yapıtı ( upstream/client gövdelerini ve akış parçalarını içerebilen) korunmaz. Semantik, bağımsız olma ve akıl yürütme-tekrar yürütme önbellekleri bu istek için okuma ve yazma işlemlerini atlar. Sağlayıcının isteği ve müşterinin görebileceği yanıt değişmeden kalır. Ayrıntılı yapay yapı atlandığında, erken canlı tutma baytları geçici arabellekten boşaltılır. Kiro hatalı biçimlendirilmiş EventStream uyarısı yalnızca yük bayt sayısını bildirir, içeriğini veya JSON ayrıştırıcısının ham hatasını bildirmez. Bu, ilgisiz her provider/plugin teşhisinin denetlendiğini iddia etmez; daha geniş tutulan lavabo taraması #11658'de izlenir.
 
-Dahili `` `/api/modality-bridge/video/drilldown` `` yaşam döngüsü, ayrı bir loopback/token ile kimliği doğrulanmış bir önbellek altyapısıdır. Her işlem ayrıca kanonik bir opak asıl kimliği gerektirir. Bir üretim çağırıcısı etkinleştirilmeden önce, bu kimliği kimliği doğrulanmış kiracıdan türetmelidir ve asla istemci tarafından seçilen bir değeri iletmemelidir. Önbellek anahtarları, bu aslı kanonik oturum ve video referans kimliklerine bağlar, yalnızca SHA-256 ile türetilmiş anahtarlarını saklar ve hem okuma işlemlerini hem de silmeyi aynı asıl ile sınırlandırır. Önbellek, girdi başına en fazla 16 türetilmiş JPEG karesi depolar, on dakika sonra bunların süresini sonlandırır ve sınırlı `` `start` ``/`` `end` `` okumalarını veya açık oturum silmeyi destekler.
+Dahili `/api/modality-bridge/video/drilldown` yaşam döngüsü ayrı bir loopback/token-authenticated önbellek alt katmanıdır. Her işlem aynı zamanda kanonik opak bir prensip ID gerektirir. Bir üretim çağırıcısı etkinleştirilmeden önce, bu ID kimliği doğrulanmış kiracıdan türetmeli ve istemci tarafından seçilen bir değeri asla iletmemelidir. Önbellek anahtarları bu sorumluyu kanonik oturuma ve IDs video referansına bağlar, yalnızca SHA-256-derived anahtarlarını saklar ve hem okuma hem de silme işlemlerini aynı sorumlunun kapsamına alır. Önbellek, giriş başına en fazla 16 türetilmiş JPEG karesi depolar, on dakika sonra bunların geçerliliğini sona erdirir ve sınırlı `start`/`end` okumalarını veya açık oturum silmeyi destekler.
 
-Her asıl, 16 girdi ve 64 MiB kanonik JPEG verisiyle sınırlıdır. Bu sınırlar, genel 64 girdi / 256 MiB üst sınırından bağımsızdır: Asıl kota baskısı, genel LRU çıkarma işlemi değerlendirilmeden önce yalnızca o asılın en son kullanılmamış girdilerini çıkarır. Süresi dolmuş girdiler, önbellek etkinliğinde hem asıl hem de genel muhasebeden temizlenirken, iptal ve doğrulama hatası kısmi bir değiştirmeyi taahhüt etmez.
+Her anapara 16 giriş ve 64 MiB kanonik JPEG verisi ile sınırlıdır. Bu sınırlar genel 64-entry/256 MiB tavanından bağımsızdır: asıl kota baskısı, küresel LRU tahliyesi dikkate alınmadan önce yalnızca anaparanın en az kullanılan girişlerini tahliye eder. Süresi dolmuş girişler, önbellek etkinliğinde hem ana hem de genel muhasebeden silinir; iptal ve doğrulama başarısızlığı ise kısmi bir değişiklik gerçekleştirmez.
 
-Önbellek; kanonik olmayan Base64, aşırı dolgu, JPEG olmayan medya, bozuk veya kesilmiş JPEG'ler ile sınırlı bir tam görüntü `sharp` kod çözme işlemi sırasında uyarı üreten JPEG'leri reddeder. Kabul edilen her görüntüyü kanonik bir JPEG olarak yeniden kodlar, çağrı yapan alanlara güvenmek yerine genişlik ve yüksekliği çözülen baytlardan türetir ve takip eden poliglot baytları tutmak yerine atar. Yalnızca sınırlı kanonik sıkıştırılmış arabellek her iki kotaya da yüklenir. JSON iletim sınırı, 32 MiB çözülmüş girdi tavanı için Base64 ek yükünü içerir. Depolanan her türetim; doğrulanmış JPEG formatını/çözünürlüğünü, örnekleme politikasını, türetim sürümünü, oluşturulma zamanını, sunucu tarafından hesaplanan içerik özetini ve hash'lenmiş üst referansını ile güvenilir çağrıçının üst içerik hash'ini kaydeder. İptal, atomik önbellek taahhüdünden önce asenkron kod çözme/hash aşamaları arasında kontrol edilir.
+Önbellek, standart olmayan Base64'ü, aşırı dolguyu, JPEG olmayan ortamı, hatalı biçimlendirilmiş veya kesilmiş JPEGs ve sınırlı tam görüntü `sharp` kod çözme sırasında bir uyarı üreten JPEGs reddeder. Kabul edilen her görüntüyü kanonik bir JPEG olarak yeniden kodlar, çağıran alanlarına güvenmek yerine genişliği ve yüksekliği kodu çözülmüş baytlardan türetir ve sondaki çok dilli baytları korumak yerine atar. Her iki kotaya da yalnızca sınırlı kurallı sıkıştırılmış arabellek yüklenir. JSON kablo sınırı, 32 MiB çözülmüş giriş tavanı için Base64 ek yükünü içerir. Her depolanan türetme, doğrulanmış JPEG format/resolution, örnekleme politikasını, türetme sürümünü, oluşturma zamanını, sunucu tarafından hesaplanan içerik karmasını ve karma edilmiş üst referansını ve ayrıca güvenilen arayanın üst içerik karmasını kaydeder. İptal, atomik önbellek işlemi öncesinde eşzamansız decode/hash aşamaları arasında kontrol edilir.
 
-Bu dilim, henüz üretime hazır bir üreticiyi rotaya bağlamaz ve çok çözünürlüklü varyant seçimi sağlamaz. Bu nedenle şeffaf Video Köprüsü istek yolu ek bir iş yükü getirmezken, kiracıya bağlı ana türetimi ve eksiksiz FU-08 çok çözünürlüklü yaşam döngüsü, eksiksiz bir davranış olarak belgelenmek yerine açık takip çalışmaları olarak kalmaya devam etmektedir.
+Bu dilim henüz bir üretim üreticisini rotaya bağlamamaktadır ve çoklu çözünürlüklü varyant seçimi sağlamamaktadır. Şeffaf Video Köprüsü istek yolu bu nedenle hiçbir ek çalışmaya gerek duymazken, kiracıya bağlı asıl türetme ve tam FU-08 çoklu çözünürlüklü yaşam döngüsü, tam davranış olarak belgelenmek yerine açık takip çalışması olarak kalır.
 
-Kareler, yapılandırılmış Video modeliyle sırayla altyazılanır. Boş bir Video geçersiz kılma ayarı Vision ayarını devralır; her ikisi de boşsa Vision otomatik yönlendiricisi etkin vizyon yetenekli modeli seçer. Başarılı altyazılar, orijinal kısmı, metni aynı zamanda güvenilmeyen medya kaynaklı bir gözlem olarak işaretleyen ve alt akıştaki modellere medyada bulunan talimatları izlememelerini söyleyen kararlı bir `[Video description:` önekiyle değiştirir. Kare altyazısı önbellek anahtarları JPEG baytlarını, istemi, zaman damgasını ve etkin modeli içerir; yalnızca başarılı altyazılar önbelleğe alınır. Önbellek girdileri, yedek bir model dahil olmak üzere gerçek başarılı üretici modelini korur; farklı kareler farklı modeller tarafından üretildiğinde köprü `mixed` bildirir. Önbellek isabeti, bunu istenen yönlendirme planı olarak yeniden etiketlemek yerine söz konusu üretici kimliğini yeniden kullanır. Tüm video sonuç önbelleği, çıktıyı değiştiren her girdiye göre anahtarlanır — istem, etkin model, örnekleme politikası, kare sayısı, anlamsal analiz modu, normalleştirilmiş odak ipucunun SHA-256 parmak izi, odak penceresi, `transcript`, `audioTranscript` ve temas sayfası bayrağı — dolayısıyla bu boyutlardan herhangi birini değiştirmek bir önbellek ıskalamasıdır, asla eski bir yeniden kullanım değildir. Görsel tekilleştirme politika sürümü, eşik ve sınırlı aday kare sayısı da sonuç önbelleği anahtarında ve meta verilerinde açıktır; bu nedenle bir politika değişikliği eski bir tüm video açıklamasını yeniden kullanamaz. Sonuç önbelleği v4 meta verileri modu ve parmak izini saklar, asla ham kullanıcı görevini saklamaz. Koruma katmanı meta verileri hem istenen hem de etkin analiz modlarını bildirir; kullanılabilir kullanıcı metni olmaksızın istenen `focused` mod, etkin olarak `full` olarak bildirilir.
+Çerçevelere, yapılandırılmış Video modeliyle sırayla altyazı eklenir. Boş bir Video geçersiz kılma, Görüş ayarını devralır; her ikisi de boşsa Vision otomatik yönlendirici etkili görme özellikli modeli seçer. Başarılı altyazılar, orijinal parçayı, aynı zamanda metni güvenilmez medyadan türetilmiş bir gözlem olarak işaretleyen ve alt modellere medyada bulunan talimatları takip etmemelerini söyleyen sabit bir `[Video description:` önekiyle değiştirir. Çerçeve başlığı önbellek anahtarları JPEG baytlarını, istemi, zaman damgasını ve etkili modeli içerir; yalnızca başarılı altyazılar önbelleğe alınır. Önbellek girişleri, bir geri dönüş modeli de dahil olmak üzere gerçek başarılı üretici modelini korur; köprü, farklı modeller tarafından farklı çerçeveler üretildiğinde `mixed` raporunu verir. Bir önbellek isabeti, bu üretici kimliğini istenen yönlendirme planı olarak yeniden etiketlemek yerine yeniden kullanır. Tüm video sonuç önbelleği, çıktı — istemini, etkili modeli, örnekleme politikasını, kare sayısını, anlamsal analiz modunu, normalleştirilmiş odak ipucunun SHA-256 parmak izini, odak penceresini, `transcript`, `audioTranscript` ve iletişim sayfası bayrağını — değiştiren her girişe anahtarlanır; dolayısıyla bu boyutlardan herhangi birinin değiştirilmesi bir önbellek kaçırmadır, asla eskimiş bir yeniden kullanım değildir. Görsel yinelenenleri kaldırma ilkesi sürümü, eşik ve sınırlı aday çerçeve sayısı da sonuç önbellek anahtarında ve meta verilerde açıkça belirtilmiştir; bu nedenle bir politika değişikliği, eski bir videonun tamamını kapsayan açıklamayı yeniden kullanamaz. Sonuç önbelleği v4 meta verileri, ham kullanıcı görevini asla değil, modu ve parmak izini korur. Guardrail meta verileri hem talep edilen hem de etkili analiz modlarını rapor eder; Kullanılabilir kullanıcı metni olmayan talep edilen bir `focused` modu etkili bir şekilde `full` olarak rapor edilir.
 
-Koruma katmanı desteklenen her video parçasını çıkarır ancak `modalityBridgeVideoMaxVideos` değerinden fazlasını açıklamaz. `supportsVideo === false` olduğu kanıtlanmış bir hedef için, başarısız ve sınır aşan videolar açık güvenli metin işaretçilerine dönüşür, böylece hiçbir ham video hayatta kalmaz. Yetenek bilinmediğinde, bu parçalar video taşıyıcılarını korur; herhangi bir yedek transkript yukarıdaki sınırlı metin dönüşümünü izler. `supportsVideo === true` olan hedefler köprüyü atlar. İstemci istek iptal sinyali; indirme, aracı kuyruğu, alt süreçler ve altyazı çağrıları boyunca yayılır; iptaller videolar arasında durur ve hiçbir zaman ham medyaya açık şekilde savunmasız kalmaz.
+Korkuluk, desteklenen her video parçasını çıkarır ancak `modalityBridgeVideoMaxVideos` fazlasını tanımlamaz. `supportsVideo === false` sahip olduğu kanıtlanmış bir hedef için, başarısız olan ve limiti aşan videolar açık güvenli metin işaretçileri haline gelir ve böylece hiçbir ham video hayatta kalmaz. Yetenek bilinmediğinde bu parçalar video taşıyıcılarını korur; herhangi bir geri dönüş transkripti yukarıdaki sınırlı metin dönüşümünü takip eder. `supportsVideo === true` hedefler köprüyü atlar. İstemci isteğini iptal etme sinyali, indirme, aracı kuyruğu, alt işlemler ve altyazı çağrıları aracılığıyla yayılır; videolar arasındaki duraklamayı iptal eder ve asla ham medyaya açılmaz.
 
-Çalışma zamanı ayarları Veritabanı desteklidir ve Zod ile doğrulanmıştır:
+Çalışma zamanı ayarları DB desteklidir ve Zod tarafından doğrulanmıştır:
 
-| Anahtar                             | Varsayılan  | Aralık / davranış                                                                                                 |
-| ----------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| `modalityBridgeVideoEnabled`        | `false`     | İsteğe bağlı çalışma zamanı, katılım gerektirir (opt-in)                                                          |
-| `modalityBridgeVideoAnalysisMode`   | `"full"`    | `full`, genel altyazıları korur; `focused`, sınırlı ve güvenilmeyen en son kullanıcı bağlamını kullanır           |
-| `modalityBridgeVideoModel`          | `""`        | Vision Bridge modelini devralır                                                                                   |
-| `modalityBridgeVideoFrameCount`     | `8`         | 1–16                                                                                                              |
-| `modalityBridgeVideoSamplingPolicy` | `"uniform"` | `uniform`, `scene_aware` veya orantısal `segment_aware`; dedektör arızası durumunda `uniform` değerine geri döner |
-| `modalityBridgeVideoMaxVideos`      | `1`         | 1–4                                                                                                               |
-| `modalityBridgeVideoTimeout`        | `120000`    | 1000–120000 ms                                                                                                    |
+| Anahtar                             | Varsayılan  | Aralık / davranış                                                                                  |
+| ----------------------------------- | ----------- | -------------------------------------------------------------------------------------------------- |
+| `modalityBridgeVideoEnabled`        | `false`     | İsteğe bağlı çalışma zamanı, katılım                                                               |
+| `modalityBridgeVideoAnalysisMode`   | `"full"`    | `full` genel başlıkları korur; `focused` sınırlı, güvenilmeyen en son kullanıcı bağlamını kullanır |
+| `modalityBridgeVideoModel`          | `""`        | Vision Bridge modelini devralın                                                                    |
+| `modalityBridgeVideoFrameCount`     | `8`         | 1–16                                                                                               |
+| `modalityBridgeVideoSamplingPolicy` | `"uniform"` | `uniform`, `scene_aware` veya orantılı `segment_aware`; dedektör arızası `uniform` geri dönüyor    |
+| `modalityBridgeVideoMaxVideos`      | `1`         | 1–4                                                                                                |
+| `modalityBridgeVideoTimeout`        | `120000`    | 1000–120000 ms                                                                                     |
 
-120 saniyenin üzerindeki eski kalıcı Video zaman aşımı değerleri aracı son tarihine göre sınırlandırılır; bu sınırın üzerindeki yeni ayar yazma işlemleri reddedilir. `GET /api/modality-bridge/video/runtime`, kimlik doğrulama veya çalışma zamanı yoklamasından önce güvenilir damgalı geri döngü konumu gerektirir, ardından yönetim kimlik doğrulaması gerektirir. Yalnızca `available`, temizlenmiş FFmpeg/ffprobe sürümlerini ve çalışma zamanı kullanılamadığında sabit bir neden döndürür. Dahili çıkarma uç noktası herkese açık bir yükleme API'si değildir: kuyruk doygunluğu `503` ve `Retry-After` döndürür, çağrı yapan tarafın bağlantıyı kesmesi `499` döndürür ve sabit aracı son tarihi `504` döndürür. Dönüştürülen yanıtlar, Vision veya Audio segmentlerini kaldırmadan merkezi `x-omniroute-modality-bridge` başlığına `video->text;model=<visionModel>;parts=<videos>` ekler.
+Eski kalıcı 120 saniyenin üzerindeki video zaman aşımı değerleri aracının son teslim tarihine sabitlenir; bu sınırın üzerindeki yeni ayar yazıları reddedilir. `GET /api/modality-bridge/video/runtime` kimlik doğrulama veya çalışma zamanı incelemesinden önce güvenilir damgalı geridöngü konumu gerektirir, ardından yönetim kimlik doğrulaması gerektirir. Çalışma zamanı kullanılamadığında yalnızca `available`, temizlenmiş FFmpeg/ffprobe sürümlerini ve sabit bir nedeni döndürür. Dahili çıkarma uç noktası genel bir yükleme API değildir: kuyruk doygunluğu `503` artı `Retry-After` döndürür, arayan bağlantının kesilmesi `499` döndürür ve sabit aracı son tarihi `504` döndürür. Dönüştürülen yanıtlar, Görüntü veya Ses segmentlerini kaldırmadan merkezi `x-omniroute-modality-bridge` başlığına `video->text;model=<visionModel>;parts=<videos>` ekler.
 
 ### PII Maskeleyici (`piiMasker.ts`)
 
-**Her iki** aşamada da çalışır.
+Devam ediyor** ikisi birden** aşamalar.
 
-- **`preCall`**, payload'ı klonlar, `system`, `messages`, `input` ve `prompt` (düz metin öğeleri dahil) alanlarını tarar ve string `content`/`text` alanlarına `processPII()` (ilgili yer: `@/shared/utils/inputSanitizer`) uygular. `PII_REDACTION_ENABLED=true` olduğunda, tespit edilen PII, giden payload'da maskelenir. Bu durum, `INPUT_SANITIZER_MODE`'dan (yalnızca prompt-injection politikasını kontrol eder) bağımsızdır. Maskeleme kapalıyken çağrı, içeriği yeniden yazmadan tespit sayılarını kaydeder.
-- **`postCall`**, yanıtı derinlemesine (deep-clone) klonlar, `sanitizePIIResponse()` fonksiyonunu ve Responses API yapısına uygun maskeleyiciyi (`maskResponsesOutput` — `output_text` ve `output[].content[].text` alanlarını kapsar) çalıştırır. Herhangi bir maskeleme gerçekleşirse, değiştirilen yanıt orijinalinin yerini alır.
+- **`preCall`** yükü klonlar, `system`, `messages`, `input` ve `prompt` (düz dize öğeleri dahil) yürütür ve `processPII()` ( `@/shared/utils/inputSanitizer`) `content`/`text` dize alanlarına uygular. `PII_REDACTION_ENABLED=true` olduğunda, algılanan PII giden veri yükünde çıkarılır. Bu, `INPUT_SANITIZER_MODE` bağımsızdır (yalnızca istem ekleme ilkesini denetler). Redaksiyon kapalıyken, çağrı kayıtlarının tespiti içeriğin yeniden yazılmasına gerek kalmadan sayılır.
+- **`postCall`** Yanıtı derin klonlar, `sanitizePIIResponse()` artı Responses-API-şekil maskeleyicisini çalıştırır (`maskResponsesOutput` — `output_text` ve `output[].content[].text` kapsar). Herhangi bir düzeltme meydana gelirse, değiştirilen yanıt orijinalin yerine geçer.
 
-Güvenlik katmanı asla engelleme yapmaz; yalnızca açıklama ekler (`meta.detections`, `meta.redacted`) veya yeniden yazar.
+Korkuluk asla engellemez; yalnızca açıklama ekler (`meta.detections`, `meta.redacted`) veya yeniden yazar.
 
-#### Türe göre seçim, özel kalıplar ve tespit sayaçları
+#### Türe göre seçim, özel modeller ve tespit sayaçları
 
-**Dashboard → Settings → Security → PII masking** ayarı, _ne tür verilerin_ maskeleneceğini belirler. Bu ayar maskelemeyi açmaz; maskeleme hâlâ varsayılan olarak kapalı olan `PII_REDACTION_ENABLED` (istek) ve `PII_RESPONSE_SANITIZATION` (yanıt + SSE) tarafından kontrol edilir.
+**Kontrol Paneli → Ayarları → Güvenlik → PII maskeleme** _neyin_ maskeleneceğini seçer. Maskelemeyi açmaz: bu hala `PII_REDACTION_ENABLED` (istek) ve `PII_RESPONSE_SANITIZATION` (yanıt + SSE), her ikisi de varsayılan olarak kapalıdır.
 
-- **Türe göre seçim** — yerleşik kimlikler `src/shared/constants/piiTypes.ts` (`PII_BUILTIN_TYPES`) içinde listelenmiştir. Değerin atanmamış olması tüm türler anlamına gelir (bu ayar var olmadan önceki davranış). İstek motorunun `ssn_us` kalıbı `ssn` ile eşleşir. Şablonlar (Minimal, Standard, Financial, Brazilian, USA, Full) yalnızca arayüzdeki onay kutularını doldurur.
-- **Özel kalıplar** — 20'ye kadar regex veya joker karakter kalıbı (`*` = 64'e kadar boşluk dışı karakter, `?` = tek karakter). Eşleşmeler `[CUSTOM_REDACTED]` haline gelir. Her kalıp `compilePiiCustomPattern()` (`src/shared/utils/piiCustomPatterns.ts`) fonksiyonundan geçer: en fazla 500 karakter, `g i m s u` ile sınırlı bayraklar, derlenebilir olmalı, `safe-regex` (felaket niteliğinde geri izleme - catastrophic backtracking) testini geçmeli ve boş bir dize ya da maskeleme yer tutucusu ile eşleşmemelidir. Başarısız olan bir kalıp hem kaydedilirken hem de test edilirken reddedilir; ayrıca başarısız olan kayıtlı bir satır, derlenmek yerine çalışma zamanında atlanır. Özel kalıplar yalnızca maskeleme etkinken çalışır.
-- **Tespit sayaçları** — bellekte tutulan ve yeniden başlatıldığında sıfırlanan türe göre sayaçlar (eşleşen değerler asla saklanmaz, `src/lib/pii/piiDetectionStats.ts`). Bunlar yalnızca maskeleme etkinken artar.
+- **Tür başına seçim** — yerleşik kimlikler `src/shared/constants/piiTypes.ts` (`PII_BUILTIN_TYPES`) içinde listelenir. Ayarlanmamış, her tür anlamına gelir (bu ayar mevcut olmadan önceki davranış). İstek motorunun `ssn_us` modeli `ssn` ile eşleşir. Şablonlar (Minimal, Standart, Mali, Brezilya, USA, GDPR, POPIA, Tam) yalnızca UI içindeki onay kutularını doldurur.
+- **GDPR ve POPIA tanımlayıcıları** — EU ve Güney Afrika kişisel tanımlayıcılarını kapsayan on iki yerleşik kimlik (aşağıdaki tablo). Regex'leri, doğrulayıcıları ve yetki etiketleri, hem yanıt temizleyicinin (`src/lib/piiSanitizer.ts`) hem de istek maskeleyicinin (`src/shared/utils/inputSanitizer.ts`) tükettiği `src/shared/utils/piiPatterns.ts` adlı tek bir tabloda bulunur. Bir eşleşme yalnızca doğrulayıcısı onu kabul ettiğinde düzenlenir; çıplak bir rakam dizisi asla yeterli değildir. Bu kimlikler var olmadan önce daraltılmış bir seçimi kaydeden operatör, yeni kimlikler işaretlenene kadar sahip olduğu davranışı korur.
+- **Özel desenler** — en fazla 20 normal ifade veya joker karakter deseni (`*` = en fazla 64 boşluk olmayan karakter, `?` = bir). Eşleşmeler `[CUSTOM_REDACTED]` olur. Her kalıp `compilePiiCustomPattern()` (`src/shared/utils/piiCustomPatterns.ts`) üzerinden geçer: en fazla 500 karakter, `g i m s u` ile sınırlı bayraklar derlenmeli, `safe-regex` (felaket geri izleme) geçmeli ve boş bir dizeyle veya redaksiyon yer tutucusuyla eşleşmemelidir. Başarısız olan bir model kaydedildiğinde ve test edildiğinde reddedilir ve başarısız olan depolanan bir satır, derlenmek yerine çalışma zamanında atlanır. Özel desenler yalnızca maskeleme açıkken çalışır.
+- **Algılama sayaçları** Tür başına — sayıları (hiçbir zaman eşleşmeyen değerler), bellekte tutulur ve yeniden başlatma sırasında sıfırlanır (`src/lib/pii/piiDetectionStats.ts`). Yalnızca maskeleme açıkken artarlar.
 
-Ayarlar `key_value` tablosunda (`pii_settings` ad alanı, `src/lib/db/piiSettings.ts`) saklanır ve 1 saniyelik bir önbellek üzerinden okunur. API:
+Ayarlar `key_value` tablosunda bulunur ( `pii_settings`, `src/lib/db/piiSettings.ts` ad alanı) ve 1 saniyelik önbellek aracılığıyla okunur. API:
 
-| Metot  | Yol                      | Amaç                                                                                                          |
-| ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/api/settings/pii`      | Bayrak durumu, `enabledTypes`, `customPatterns`, tespit sayaçları                                             |
-| `PUT`  | `/api/settings/pii`      | `enabledTypes` (`null` = tümü) ve/veya `customPatterns` değerlerini değiştirme                                |
-| `POST` | `/api/settings/pii/test` | En fazla 8 KB'lık bir örnek üzerinde tek bir kalıbı dry-run (ön deneme) olarak çalıştır; hiçbir şey saklanmaz |
+| Yöntem | Yol                      | Amaç                                                                            |
+| ------ | ------------------------ | ------------------------------------------------------------------------------- |
+| `GET`  | `/api/settings/pii`      | Bayrak durumu, `enabledTypes`, `customPatterns`, tespit sayaçları               |
+| `PUT`  | `/api/settings/pii`      | `enabledTypes` değiştirin (`null` = tümü) and/or `customPatterns`               |
+| `POST` | `/api/settings/pii/test` | Bir modeli en fazla 8 KB bir numuneye karşı prova yapın; hiçbir şey saklanmıyor |
 
-Üçü de yönetim yetkilendirmesi gerektirir ve istek gövdesini Zod (`src/shared/validation/schemas/piiSettings.ts`) ile doğrular.
+Üçü de yönetim yetkilendirmesi gerektirir ve gövdeyi Zod (`src/shared/validation/schemas/piiSettings.ts`) ile doğrular.
 
-### Prompt Enjeksiyonu (`promptInjection.ts`)
+#### GDPR (EU) ve POPIA (Güney Afrika) tanımlayıcıları
 
-Kullanıcı tarafından sağlanan içerikteki kötü amaçlı yapıları tespit eder ve yapılandırılmış politikayı uygular. Davranış, ortam değişkenleri ve yapıcı (constructor) seçenekleriyle yönlendirilir:
+| İD                  | Tanımlayıcı               | Doğrulama                                                                       |
+| ------------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| `iban`              | IBAN                      | Bilinen ülke, o ülke için tam uzunluk, ISO 13616 MOD-97-10                      |
+| `eu_vat`            | EU VAT numarası           | Bilinen üye devlet öneki ve bu eyaletin sayı biçimi ( VIES araması yok)         |
+| `es_dni_nie`        | İspanyolca DNI / NIE      | Kontrol harfi (değer modu 23); NIE `X/Y/Z` + 7 basamaklıdır                     |
+| `it_codice_fiscale` | İtalyanca Codice Fiscale  | odd/even konum tablolarından kontrol mektubu                                    |
+| `pl_pesel`          | Polonya PESEL             | Ağırlıklı sağlama toplamı ve mevcut kodlanmış bir doğum tarihi                  |
+| `nl_bsn`            | Hollandalı BSN            | 11 geçirmez (ağırlık 9..2, -1)                                                  |
+| `de_steuer_id`      | Alman Steuer-ID           | ISO 7064 Mod 11,10 artı rakam yapısı kuralları (başında 0 yok)                  |
+| `se_personnummer`   | İsveçli kişi numarası     | Luhn'un son on hanesi ve makul bir doğum tarihi (10 veya 12 hane)               |
+| `za_id`             | Güney Afrika ID numarası  | 13 hanenin tamamında Luhn, geçerli doğum month/day, vatandaşlık hanesi 0 veya 1 |
+| `za_phone`          | Güney Afrika telefonu     | `+27` / `27` öneki veya boşluk veya kısa çizgi ile yazılan ulusal `0..` formu   |
+| `za_vat`            | Güney Afrika VAT numarası | `4` ile başlayan 10 hane** Ve** Önceki 48 karakterde "VAT" / "BTW"              |
+| `za_tax_ref`        | Güney Afrika vergi ref.   | `0`-`3`, Luhn ile başlayan 10 hane** Ve** Önceki 48 karakterde "vergi" / "SARS" |
 
-| Ayar            | Ortam Değişkeni                                                                                             | Varsayılan | Etki                                                                                                                                                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Etkin           | `INPUT_SANITIZER_ENABLED`                                                                                   | `true`     | `false` olduğunda güvenlik katmanı erkenden sonlanır (short-circuit).                                                                                                                                                         |
-| Mod             | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                             | `warn`     | Enjeksiyon politikası: `block`, `warn` veya `log`. (`redact` geriye dönük uyumluluk için kabul edilir ancak enjeksiyon metnini **silmez**; istek PII yeniden yazma işlemi `PII_REDACTION_ENABLED` tarafından kontrol edilir.) |
-| Engelleme eşiği | `blockThreshold` seçeneği / `INPUT_SANITIZER_BLOCK_THRESHOLD` (takma ad: `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high`     | Engellemek için gereken minimum önem derecesi. Varsayılan olarak Medium (Orta) seviyesi yalnızca gözlem amaçlıdır.                                                                                                            |
+Salt rakamlı formatlar sipariş numaraları, yapı numaraları ve zaman damgalarıyla çarpıştığı için en zayıf olanlar (`za_vat`, `za_tax_ref`) anahtar kelime ipucuna ihtiyaç duyar ve on basamaklı çıplak bir `0..` numarası Güney Afrika telefon numarası olarak değerlendirilmez. Aralıklı IBANs (`GB29 NWBK ...`) eşleşmiyor. Akış yolunda işaret yalnızca geçerli parçanın içinde aranır. Kimlikler genel telefon kalıplarının önünde yer aldığından, doğrulanmış bir tanımlayıcı kendi yer tutucusunu (`[IBAN_REDACTED]`, `[NL_BSN_REDACTED]`, ...) korur. `gdpr` ve `popia` şablonları sırasıyla EU ve Güney Afrika kimliklerini seçer. Maskeleme isteğe bağlı olarak kalır (Zor Kural #20): burada hiçbir şey varsayılan özellik bayrağını değiştirmez.
 
-**Mod önceliği** (`getMode`): çağıranın `options.mode` değeri → `INJECTION_GUARD_MODE` **DB özellik bayrağı (feature-flag) geçersiz kılma ayarı** (Dashboard → Settings → Feature Flags) → `INJECTION_GUARD_MODE` ortam değişkeni → `INPUT_SANITIZER_MODE` ortam değişkeni → `warn`. Bu nedenle bir pano geçersiz kılma ayarı, ortam değişkenlerini geçersiz kılar; böylece Feature Flags arayüzü çalışan korumayı canlı olarak (yeniden başlatmaya gerek kalmadan) kontrol eder. DB okuma işlemi güvenlidir (fail-safe): hata oluşması durumunda koruma, ortam tabanlı davranışa geri döner ve hiçbir geçersiz kılma ayarlanmadığında davranış, yalnızca ortam değişkeni çözümlemesiyle aynı olur.
+### Hızlı Enjeksiyon (`promptInjection.ts`)
 
-Tespit kaynakları:
+Kullanıcı tarafından sağlanan içerikteki düşmanca yapıları algılar ve yapılandırılmış politikayı uygular. Davranış, ortam değişkenleri ve yapıcı seçenekleri tarafından yönlendirilir:
 
-1. `@/shared/utils/inputSanitizer` içindeki `sanitizeRequest()` (boru hattının diğer yerlerinde kullanılan paylaşılan tespitçi kümesi).
-2. Yerleşik `DEFAULT_GUARD_PATTERNS` (şu anda her ikisi de `high` önem derecesine sahip olan `system_override_inline` ve `markdown_system_block`).
-3. Yapıcı seçenekleri aracılığıyla iletilen isteğe bağlı `customPatterns` (dizeler, regex veya `{ name, pattern, severity }` kayıtları).
+| Ayar             | Ortam değişkeni                                                                                            | Varsayılan | Etki                                                                                                                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Etkinleştirilmiş | `INPUT_SANITIZER_ENABLED`                                                                                  | `true`     | `false` olduğunda korkuluk kısa devre yapar.                                                                                                                                                                     |
+| Mod              | `INJECTION_GUARD_MODE` / `INPUT_SANITIZER_MODE`                                                            | `warn`     | Ekleme politikası: `block`, `warn` veya `log`. (`redact` geri uyumluluk için kabul edilir ancak** Olumsuz** şerit enjeksiyon metni; PII yeniden yazma isteği `PII_REDACTION_ENABLED` tarafından kontrol edilir.) |
+| Blok eşiği       | `blockThreshold` seçeneği / `INPUT_SANITIZER_BLOCK_THRESHOLD` (takma ad `INJECTION_GUARD_BLOCK_THRESHOLD`) | `high`     | Engellemek için gereken minimum önem derecesi. Medium, varsayılan olarak yalnızca gözlem içindir.                                                                                                                |
 
-`mode === "block"` olduğunda **ve** en az bir tespit önem eşiğini karşıladığında, `preCall` şu değeri döndürür: `{ block: true, message: "Request rejected: suspicious content detected" }`. `warn`/`log` modlarında güvenlik bariyeri loglama yapar ancak çağrıya izin verir. Paylaşılan yardımcı fonksiyon `evaluatePromptInjection()`, kayıt defteri üzerinden gitmeden istemleri değerlendirmesi gereken çağırıcılar için de dışarı aktarılır.
+**Mod önceliği** (`getMode`): arayan `options.mode` → `INJECTION_GUARD_MODE`**DB özellik bayrağını geçersiz kılma** (Kontrol Paneli → Ayarları → Özellik Bayrakları) → `INJECTION_GUARD_MODE` env → `INPUT_SANITIZER_MODE` env → `warn`. Bu nedenle, bir kontrol paneli geçersiz kılma, env değişkenlerine karşı galip gelir, böylece Özellik Bayrakları UI çalışan korumayı canlı olarak kontrol eder (yeniden başlatma yok). DB okuması arıza korumalıdır: hata verirse, koruma env tabanlı davranışa geri döner ve hiçbir geçersiz kılma ayarlanmadığında davranış, yalnızca env çözünürlüğüyle aynıdır.
 
-### Tarama sınırı (v3.8.20):
+Algılama kaynakları:
 
-dedektör, birleştirilmiş istem metninin yalnızca **ilk 16 KB**'lık kısmını inceler — `src/shared/utils/inputSanitizer.ts` dosyasındaki `MAX_INJECTION_SCAN_BYTES = 16 * 1024` (16 384 bayt). `detectInjection()` ve `evaluatePromptInjection()`, desen döngüsünü çalıştırmadan önce `slice(0, MAX_INJECTION_SCAN_BYTES)` uygular. Enjeksiyon yönergeleri bir girdinin üst kısmına yakın yer alır; bu nedenle, tespiti zayıflatmadan yüzlerce KB'lık yüklerde regex CPU/GC kullanımını sınırlar (bkz. #3932, #4041).
+1. `@/shared/utils/inputSanitizer` `sanitizeRequest()` (boru hattının başka bir yerinde kullanılan paylaşılan dedektör seti).
+2. Yerleşik `DEFAULT_GUARD_PATTERNS` (şu anda `system_override_inline` ve `markdown_system_block`, her ikisi de `high` önem derecesine sahiptir).
+3. İsteğe bağlı `customPatterns` yapıcı seçenekleri (dizeler, normal ifade veya `{ name, pattern, severity }` kayıtları) aracılığıyla aktarılır.
 
-### Kimlik Bilgisi Maskeleyici (`credentialMasker.ts`)
+Ne zaman `mode === "block"`** Ve** en az bir algılama önem eşiğini karşıladığında `preCall`, `{ block: true, message: "Request rejected: suspicious content detected" }` değerini döndürür. `warn`/`log` modlarında korkuluk günlüğe kaydedilir ancak çağrıya izin verilir. Paylaşılan yardımcı `evaluatePromptInjection()` kayıt defterine girmeden istemleri değerlendirmesi gereken arayanlar için de dışa aktarılır.
 
-**Her iki** aşamada da çalışır, varsayılan zincirde en son sıradadır (öncelik `95`). Giden payload'dan (mesaj içeriği, araç çağrısı argümanları, araç sonuçları) **ve** sağlayıcı yanıtından bilinen API anahtarı / gizli belirteç kalıplarını gizler; böylece bir istemin içine yapıştırılmış (veya bir araç sonucu tarafından geri yansıtılmış) bir kimlik bilgisi, üst düzey sağlayıcıya veya istemciye sızdırılmaz.
+**Tarama sınırı (v3.8.20):** dedektör yalnızca şunları denetler:** ilk 16 KB** `src/shared/utils/inputSanitizer.ts` içindeki birleştirilmiş bilgi istemi metni — `MAX_INJECTION_SCAN_BYTES = 16 * 1024` (16 384 bayt). Desen döngüsünü çalıştırmadan önce hem `detectInjection()` hem de `evaluatePromptInjection()` `slice(0, MAX_INJECTION_SCAN_BYTES)`. Enjeksiyon direktifleri bir girişin üst kısmına yakın bir yerde bulunur, bu nedenle bu, algılamayı zayıflatmadan yüzlerce KB'lik verilerde regex CPU/GC sınırlar (cf. #3932, #4041).
 
-- **Yalnızca isteğe bağlı (Opt-in only)**, PII gizleme ile aynı kural (Katı Kural #20 ile ilişkili): `settings.credentialRedactionEnabled === true` **veya** `CREDENTIAL_REDACTION_ENABLED=true` olmadığı sürece devre dışıdır. Kapalı olduğunda güvenlik bariyeri hiçbir işlem yapmaz (no-op) — asla engellemez ve yeniden yazmaz.
-- `redactCredentials()`, tam payload/yanıt ağacını (`walkValue()`, prototip kirlenmesine karşı güvenli, `WeakSet` aracılığıyla döngü güvenli) tarar ve eşleşmeleri `[REDACTED:<type>]` yer tutucusuyla değiştirerek yalnızca gerçekten değişen dalları klonlar.
-- `CREDENTIAL_PATTERNS`, LLM sağlayıcı anahtarlarını (OpenAI, OpenAI-proj, Anthropic, Google, Hugging Face, Replicate), VCS/SaaS belirteçlerini (GitHub, Slack, Linear, Notion, npm, Postman, Discord), ödeme anahtarlarını (Stripe, Square), bulut anahtarlarını (AWS erişim anahtarı, Twilio, SendGrid, Mailgun), özel anahtarları / JWT'leri, kimlik bilgisi içeren bağlantı dizelerini (`mongodb://user:pass@...`, vb.) ve genel bir `Authorization`/`x-api-key`/`api-key`/`apikey` başlık değeri kalıbını kapsar. Başlık şeklindeki anahtarlar (`authorization`, `x-api-key`, `api-key`, `apikey`), genel metin regex'i yerine yapısal olarak (yalnızca değer, `Bearer ` / `Basic ` gibi şema öneki korunarak) gizlenir.
-- Güvenlik bariyeri asla engellemez; yalnızca yeniden yazar (`modifiedPayload` / `modifiedResponse`) ve etiketler (`meta.credentialsRedacted`, `meta.count`).
+### Kimlik Bilgisi Maskeleyicisi (`credentialMasker.ts`)
 
-Gerileme koruması: `tests/unit/credential-masker-guardrail.test.ts`.
+Devam ediyor** ikisi birden** aşamalar, varsayılan zincirin sonuncusudur (öncelik `95`). Giden yükteki iyi bilinen API anahtarı/gizli belirteç modellerini çıkarır (mesaj içeriği, araç çağrısı bağımsız değişkenleri, araç sonuçları)** Ve** sağlayıcı yanıtı, böylece bir bilgi istemine yapıştırılan (veya bir araç sonucu tarafından yankılanan) kimlik bilgisi yukarı akış sağlayıcısına veya istemciye geri sızdırılmaz.
+
+- **Yalnızca kaydolma** , PII redaksiyonuyla aynı kural (Zor Kural #20-bitişik): `settings.credentialRedactionEnabled === true` olmadığı sürece devre dışı** veya** `CREDENTIAL_REDACTION_ENABLED=true`. Kapalıyken, korkuluk hiçbir zaman bloke etmeyen ve asla yeniden yazmayan, işlem yapmayan bir —.
+- `redactCredentials()` payload/response ağacının tamamını yürütür (`walkValue()`, prototip-pollution-safe, `WeakSet` aracılığıyla çevrim güvenli) ve eşleşmeleri bir `[REDACTED:<type>]` yer tutucuyla değiştirerek yalnızca gerçekten değişen dalları klonlar.
+- `CREDENTIAL_PATTERNS` LLM sağlayıcı anahtarlarını (OpenAI, OpenAI-proj, Anthropic, Google, Hugging Face, Replicate), VCS/SaaS belirteçlerini (GitHub, Slack, Linear, Notion, npm, Postman, Discord), ödeme anahtarlarını (Stripe, Square), bulut anahtarlarını (AWS erişim anahtarı, Twilio, SendGrid, Mailgun), özel anahtarları / JWTs, kimlik bilgisi taşıyan öğeleri kapsar bağlantı dizeleri (`mongodb://user:pass@...` vb.) ve genel bir `Authorization`/`x-api-key`/`api-key`/`apikey` başlık değeri modeli. Başlık şeklindeki anahtarlar (`authorization`, `x-api-key`, `api-key`, `apikey`) genel metin regex'i yerine yapısal olarak düzenlenir (yalnızca değer, `Bearer `/`Basic ` gibi şema öneki korunur).
+- Korkuluk asla engellemez; yalnızca yeniden yazar (`modifiedPayload` / `modifiedResponse`) ve açıklama ekler (`meta.credentialsRedacted`, `meta.count`).
+
+Regresyon koruması: `tests/unit/credential-masker-guardrail.test.ts`.
 
 ## Temel Sözleşme (`base.ts`)
 
@@ -292,8 +299,8 @@ class BaseGuardrail {
 }
 
 interface GuardrailResult<TValue = unknown> {
-  block?: boolean; // true zinciri kısa devre yapar
-  message?: string; // engelleme yapıldığında gösterilir
+  block?: boolean; // true olduğunda zinciri kısa devre yapar
+  message?: string; // engelleme durumunda gösterilir
   meta?: Record<string, unknown> | null;
   modifiedPayload?: TValue; // isteği yeniden yazmak için preCall tarafından döndürülür
   modifiedResponse?: TValue; // yanıtı yeniden yazmak için postCall tarafından döndürülür
@@ -315,134 +322,156 @@ interface GuardrailContext {
 }
 ```
 
-Bir koruma katmanı (guardrail), `void`, `{}` veya `{ block: false }` değerlerinden birini döndürerek "değişiklik yok" sinyali verir. `modifiedPayload`/`modifiedResponse` döndürmek, akış boyunca sonraki koruma katmanları için akan değeri değiştirir. `signal?: AbortSignal` çağıranın yaşam döngüsünü koruma katmanlarına taşır. Bir isteğin iptal edilmesi, kasıtlı bir fail-open istisnasıdır: medya köprüleri, desteklemediği bilinen bir hedefe ham medyayı geri yüklemeden çalışmayı durdurur ve temizlik yapar.
+Bir guardrail, `void`, `{}` veya `{ block: false }` döndürerek "değişiklik yok" sinyali verir. `modifiedPayload`/`modifiedResponse` döndürmek, zincirde ilerideki guardrail'lere akan değerin yerini alır. `signal?: AbortSignal`, çağıranın yaşam döngüsünü guardrail'lere taşır. Bir isteğin iptal edilmesi, kasıtlı fail-open istisnasıdır: medya köprüleri, ham medyayı desteklemediği bilinen bir hedefe geri yüklemeden çalışmayı durdurur ve temizlik yapar.
 
 ## Kayıt Defteri (`registry.ts`)
 
 Tekil (singleton) `guardrailRegistry` şunları sunar:
 
-- `register(guardrail)` — bir koruma katmanı ekler (veya normalleştirilmiş ada göre değiştirir) ve `priority` değerine göre artan sırada yeniden sıralar.
+- `register(guardrail)` — bir guardrail ekler (veya normalleştirilmiş ada göre değiştirir) ve artan `priority` değerine göre yeniden sıralar.
 - `clear()` / `list()` — yönetimsel yardımcılar.
-- `runPreCallHooks(payload, context)` — etkin koruma katmanları üzerinde yineler, yükü (payload) `modifiedPayload` aracılığıyla geçirir ve ilk `block: true` ifadesinde durur.
-- `runPostCallHooks(response, context)` — yanıt tarafında aynı akışı izler.
-- `resetGuardrailsForTests({ registerDefaults })` — durumu temizler ve temiz bir test izolasyonu için isteğe bağlı olarak varsayılanları yeniden kaydeder.
+- `runPreCallHooks(payload, context)` — etkin guardrail'leri sırayla işler, yükü `modifiedPayload` üzerinden zincir boyunca iletir ve ilk `block: true` değerinde durur.
+- `runPostCallHooks(response, context)` — yanıt tarafında aynı akış.
+- `resetGuardrailsForTests({ registerDefaults })` — durumu temizler ve temiz bir test yalıtımı için isteğe bağlı olarak varsayılanları yeniden kaydeder.
 
-Her iki çalıştırıcı da `{ blocked, payload|response, results, guardrail?, message? }` döndürür; burada `results`, izleme (tracing) için yararlı olan ve her koruma katmanına özel `blocked`, `skipped`, `modified`, `error` ve `meta` alanlarını içeren bir `GuardrailExecutionResult` kayıtları dizisidir.
+Her iki çalıştırıcı da `{ blocked, payload|response, results, guardrail?, message? }` döndürür; burada `results`, guardrail başına `blocked`, `skipped`, `modified`, `error` ve `meta` alanlarını içeren `GuardrailExecutionResult` kayıtlarından oluşan bir dizidir ve izleme (tracing) için kullanışlıdır.
 
-### Her İstek İçin Koruma Katmanlarını Devre Dışı Bırakma
+### Guardrail'leri İstek Bazında Devre Dışı Bırakma
 
-`resolveDisabledGuardrails({ apiKeyInfo, body, headers })`, mevcut istek için atlanması gereken koruma katmanı adlarından oluşan, yinelenmeleri giderilmiş bir liste toplar. Bu sırada okunan ve tek bir listede birleştirilen beş kanal vardır (yinelenenler giderilirken ilk görünen kazanır):
+`resolveDisabledGuardrails({ apiKeyInfo, body, headers })`, geçerli istek için atlanması gereken guardrail adlarının tekilleştirilmiş bir listesini oluşturur. Bu sırayla okunan ve tek bir listede birleştirilen beş kanal vardır (tekilleştirmede ilk geçen kazanır):
 
 1. `apiKeyInfo.disabledGuardrails`
-2. İstek gövdesi `disabledGuardrails` (üst düzey)
+2. İstek gövdesi `disabledGuardrails` (en üst düzey)
 3. İstek gövdesi `metadata.disabledGuardrails` (yalnızca `metadata` bir nesne olduğunda)
-4. `x-omniroute-disabled-guardrails` başlığı
-5. Eski `x-disabled-guardrails` başlığı
+4. `x-omniroute-disabled-guardrails` üstbilgisi
+5. Eski (legacy) `x-disabled-guardrails` üstbilgisi
 
-Beş kanalın tümü birleştirilir, iki başlık dahildir: hem `x-omniroute-disabled-guardrails` hem dahi `x-disabled-guardrails` göndermek, listelerinin birleşimini atlar ve boş bir modern başlık artık eski başlığı gizlemez ([#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412), düzeltildiği yer: [#16805](https://github.com/diegosouzapw/OmniRoute/pull/16805)).
+Beş kanalın tümü birleştirilir; iki üstbilgi de buna dahildir: hem `x-omniroute-disabled-guardrails` hem de `x-disabled-guardrails` göndermek, listelerinin birleşimini atlar ve boş bir modern üstbilgi artık eski olanı gizlemez ([#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412), [#16805](https://github.com/diegosouzapw/OmniRoute/pull/16805) ile düzeltildi).
 
-Değerler dizi veya virgülle ayrılmış bir dize olabilir; adlar kırpılır ve küçük harfli kebab-case formatına normalleştirilir (`pii_masker` → `pii-masker`) ve boş girdiler çıkarılır. Sonuç, `context.disabledGuardrails` aracılığıyla kayıt defterine iletilir ve eşleşen koruma katmanları atlanır (`results` içinde `skipped: true`).
+Değerler dizgi dizileri ya da virgülle ayrılmış bir dizgi olabilir; adlar kırpılır ve küçük harfli kebab-case biçimine normalleştirilir (`pii_masker` → `pii-masker`), boş girdiler atılır. Sonuç, `context.disabledGuardrails` aracılığıyla kayıt defterine aktarılır; kayıt defteri eşleşen guardrail'leri atlar (`results` içinde `skipped: true`).
 
-Devre dışı bırakma listesi yalnızca **kayıt defterini (registry)** etkiler. Prompt-injection `block` modu zorunlu bir sınırdır: enjeksiyon koruma ara yazılımı (`src/middleware/promptInjectionGuard.ts`), herhangi bir çağırıcı kontrollü devre dışı bırakma listesi olmadan `evaluatePromptInjection()` fonksiyonunu çağırır (daha önce yaptığı ölü `resolveDisabledGuardrails({ body })` çağrısı [#16934](https://github.com/diegosouzapw/OmniRoute/pull/16934) numaralı PR'da kaldırılmıştır), bu nedenle `prompt-injection` özelliğini devre dışı bırakan bir istek `block` modunda yine de reddedilir. Bu tasarım gereğidir. Devre dışı bırakma kanalları çağırıcı tarafından kontrol edilir (istek gövdesi, meta veriler, başlıklar) ve bir çağırıcı, operatörün belirlediği bir güvenlik kontrolünü kapatamamalıdır ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)). [#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412) numaralı sayıdan gelen başlık birleşimi, yalnızca hangi kayıt defteri koruma katmanlarının atlanacağını değiştirir; istemcinin ara yazılımı atlamasına izin vermez. Zorunlu anahtar bazlı ve grup bazlı koruma katmanı politikaları, v4 RFC [#16417](https://github.com/diegosouzapw/OmniRoute/issues/16417) altında takip edilmektedir. Bkz. [Kapsam ve sınırlar](#coverage-and-limits).
+Devre dışı bırakma listesi yalnızca **kayıt defterini** etkiler. İstem enjeksiyonu `block` modu zorunlu bir sınırdır: injection-guard ara yazılımı (`src/middleware/promptInjectionGuard.ts`), `evaluatePromptInjection()` işlevini çağıranın denetimindeki herhangi bir devre dışı bırakma listesi olmadan çağırır (eskiden yaptığı ölü `resolveDisabledGuardrails({ body })` çağrısı [#16934](https://github.com/diegosouzapw/OmniRoute/pull/16934) ile kaldırıldı); bu nedenle `prompt-injection` guardrail'ini devre dışı bırakan bir istek, `block` modunda yine de reddedilir. Bu, tasarım gereğidir. Devre dışı bırakma kanalları çağıranın denetimindedir (istek gövdesi, metadata, üstbilgiler) ve bir çağıran, operatörün ayarladığı bir güvenlik denetimini kapatamamalıdır ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)). [#16412](https://github.com/diegosouzapw/OmniRoute/issues/16412)'deki üstbilgi birleşimi yalnızca hangi kayıt defteri guardrail'lerinin atlanacağını değiştirir; bir istemcinin ara yazılımı atlatmasına izin vermez. Anahtar başına ve grup başına zorunlu guardrail ilkeleri, v4 RFC'si [#16417](https://github.com/diegosouzapw/OmniRoute/issues/16417)'de izlenmektedir. Bkz. [Kapsam ve sınırlar](#coverage-and-limits).
 
 ## Yürütme Sırası
 
-`src/sse/handlers/chat.ts` ve
-`open-sse/handlers/chatCore.ts` üzerinden akan her istek için ([Kapsam ve sınırlar](#coverage-and-limits) altında listelenen sohbet ailesi rotaları):
+`src/sse/handlers/chat.ts` ve `open-sse/handlers/chatCore.ts` üzerinden akan her istek için ([Kapsam ve sınırlar](#kapsam-ve-sınırlar) altında listelenen sohbet ailesi rotaları):
 
-1. `resolveDisabledGuardrails(...)`, API anahtarından, gövdeden ve
-   başlıklardan atlama listesini oluşturur.
-2. `guardrailRegistry.runPreCallHooks(body, ctx)`, güvenlik kalkanlarını artan
-   öncelik sırasına göre çalıştırır:
-   - Devre dışı bırakılan güvenlik kalkanları `skipped` olarak kaydedilir.
-   - Her güvenlik kalkanının `preCall` aşaması, yükü (payload) `modifiedPayload` aracılığıyla yeniden yazabilir.
-   - İlk `block: true` ifadesi zinciri kısa devre yaptırır ve işleyici
-     bir güvenlik kalkanı reddetme yanıtı döndürür.
-3. (Yeniden yazılmış olabilecek) yük, kombo yönlendirmeye ve upstream
-   dağıtımına aktarılır.
-4. **Yalnızca akış dışı (non-streaming):** yanıt oluşturulduktan sonra,
-   `guardrailRegistry.runPostCallHooks(...)` aynı zinciri yanıt üzerinde çalıştırır. Buradaki `block: true`, upstream yanıtını düşürür ve HTTP 400 döndürür. Akışlı yanıtlar bu adımı tamamen atlar.
+1. `resolveDisabledGuardrails(...)` atlama listesini API anahtarından, gövdeden
+   ve başlıklardan oluşturur.
+2. `guardrailRegistry.runPreCallHooks(body, ctx)` guardrail'leri artan öncelik
+   sırasına göre çalıştırır:
+   - Devre dışı bırakılan guardrail'ler `skipped` olarak kaydedilir.
+   - Her guardrail'in `preCall`'ı, yükü `modifiedPayload` aracılığıyla yeniden yazabilir.
+   - İlk `block: true` zinciri kısa devre yapar ve işleyici bir guardrail reddi
+     yanıtı döndürür.
+3. (Olası yeniden yazılmış) yük, combo yönlendirmesine ve upstream gönderimine akar.
+4. **Yalnızca akışsız (non-streaming):** yanıt oluşturulduktan sonra,
+   `guardrailRegistry.runPostCallHooks(...)` aynı zinciri yanıt üzerinde
+   çalıştırır. Buradaki `block: true`, upstream yanıtını düşürür ve HTTP 400
+   döndürür. Stream edilen yanıtlar bu adımı tamamen atlar.
 
-Hata fırlatan güvenlik kalkanları `error: <message>` ile kaydedilir ve
-`logger.warn` aracılığıyla günlüklenir, ancak zincir devam eder — tasarım gereği hata durumunda açık kalır (fail-open).
+Hata fırlatan guardrail'ler `error: <message>` ile kaydedilir ve `logger.warn`
+aracılığıyla günlüğe yazılır, ancak zincir devam eder — tasarım gereği fail-open.
 
 ## Kapsam ve sınırlar
 
-Güvenlik kalkanı kayıt defteri yalnızca sohbet boru hattına entegre edilmiştir. Bu sınırlar
+Guardrail registry'si yalnızca sohbet pipeline'ına bağlanmıştır. Bu sınırlar
 `tests/unit/guardrail-pipeline-wiring-characterization.test.ts` ve
 `tests/unit/guardrail-pipeline-characterization.test.ts` tarafından sabitlenmiştir;
 davranış değiştiğinde bu testleri bilinçli olarak güncelleyin.
 
-### Kancaların (hooks) çalıştığı yerler
+### Hook'ların çalıştığı yerler
 
-| Kanca / kontrol                         | Çalıştığı yer                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `runPreCallHooks`                       | `handleChat` (`src/sse/handlers/chat.ts`) tarafından işlenen istekler: `/v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/responses` (ve `/v1/responses/*`), `/v1/relay/chat/completions`, `/v1/providers/{provider}/chat/completions`, `/v1/api/chat`, `/v1/antigravity`, `/v1beta/models/*` ve Telegram sohbet proxy'si. Ayrıca pano test uç noktası `/api/guardrails/test`. Bir çağrı öncesi (pre-call) bloğu HTTP 400 döndürür. |
-| `runPostCallHooks`                      | Yalnızca **akış dışı (non-streaming)** sohbet yanıtları (`open-sse/handlers/chatCore/nonStreamingResponse.ts`). Akışlı yanıtlar asla buraya ulaşmaz.                                                                                                                                                                                                                                                                                             |
-| Akış PII                                | `PII_RESPONSE_SANITIZATION` açık olduğunda `streamingPipeline.ts` içinde boru hattına bağlanmış `createPiiSseTransform` (`src/lib/streamingPiiTransform.ts`). Bu bir güvenlik kalkanı değildir, bu nedenle devre dışı bırakma kanalları bunu etkilemez.                                                                                                                                                                                          |
-| Enjeksiyon koruması ara yazılımı (eski) | İstem (prompt) içeren her `/v1` rotası, sohbet ailesi dahil ([rota kapsamı](#injection-guard-route-coverage--red-team-phase-8--block-d) bölümüne bakın). Yalnızca istem enjeksiyonu.                                                                                                                                                                                                                                                             |
+| Hook / kontrol                        | Çalıştığı yerler                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runPreCallHooks`                     | `handleChat` (`src/sse/handlers/chat.ts`) tarafından işlenen istekler: `/v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/responses` (ve `/v1/responses/*`), `/v1/relay/chat/completions`, `/v1/providers/{provider}/chat/completions`, `/v1/api/chat`, `/v1/antigravity`, `/v1beta/models/*` ve Telegram sohbet vekili. Ayrıca pano test uç noktası `/api/guardrails/test`. Bir pre-call engellemesi HTTP 400 döndürür. |
+| `runPostCallHooks`                    | Yalnızca **akışsız (non-streaming)** sohbet yanıtları (`open-sse/handlers/chatCore/nonStreamingResponse.ts`). Stream edilen yanıtlar buna asla ulaşmaz.                                                                                                                                                                                                                                                                               |
+| Streaming PII                         | `createPiiSseTransform` (`src/lib/streamingPiiTransform.ts`); `PII_RESPONSE_SANITIZATION` açıkken `streamingPipeline.ts` içinde pipe'a bağlanır. Bir guardrail değildir, bu nedenle devre dışı bırakma kanalları onu etkilemez.                                                                                                                                                                                                       |
+| Injection-guard middleware'i (legacy) | Sohbet ailesi dahil, prompt taşıyan her `/v1` rotası (bkz. [rota kapsamı](#injection-guard-route-coverage--red-team-phase-8--block-d)). Yalnızca prompt injection.                                                                                                                                                                                                                                                                    |
 
-### Kapsama girmeyenler
+### Kapsanmayanlar
 
-- **Medya, gömmeler ve veri rotaları** (`/v1/images/*`, `/v1/embeddings`,
+- **Medya, embeddings ve veri rotaları** (`/v1/images/*`, `/v1/embeddings`,
   `/v1/audio/*`, `/v1/videos/generations`, `/v1/music/generations`,
-  `/v1/rerank`, `/v1/search`, `/v1/moderations`) asla kayıt defterine ulaşmaz. Orada hiçbir
-  PII maskeleme, kimlik bilgisi maskeleme veya modalite köprüsü çalışmaz. Tek
-  kontrolleri eski enjeksiyon koruması ara yazılımıdır.
-- **Akışlı (streamed) yanıtlar** çağrı sonrası güvenlik kalkanı almaz: çağrı sonrasında `pii-masker` veya
-  `credential-masker` bulunmaz ve çağrı sonrası blok yer almaz. Yalnızca akış PII
-  dönüşümü uygulanır (`PII_RESPONSE_SANITIZATION` açık olduğunda). Akışlı bir
-  yanıtta geri yansıtılan bir kimlik bilgisi gizlenmez (redacted).
-- **Devre dışı bırakma kanalları ve ara yazılım (tasarım gereği):** ara yazılım, arayan tarafından kontrol edilen herhangi bir devre dışı bırakma listesi geçirmeden,
-  `evaluatePromptInjection()` çağrısıyla istem enjeksiyonunu değerlendirir. `block`
-  modu, arayan tarafından kontrol edilen devre dışı bırakmaların (sohbet ailesi rotaları dahil)
-  baypas edemeyeceği zorunlu bir sınırdır
-  ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)). `prompt-injection`'ı
-  devre dışı bırakmak yalnızca kayıt defteri güvenlik kalkanını atlar.
+  `/v1/rerank`, `/v1/search`, `/v1/moderations`) registry'ye asla ulaşmaz. Orada
+  PII maskeleme, kimlik bilgisi maskeleme veya modality bridge çalışmaz. Tek
+  denetimleri, eski (legacy) injection-guard middleware'idir.
+- **Stream edilen yanıtlar** post-call guardrail'i almaz: post-call `pii-masker`
+  veya `credential-masker` yoktur ve post-call engellemesi de yoktur. Yalnızca
+  streaming PII dönüşümü uygulanır (`PII_RESPONSE_SANITIZATION` açıkken). Stream
+  edilen bir yanıtta geri yansıtılan bir kimlik bilgisi maskelenmez.
+- **Devre dışı bırakma kanalları ve middleware (tasarım gereği):** middleware,
+  prompt injection'ı, çağıran kontrolündeki herhangi bir devre dışı bırakma listesi
+  iletmeden, kendi `evaluatePromptInjection()` çağrısıyla değerlendirir. `block`
+  modu, sohbet ailesi rotaları da dahil olmak üzere, çağıran kontrolündeki devre
+  dışı bırakmaların atlatamayacağı zorunlu bir sınırdır
+  ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)).
+  `prompt-injection`'ı devre dışı bırakmak yalnızca registry guardrail'ini atlar.
 
-### Çağrı sonrasından önce bir yanıtı ne görür
+### Post-call'dan önce yanıtı neler görür
 
-Akış dışı yolda sıra şöyledir: bellek çıkarma → yerleşik araç yürütme → çağrı sonrası güvenlik kalkanları → çağrı sonrası blok çıkışı → anlamsal önbellek depolaması.
+Non-streaming yolunda sıra şöyledir: bellek çıkarımı → yerleşik araç
+yürütme → post-call guardrail'leri → post-call engel çıkışı → semantic-cache
+deposuna yazma.
 
-- **Bellek çıkarımı** ve **araç yürütme**, çağrı sonrası koruma mekanizmaları yanıtı yeniden yazmadan veya engellemeden önce yanıtı görür. [#16401](https://github.com/diegosouzapw/OmniRoute/pull/16401) itibarıyla, bellek çıkarımı `PII_RESPONSE_SANITIZATION` etkin olduğunda (hem akış hem de akış dışı modlarda) çıkarılan metni `sanitizePII` üzerinden geçirir; ancak çağrı sonrasında engellenen bir yanıt yine de belleğe ve araçlara sunulmuş olur.
-- **Anlamsal önbellek**, yanıtı çağrı sonrasında saklar, bu nedenle yeniden yazılmış yanıtı kaydeder ve engellenen bir yanıt hiçbir zaman önbelleğe alınmaz. Önbellek girdileri API anahtarına göre anahtarlanır.
+- **Bellek çıkarımı** ve **araç yürütme**, yanıtı çağrı sonrası
+  korumalar onu yeniden yazmadan veya engellemeden önce görür.
+  [#16401](https://github.com/diegosouzapw/OmniRoute/pull/16401)'den bu yana,
+  bellek çıkarımı, `PII_RESPONSE_SANITIZATION` açıkken (hem akışlı hem de
+  akışsız modda) çıkarılan metni `sanitizePII` üzerinden geçirir; ancak çağrı
+  sonrası korumaların daha sonra engellediği bir yanıt yine de belleğe ve
+  araçlara sunulmuş olur.
+- **Anlamsal önbellek**, yanıtı çağrı sonrası işlemin ardından saklar; bu
+  nedenle yeniden yazılmış yanıtı saklar ve engellenen bir yanıt asla önbelleğe
+  alınmaz. Önbellek girdileri API anahtarı başına anahtarlanır.
 
 ## Yapılandırma
 
-Yerleşik güvenlik sınırları tarafından okunan ortam değişkenleri:
+Yerleşik korumalar tarafından okunan ortam değişkenleri:
 
-| Değişken                              | Kullanan                  | Etki                                                                                                               |
-| ------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`        | Algılamayı tamamen devre dışı bırakmak için `false` olarak ayarlayın.                                              |
-| `INPUT_SANITIZER_MODE`                | `prompt-injection`        | Enjeksiyon politikası: `warn`, `block` veya `log`. Eski `redact` değeri enjeksiyon metnini yeniden yazmaz.         |
-| `INJECTION_GUARD_MODE`                | `prompt-injection`        | Enjeksiyon koruması için mod; ayrıca ortam değişkenlerini **geçersiz kılan** (DB > ENV) bir DB özellik bayrağıdır. |
-| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`        | `MODE=block` seçeneğinin reddettiği minimum önem derecesi: `high` (varsayılan), `medium` veya `low`.               |
-| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`        | `INPUT_SANITIZER_BLOCK_THRESHOLD` için eski sürüm takma adı.                                                       |
-| `PII_REDACTION_ENABLED`               | `pii-masker`              | `true` olduğunda, istek PII verileri gizlenir (enjeksiyon modundan bağımsız olarak).                               |
-| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (downstream) | Yanıt tarafındaki maskeleme davranışını kontrol eder.                                                              |
+| Değişken                              | Kullanan                  | Etki                                                                                                              |
+| ------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `INPUT_SANITIZER_ENABLED`             | `prompt-injection`        | Algılamayı tamamen devre dışı bırakmak için `false` olarak ayarlayın.                                             |
+| `INPUT_SANITIZER_MODE`                | `prompt-injection`        | Enjeksiyon politikası: `warn`, `block` veya `log`. Eski `redact` değeri enjeksiyon metnini yeniden yazmaz.        |
+| `INJECTION_GUARD_MODE`                | `prompt-injection`        | Enjeksiyon korumasının modu; ayrıca ortam değişkenlerini **geçersiz kılan** bir DB özellik bayrağıdır (DB > ENV). |
+| `INPUT_SANITIZER_BLOCK_THRESHOLD`     | `prompt-injection`        | `MODE=block` tarafından reddedilecek minimum önem derecesi: `high` (varsayılan), `medium` veya `low`.             |
+| `INJECTION_GUARD_BLOCK_THRESHOLD`     | `prompt-injection`        | `INPUT_SANITIZER_BLOCK_THRESHOLD` için eski takma ad.                                                             |
+| `PII_REDACTION_ENABLED`               | `pii-masker`              | `true` olduğunda, istekteki PII maskelenir (enjeksiyon modundan bağımsız).                                        |
+| `PII_RESPONSE_SANITIZATION` / `_MODE` | `pii-masker` (aşağı akış) | Yanıt tarafındaki maskeleyici davranışını kontrol eder.                                                           |
 
-Modality Bridge güvenlik sınırları, çalışma zamanı yapılandırmasını ortam değişkenlerinden değil, DB destekli ayar deposundan (`getSettings()`) okur. Vision'ın birincil anahtarları şunlardır:
+Modality Bridge korumaları, çalışma zamanı yapılandırmasını ortam
+değişkenlerinden değil, DB destekli ayarlar deposundan (`getSettings()`) okur.
+Vision'ın birincil anahtarları şunlardır:
 `modalityBridgeVisionEnabled`, `modalityBridgeVisionMode`,
 `modalityBridgeVisionModel`, `modalityBridgeVisionTaskAware`,
 `modalityBridgeVisionPrompt`, `modalityBridgeVisionTimeout`,
 `modalityBridgeVisionMaxImages`, `modalityBridgeVisionMaxChars`,
 `modalityBridgeCacheEnabled`, `modalityBridgeCacheTtlMinutes` ve
 `modalityBridgeCacheMaxEntries`. Eski
-`visionBridge*` anahtarları yalnızca belgelenen tek çevrimlik okuma
-yedeklemesi (fallback) olarak kabul edilir; pano yazma işlemleri birincil anahtarları kullanır. Varsayılan değerler ve yedek çözücü `src/shared/constants/modalityBridgeDefaults.ts` dosyasında bulunur; eski sabitler ise `src/shared/constants/visionBridgeDefaults.ts` içinde tutulmaktadır.
+`visionBridge*` anahtarları yalnızca belgelenen tek döngülük okuma geri
+dönüşü olarak kabul edilir; pano yazma işlemleri birincil anahtarları kullanır.
+Varsayılanlar ve geri dönüş çözümleyicisi
+`src/shared/constants/modalityBridgeDefaults.ts` dosyasında bulunur; eski
+sabitler ise `src/shared/constants/visionBridgeDefaults.ts` dosyasında
+tutulur.
 
-Ses (Audio), `modalityBridgeAudioEnabled`, `modalityBridgeAudioModel`,
-`modalityBridgeAudioTimeout` ve `modalityBridgeAudioMaxClips` öğelerinin yanı sıra paylaşılan
-`modalityBridgeCache*` ayarlarını kullanır. Ses için eski anahtar yedeği bulunmamaktadır, çünkü bu anahtarlar Modality Bridge şemasıyla birlikte sunulmuştur.
+Audio, `modalityBridgeAudioEnabled`, `modalityBridgeAudioModel`,
+`modalityBridgeAudioTimeout` ve `modalityBridgeAudioMaxClips` anahtarlarının
+yanı sıra paylaşılan `modalityBridgeCache*` ayarlarını kullanır. Bu anahtarlar
+Modality Bridge şemasıyla birlikte tanıtıldığından Audio için eski anahtar geri
+dönüşü yoktur.
 
 Video, `modalityBridgeVideoEnabled`, `modalityBridgeVideoAnalysisMode`,
 `modalityBridgeVideoModel`,
 `modalityBridgeVideoFrameCount`, `modalityBridgeVideoSamplingPolicy`,
 `modalityBridgeVideoMaxVideos` ve
-`modalityBridgeVideoTimeout` öğelerinin yanı sıra paylaşılan `modalityBridgeCache*` ayarlarını kullanır.
-FFmpeg/ffprobe isteğe bağlı operasyonel bağımlılıklar olduğundan ve kare açıklamaları gecikme ile model maliyeti eklediğinden, varsayılan olarak devre dışıdır.
+`modalityBridgeVideoTimeout` anahtarlarının yanı sıra paylaşılan
+`modalityBridgeCache*` ayarlarını kullanır. FFmpeg/ffprobe isteğe bağlı
+operasyonel bağımlılıklar olduğundan ve kare açıklaması oluşturma işlemi
+gecikme süresi ile model maliyeti eklediğinden, varsayılan olarak devre
+dışıdır.
 
-## Özel Guardrail'ler
+## Özel Koruma Rayları (Guardrails)
 
 ```typescript
 import { BaseGuardrail, guardrailRegistry } from "@/lib/guardrails";
@@ -465,13 +494,12 @@ guardrailRegistry.register(new BudgetGuardrail());
 
 Adımlar:
 
-1. `BaseGuardrail` sınıfını genişleterek `src/lib/guardrails/myGuardrail.ts` dosyasını oluşturun.
-2. `preCall` ve/veya `postCall` metotlarını uygulayın.
-3. Ya içe aktarma anında kaydedin (`registerDefaultGuardrails` üzerinden ekleyin) ya da
-   çalışma zamanında `guardrailRegistry.register(...)` çağrısı yapın — kayıt defteri,
-   aynı normalize edilmiş adı taşıyan önceki herhangi bir guardrail'i
-   değiştirir.
-4. `tests/unit/` altında testler ekleyin (mevcut örnekler:
+1. `BaseGuardrail` sınıfını genişleten `src/lib/guardrails/myGuardrail.ts` dosyasını oluşturun.
+2. `preCall` ve/veya `postCall` metodlarını uygulayın.
+3. Ya içe aktarma (import) zamanında kaydedin (`registerDefaultGuardrails` içinden push ederek) ya da
+   çalışma zamanında `guardrailRegistry.register(...)` çağırın — kayıt defteri (registry),
+   aynı normalize edilmiş ada sahip önceki guardrail'in yerine geçer.
+4. `tests/unit/` altına testler ekleyin (mevcut örnekler:
    `tests/unit/guardrails-registry.test.ts`,
    `tests/unit/prompt-injection-guard.test.ts`,
    `tests/unit/guardrails/visionBridge.test.ts`).
@@ -479,28 +507,29 @@ Adımlar:
 ## Test Etme
 
 Bilinen bir durumdan başlamak için testler arasında `resetGuardrailsForTests()` kullanın.
-Boş bir kayıt defteri ile başlamak ve yalnızca test edilen guardrail'leri kaydetmek için
-`{ registerDefaults: false }` parametresini geçin. Vision Bridge, bağımlılık enjeksiyonunu
-(`deps.getSettings`, `deps.callVisionModel`) kabul eder; Audio Bridge ise ayarlar, yetenekler,
-STT model seçimi, kimlik bilgisi kontrolleri ve deşifre için eşdeğer bağlantı noktalarını
-sunar. Bu sayede testler, veritabanı veya ağ erişimine ihtiyaç duyulmadan her iki akışı da çalıştırabilir.
+Boş bir kayıt defteriyle başlamak ve yalnızca test edilen guardrail'leri kaydetmek için
+`{ registerDefaults: false }` geçirin. Vision Bridge, bağımlılık enjeksiyonunu kabul eder
+(`deps.getSettings`, `deps.callVisionModel`); Audio Bridge ise ayarlar, yetenekler,
+STT model seçimi, kimlik bilgisi kontrolleri ve transkripsiyon için eşdeğer
+bağlantı noktaları (seam) sunar. Böylece testler her iki akışı da veritabanı
+veya ağ erişimi olmadan çalıştırabilir.
 
 ## Ayrıca Bakınız
 
-- `src/lib/guardrails/` — implementasyon
-- `src/shared/utils/inputSanitizer.ts` — prompt enjeksiyonunu ve PII maskelemesini
-  destekleyen ortak dedektör
+- `src/lib/guardrails/` — uygulama
+- `src/shared/utils/inputSanitizer.ts` — prompt-injection ve PII maskelemesini
+  destekleyen paylaşılan algılayıcı
 - `src/shared/constants/visionBridgeDefaults.ts` — Vision Bridge varsayılanları ve
-  zorunlu köprü model listesi
-- `src/shared/constants/modalityBridgeDefaults.ts` — ortak Vision/Audio çalışma zamanı varsayılanları
-- `docs/architecture/RESILIENCE_GUIDE.md` — ortogonal katman (devre kesici, bekleme süreleri)
+  zorunlu köprü (forced-bridge) model listesi
+- `src/shared/constants/modalityBridgeDefaults.ts` — paylaşılan Vision/Audio çalışma zamanı varsayılanları
+- `docs/architecture/RESILIENCE_GUIDE.md` — dik (orthogonal) katman (circuit breaker, cooldown'lar)
 - `docs/reference/ENVIRONMENT.md` — tam ortam değişkeni referansı
 
-## Enjeksiyon koruması rota kapsamı ve kırmızı takım (Phase 8 · Block D)
+## Injection-guard rota kapsamı ve red-team (Faz 8 · Blok D)
 
-Enjeksiyon koruması (`createInjectionGuard` / `withInjectionGuard`), kullanıcı istemlerini
-kabul eden tüm rotaları kapsar. `INJECTION_GUARD_MODE` değerine uyar (varsayılan `warn` = yalnızca loglama;
-`block` = HTTP 400 `SECURITY_001` döndürür).
+Injection-guard (`createInjectionGuard` / `withInjectionGuard`), kullanıcı prompt'u
+kabul eden tüm rotaları kapsar. `INJECTION_GUARD_MODE` değerine uyar (varsayılan `warn` =
+yalnızca log; `block` = HTTP 400 `SECURITY_001` döndürür).
 
 | Tür            | Rotalar                                                                                                                                              | Varsayılan mod |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -508,27 +537,32 @@ kabul eden tüm rotaları kapsar. `INJECTION_GUARD_MODE` değerine uyar (varsay�
 | Üretken        | `/v1/messages`, `/v1/responses`, `/v1/images/generations`, `/v1/images/edits`, `/v1/videos/generations`, `/v1/music/generations`, `/v1/audio/speech` | warn           |
 | Veri           | `/v1/embeddings`, `/v1/rerank`, `/v1/search`, `/v1/moderations`                                                                                      | warn           |
 
-Metin çıkarma (`extractMessageContents`), `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` alanlarını kapsar.
+Metin çıkarımı (`extractMessageContents`), `messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` alanlarını kapsar.
 
-**Kırmızı takım (gecelik, `nightly-llm-security.yml`):** promptfoo, her rotanın OWASP-LLM derlemesini
-`INJECTION_GUARD_MODE=block` altında bloke ettiğini doğrular; garak propları çalıştırır (gizli anahtar olmadan atlar).
-`moderations`, tutarlılık için dahildir. Blok modu zorunlu bir sınırdır: `evaluatePromptInjection()`
-ara yazılımın kendisine aktardığı istek başına devre dışı bırakma listesini yok sayar, bu nedenle `disabledGuardrails`
-bir rotayı bundan muaf **tutmaz** ([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)).
+**Red-team (gecelik, `nightly-llm-security.yml`):** promptfoo, her rotanın
+`INJECTION_GUARD_MODE=block` altında OWASP-LLM külliyatını engellediğini doğrular;
+garak probları çalıştırır (gizli anahtar olmadan atlar). `moderations`, tutarlılık
+için dahil edilmiştir. Block modu zorunlu bir sınırdır: `evaluatePromptInjection()`,
+ara katmanın (middleware) kendisine ilettiği istek bazlı devre dışı bırakma listesini
+yok sayar; bu nedenle `disabledGuardrails` bir rotayı bundan **muaf tutmaz**
+([#16413](https://github.com/diegosouzapw/OmniRoute/issues/16413)).
 
 Gecelik iş akışı (`.github/workflows/nightly-llm-security.yml`, cron + manuel
-tetikleme) iki işe sahiptir:
+tetikleme) iki işe (job) sahiptir:
 
-- **`promptfoo-guard` (bloke edici)** — `INJECTION_GUARD_MODE=block` ile
-  `promptfoo eval -c promptfooconfig.yaml` komutunu çalıştırır. Her bir düşmanca vaka (ör. "ignore all
-  previous instructions…", DAN tarzı jailbreak'ler), yanıtın
-  `error.code === "SECURITY_001"` taşıdığını, yani korumanın isteği fiilen reddettiğini doğrular.
-- **`garak` (tavsiye niteliğinde)** — yerel bir OmniRoute örneğine (`http://localhost:20128/v1`)
-  karşı garak `--probes promptinject,dan,leakreplay` komutunu çalıştırır. Sağlayıcı gizli anahtarına
-  (`PROMPTFOO_PROVIDER_KEY`) bağlıdır; sorunsuz bir şekilde atlanır ve sonuna
-  `|| true` eklenmiştir, böylece CI'ı başarısız kılmadan raporlama yapar.
+- **`promptfoo-guard` (engelleyici)** — `INJECTION_GUARD_MODE=block` ile
+  `promptfoo eval -c promptfooconfig.yaml` çalıştırır. Her düşmanca test senaryosu
+  (örn. "ignore all previous instructions…", DAN tarzı jailbreak'ler) yanıtın
+  `error.code === "SECURITY_001"` taşıdığını, yani guard'ın isteği gerçekten
+  reddettiğini doğrular.
+- **`garak` (danışman niteliğinde)** — yerel bir OmniRoute örneğine
+  (`http://localhost:20128/v1`) karşı garak `--probes promptinject,dan,leakreplay`
+  çalıştırır. Bir sağlayıcı gizli anahtarına (`PROMPTFOO_PROVIDER_KEY`) bağlıdır;
+  sorunsuz şekilde atlar ve `|| true` ile sonlandırılmıştır, böylece CI'ı
+  başarısız etmeden raporlar.
 
-Koruma yardımcı fonksiyonunun (`createInjectionGuard` / `withInjectionGuard`)
-kapsamı, istem içeren her `/v1` rotasını kapsar; istem metni,
+Guard yardımcısının (`createInjectionGuard` / `withInjectionGuard`) kapsamı,
+prompt taşıyan tüm `/v1` rotalarını kapsar; prompt metni,
 `src/shared/utils/inputSanitizer.ts` içindeki `extractMessageContents()` tarafından
-`messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` alanlarından çekilir.
+`messages`/`input`/`prompt`/`query`+`documents`/`instructions`/`system` alanlarından
+alınır.

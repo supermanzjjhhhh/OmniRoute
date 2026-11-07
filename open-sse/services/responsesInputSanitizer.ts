@@ -45,7 +45,7 @@ const SERVER_ITEM_ID_PREFIX_BY_TYPE: Record<string, string> = {
   message: "msg_",
   reasoning: "rs_",
 };
-const SERVER_ITEM_ID_PATTERN = /^(fc|msg|rs|resp)_/;
+const SERVER_ITEM_ID_PATTERN = /^(fc|msg|rs|resp|ws)_/;
 // Validated per input item of type function_call / function_call_output (the agentic
 // Responses path), so kept as a module constant instead of an inline literal.
 const FUNCTION_NAME_VALID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
@@ -315,6 +315,20 @@ function isGrokBuildReasoningItem(item: unknown): boolean {
   );
 }
 
+const CODEX_WEB_SEARCH_ACTIONS = new Set(["search", "open_page", "find_in_page"]);
+
+function sanitizeCodexWebSearchAction(item: unknown): unknown {
+  const record = toRecord(item);
+  if (record?.type !== "web_search_call" || record.action === undefined) return item;
+  const action = toRecord(record.action);
+  if (typeof action?.type === "string" && CODEX_WEB_SEARCH_ACTIONS.has(action.type)) return item;
+  // WebSearchCall.action is optional. Omit an unrecognized replay action rather
+  // than inventing a search or discarding the item's encrypted history.
+  const next = { ...record };
+  delete next.action;
+  return next;
+}
+
 // Codex-specific call site (#13698): the native Codex/ChatGPT passthrough path is the only
 // caller that needs both flags derived from one boolean, kept here (not in the frozen
 // open-sse/executors/codex.ts) so a per-property change never grows that file's line count.
@@ -337,7 +351,9 @@ export function sanitizeCodexResponsesInput(
     !body.conversation &&
     getResponsesSubpath(context?.requestEndpointPath ?? "/responses") === "" &&
     !body.input.some((item) => toRecord(item)?.type === "item_reference");
-  let input = body.input.filter((item) => !isGrokBuildReasoningItem(item));
+  let input = body.input
+    .filter((item) => !isGrokBuildReasoningItem(item))
+    .map(sanitizeCodexWebSearchAction);
   if (repairOpaqueIds) {
     input = input.map((item) => {
       const record = toRecord(item);

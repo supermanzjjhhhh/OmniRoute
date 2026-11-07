@@ -202,11 +202,6 @@
       "count": 1
     }
   },
-  "open-sse/handlers/responseTranslator.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "open-sse/handlers/responsesHandler.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -397,11 +392,6 @@
       "count": 1
     }
   },
-  "open-sse/services/codexQuotaFetcher.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "open-sse/services/codexUsageQuotas.ts": {
     "no-restricted-syntax": {
       "count": 1
@@ -505,7 +495,7 @@
   },
   "open-sse/services/sessionPool/sessionPool.ts": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 2
     }
   },
   "open-sse/services/taskAwareRouter.ts": {
@@ -536,11 +526,6 @@
   "open-sse/services/usage.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 3
-    }
-  },
-  "open-sse/services/usage/github.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "open-sse/services/usage/glm.ts": {
@@ -593,22 +578,12 @@
       "count": 1
     }
   },
-  "open-sse/translator/webTools.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
   "open-sse/types.d.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 2
     }
   },
   "open-sse/utils/bypassHandler.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "open-sse/utils/earlyStreamKeepalive.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
@@ -628,19 +603,9 @@
       "count": 1
     }
   },
-  "open-sse/utils/usageTracking.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/app/(dashboard)/dashboard/HomePageClient.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 2
-    }
-  },
-  "src/app/(dashboard)/dashboard/a2a/page.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 6
     }
   },
   "src/app/(dashboard)/dashboard/analytics/CompressionAnalyticsTab.tsx": {
@@ -683,11 +648,6 @@
       "count": 2
     }
   },
-  "src/app/(dashboard)/dashboard/costs/CostOverviewTab.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/app/(dashboard)/dashboard/costs/costExplorerUtils.ts": {
     "no-restricted-syntax": {
       "count": 1
@@ -711,11 +671,6 @@
   "src/app/(dashboard)/dashboard/health/page.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    }
-  },
-  "src/app/(dashboard)/dashboard/mcp/page.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
     }
   },
   "src/app/(dashboard)/dashboard/playground/components/tabs/CompareTab.tsx": {
@@ -798,11 +753,6 @@
       "count": 1
     }
   },
-  "src/app/(dashboard)/dashboard/search-tools/components/SearchHistory.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/app/(dashboard)/dashboard/search-tools/components/tabs/CompareTab.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -833,11 +783,6 @@
       "count": 1
     }
   },
-  "src/app/(dashboard)/dashboard/settings/components/MitmProxyTab.tsx": {
-    "@next/next/no-html-link-for-pages": {
-      "count": 1
-    }
-  },
   "src/app/(dashboard)/dashboard/settings/components/ModelLockoutCard.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -845,7 +790,7 @@
   },
   "src/app/(dashboard)/dashboard/settings/components/ProxyRegistryManager.tsx": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 2
     }
   },
   "src/app/(dashboard)/dashboard/settings/components/ResponsesStatePolicyTab.tsx": {
@@ -861,11 +806,6 @@
   "src/app/(dashboard)/dashboard/tools/agent-bridge/components/AgentList.tsx": {
     "no-restricted-syntax": {
       "count": 3
-    }
-  },
-  "src/app/(dashboard)/dashboard/tools/traffic-inspector/components/RequestStreamingList.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "src/app/(dashboard)/dashboard/tools/traffic-inspector/components/TopBarControls.tsx": {
@@ -884,11 +824,6 @@
     }
   },
   "src/app/(dashboard)/dashboard/translator/components/TranslateTab.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/app/(dashboard)/dashboard/usage/components/ProviderLimits/index.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
@@ -1053,11 +988,6 @@
       "count": 1
     }
   },
-  "src/app/api/v1/chat/completions/route.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/app/api/v1/embeddings/route.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -1103,17 +1033,7 @@
       "count": 1
     }
   },
-  "src/app/api/v1/ocr/route.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/app/api/v1/providers/[provider]/embeddings/route.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
-  "src/app/api/v1/rerank/route.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 2
     }
@@ -1383,14 +1303,6 @@
       "count": 2
     }
   },
-  "src/lib/monitoring/providerHealthAutopilot.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/monitoring/providerHealthMatrix.ts": {
     "no-restricted-syntax": {
       "count": 1
@@ -1599,11 +1511,6 @@
       "count": 5
     }
   },
-  "src/shared/components/DegradationBadge.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/shared/components/KiroAuthModal.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -1614,17 +1521,7 @@
       "count": 1
     }
   },
-  "src/shared/components/NotificationToast.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/shared/components/OAuthModal.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 3
-    }
-  },
-  "src/shared/components/RequestLoggerV2.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 3
     }
@@ -1632,14 +1529,6 @@
   "src/shared/components/RequestTimeline.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    }
-  },
-  "src/shared/components/Sidebar.tsx": {
-    "@next/next/no-img-element": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
     }
   },
   "src/shared/components/analytics/rechartsUsageCharts.tsx": {
@@ -1685,11 +1574,6 @@
   "src/shared/utils/apiKey.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    }
-  },
-  "src/shared/utils/apiKeyPolicy.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
     }
   },
   "src/shared/utils/cloud.ts": {
@@ -2700,7 +2584,7 @@
   },
   "tests/unit/cli-mcp-call-commands.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 10
+      "count": 5
     }
   },
   "tests/unit/cli-memory-commands.test.ts": {
@@ -4458,11 +4342,6 @@
   "tests/unit/security/cloud-sync-hmac.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 5
-    }
-  },
-  "tests/unit/serial/provider-health-autopilot.test.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "tests/unit/service-combo-metrics.test.ts": {

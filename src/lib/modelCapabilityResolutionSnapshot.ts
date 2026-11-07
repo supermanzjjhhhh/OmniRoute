@@ -9,6 +9,7 @@
  * collide via delimiter composition.
  */
 import { listModelCapabilityOverrides } from "@/lib/db/modelCapabilityOverrides";
+import { listInputModalities, type InputModalityMap } from "@/lib/db/models/inputModalities";
 import type { ReasoningEffortOverrideValue } from "@/shared/reasoning/reasoningEffortsOverride";
 import { listModelContextOverrides } from "@/lib/db/modelContextOverrides";
 import { getAllServiceModels, type ServiceModel } from "@/lib/db/serviceModels";
@@ -38,6 +39,7 @@ export type NestedReasoningEffortsOverrideMap = ReadonlyMap<
 >;
 
 export interface ModelCapabilityResolutionSnapshot {
+  readonly inputModalities?: InputModalityMap;
   readonly synced: CapabilitiesByProvider;
   /** Embedded service catalogs captured once; missing providers are authoritative misses. */
   readonly serviceModelsByTool?: ReadonlyMap<string, readonly ServiceModel[]>;
@@ -125,5 +127,6 @@ export function createModelCapabilityResolutionSnapshot(
     customModelsByProvider,
     compatVisionOverrides: listModelCompatVisionOverrides(),
     syncedAvailableModelVision: listSyncedAvailableModelVision(),
+    inputModalities: listInputModalities(),
   };
 }

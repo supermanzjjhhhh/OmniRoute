@@ -238,7 +238,8 @@ async function enrichCompletedDetailFromArtifacts(
   model: string,
   connectionId: string,
   needProvider: boolean,
-  needClient: boolean
+  needClient: boolean,
+  attemptGeneration: string | undefined
 ) {
   let providerResponse: unknown;
   let clientResponse: unknown;
@@ -282,7 +283,7 @@ async function enrichCompletedDetailFromArtifacts(
       }
       if (providerResponse || clientResponse) {
         const current = completedDetails.get(detailId);
-        if (current) {
+        if (current && current.attemptGeneration === attemptGeneration) {
           // Usage can arrive while the artifact read is awaiting its import.
           // Keep newer counters instead of restoring the pre-usage snapshot.
           storeCompletedDetail({
@@ -315,6 +316,7 @@ export function maybeEnrichCompletedDetail(updated: PendingRequestDetail, connec
     updated.model,
     connectionId,
     needProvider,
-    needClient
+    needClient,
+    updated.attemptGeneration
   );
 }
